@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Requirement Traceability Reminder",
+  "description": "When the agent completes a task, reminds it to verify that commit messages and code comments reference the relevant Requirement IDs from the spec, maintaining traceability between implementation and requirements.",
+  "version": "1",
+  "when": {
+    "type": "postTaskExecution"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Before marking this task complete, verify that: 1) Any new or modified source files include a comment or docstring referencing the Requirement ID(s) they implement (e.g., '// Requirement 1.1' or '// NFR 4.5'). 2) The commit message for these changes will include the affected Requirement IDs. This ensures traceability from code back to the spec documents. If requirement references are missing, add them now."
+  }
+}
