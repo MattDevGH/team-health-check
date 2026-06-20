@@ -161,16 +161,22 @@ All stages must pass. Branch protection requires CI green before merge.
 ## Spec Status
 
 Full spec at `.kiro/specs/team-health-check/`:
-- `requirements.md` — 20 requirements + 4 NFRs (complete)
-- `design.md` — Architecture, data models, 34 correctness properties, testing strategy, SOLID, TDD (complete)
-- `tasks.md` — Not yet generated
+- `requirements.md` — 20 requirements + 4 NFRs (complete, includes Slack retry queue and GDPR audit specifics)
+- `design.md` — Architecture, data models, 34 correctness properties, testing strategy, SOLID, TDD, SlackInteractionQueue, documentation-as-code CI (complete)
+- `tasks.md` — 28 task groups, ~120 sub-tasks including property tests (complete)
+
+---
+
+## Hooks
+
+- `requirement-traceability` (postTaskExecution) — reminds agent to tag Requirement IDs in source files and commit messages after each task
 
 ---
 
 ## Outstanding Work
 
-- Generate task list from design
 - Implement domain model (replace placeholder Item schema)
 - Build service layer with repository pattern
 - Expand CI pipeline (lint, typecheck, e2e stages)
 - Add Playwright, fast-check, zod, date-fns-tz dependencies
+- Create PR template and requirement coverage CI script

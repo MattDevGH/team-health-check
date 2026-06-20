@@ -240,6 +240,34 @@ interface AuditService {
   }): Promise<void>;
   getLog(teamId: string, pagination?: { cursor?: string; limit?: number }): Promise<AuditEntry[]>;
 }
+
+// GDPR Data Deletion Audit Entry Structure
+// When a team member exercises their right to data deletion (NFR 4.5, NFR 4.7),
+// the audit log MUST record the event without storing any deleted response data.
+// The entry uses a hashed/masked TeamMemberId to maintain an audit trail while
+// preventing the audit log itself from becoming a PII store.
+//
+// Structure:
+//   {
+//     teamId: string;                          // The team the member belonged to
+//     changeType: "data_deletion";             // Fixed action type for GDPR deletions
+//     previousValue: "";                       // MUST be empty — never log deleted data
+//     newValue: "";                            // MUST be empty — never log deleted data
+//     userId: string;                          // Hashed/masked TeamMemberId (e.g., SHA-256 of the original ID)
+//                                             // NOT the plaintext member ID
+//     timestamp: DateTime;                     // UTC timestamp of the deletion event
+//   }
+//
+// Constraints:
+// - The userId field MUST contain a one-way hash or masked representation of the
+//   TeamMemberId (e.g., first 8 chars of SHA-256 hash prefixed with "deleted:")
+//   to prevent reverse-lookup of the deleted member's identity.
+// - previousValue and newValue MUST both be empty strings — the audit log records
+//   THAT a deletion occurred, not WHAT was deleted.
+// - The changeType MUST be exactly "data_deletion" to distinguish from other audit events.
+// - This entry is append-only and immutable like all other audit entries.
+//
+// Validates: NFR 4.5 (individual data deletion), NFR 4.7 (audit trail for deletions)
 ```
 
 ### Validation Layer
@@ -433,6 +461,17 @@ erDiagram
         string newValue
         string userId
         datetime timestamp
+    }
+
+    SlackInteractionQueue {
+        string id PK
+        string interactionPayload
+        string responseUrl
+        string failureReason
+        int retryCount
+        enum status "pending|delivered|failed"
+        datetime createdAt
+        datetime nextRetryAt
     }
 ```
 
@@ -653,6 +692,17 @@ model PendingGenesis {
   used                   Boolean             @default(false)
   expiresAt              DateTime
   createdAt              DateTime            @default(now())
+}
+
+model SlackInteractionQueue {
+  id                     String              @id @default(cuid())
+  interactionPayload     String              // JSON string of the original Slack interaction payload
+  responseUrl            String              // Slack response_url for deferred delivery
+  failureReason          String?             // Last failure reason (e.g., "timeout", "HTTP 500")
+  retryCount             Int                 @default(0) // Number of retry attempts made (max 5 total)
+  status                 String              @default("pending") // "pending" | "delivered" | "failed"
+  createdAt              DateTime            @default(now())
+  nextRetryAt            DateTime?           // When the next retry should be attempted
 }
 ```
 
@@ -1353,6 +1403,66 @@ jobs:
 - All stages must pass — any failure blocks the entire pipeline
 - Test results reported as annotations on the PR via `dorny/test-reporter`
 
+### Documentation-as-Code: Requirement Coverage Check
+
+**Purpose**: Keep spec documents (requirements.md, design.md, tasks.md) as a living source of truth by enforcing traceability between code changes and requirements.
+
+**Mechanism**: A lightweight CI script runs on every PR and validates that the PR description includes a "Requirements Affected" section tagging relevant Requirement IDs from the spec. This creates a bidirectional link between code changes and the requirements they implement or modify.
+
+**PR template**:
+```markdown
+## Requirements Affected
+
+- Requirement X.Y: [brief description of how this PR affects it]
+- NFR Z.W: [brief description]
+```
+
+**CI script** (`scripts/check-requirements-coverage.sh`):
+```bash
+#!/bin/bash
+# Validates that PR descriptions reference at least one Requirement ID
+# when source code files are modified (excludes docs-only or config-only PRs)
+
+PR_BODY="$1"
+CHANGED_FILES="$2"
+
+# Skip check if only non-source files changed (e.g., README, config)
+SOURCE_CHANGES=$(echo "$CHANGED_FILES" | grep -E '\.(ts|tsx|prisma)$' | grep -v '\.test\.')
+if [ -z "$SOURCE_CHANGES" ]; then
+  echo "✅ No source code changes — requirement tagging not required."
+  exit 0
+fi
+
+# Check for requirement references in PR body
+if echo "$PR_BODY" | grep -qiE '(Requirement|NFR)\s+\d+\.\d+'; then
+  echo "✅ Requirements referenced in PR description."
+  exit 0
+else
+  echo "❌ PR modifies source code but does not reference any Requirements."
+  echo "   Please add a 'Requirements Affected' section to your PR description."
+  echo "   Format: 'Requirement X.Y' or 'NFR X.Y'"
+  exit 1
+fi
+```
+
+**Integration with CI pipeline**: Added as an early step before lint, so developers get fast feedback:
+
+```yaml
+- name: Check requirement coverage
+  if: github.event_name == 'pull_request'
+  run: |
+    bash scripts/check-requirements-coverage.sh \
+      "${{ github.event.pull_request.body }}" \
+      "$(git diff --name-only origin/master...HEAD)"
+```
+
+**Key points**:
+- Only enforced on PRs that modify source code (`.ts`, `.tsx`, `.prisma` files) — documentation-only or config-only PRs are exempt
+- Does not validate that the referenced requirements are correct or complete — it's a lightweight traceability nudge, not a formal verification
+- The regex accepts both "Requirement 1.3" and "NFR 4.5" formats
+- Keeps the spec documents relevant by creating a habit of connecting code to requirements
+- Failure is a soft block — the PR cannot merge until a requirement reference is added
+
 ### Database in CI
 
 - Prisma generates the client and runs migrations against a temporary SQLite file (`test.db`)
@@ -1846,6 +1956,48 @@ export async function POST(req: Request): Promise<Response> {
 - This pattern applies to ALL Slack interaction handlers, not just response submission
 
 **Testing**: Integration tests should verify that the response is returned independently of DB write success/failure. Mock the database to simulate failure and verify the error follow-up message is sent.
+
+### Slack Interaction Retry Queue
+
+**Problem**: Slack's `response_url` is valid for only 30 minutes after the user interaction. If the deferred DB write (via `after()`) succeeds but the follow-up message delivery to `response_url` fails due to a transient Slack API error, the user never receives confirmation. The ephemeral error message approach (above) handles immediate failures, but if the Slack API itself is temporarily down, even the error notification can't be delivered. This creates a silent failure window.
+
+**Solution**: Implement a persistent retry queue (`SlackInteractionQueue`) that captures failed Slack `response_url` deliveries and retries them on subsequent scheduler ticks.
+
+**Flow**:
+
+1. Slack interaction arrives → immediate 200 ack → `after()` processes the DB write
+2. After successful DB write, attempt delivery to `response_url` (confirmation message)
+3. If delivery fails after the inline retry logic (3 attempts, 5s intervals per Requirement 5.12), persist the failure to `SlackInteractionQueue` with:
+   - `interactionPayload`: serialised JSON of what needs to be delivered
+   - `responseUrl`: the Slack `response_url` for this interaction
+   - `failureReason`: last error (e.g., "timeout", "HTTP 503")
+   - `status`: "pending"
+   - `nextRetryAt`: calculated with exponential backoff (30s, 2min, 8min, 20min)
+4. On each scheduler tick, the scheduler picks up `SlackInteractionQueue` entries where `status = 'pending'` AND `nextRetryAt <= now()`
+5. For each entry, attempt delivery to `response_url`
+6. On success: set `status = 'delivered'`
+7. On failure: increment `retryCount`, update `failureReason`, calculate next `nextRetryAt`
+8. If `retryCount >= 5` (total attempts including the original 3 inline retries = 8 total delivery attempts): set `status = 'failed'`, log a warning
+
+**Retry schedule** (after initial 3 inline retries exhaust):
+
+| Queue Attempt | Delay | Cumulative Time |
+|---------------|-------|-----------------|
+| 1 | 30 seconds | ~45s after interaction |
+| 2 | 2 minutes | ~2:45 after interaction |
+| 3 | 8 minutes | ~10:45 after interaction |
+| 4 | 20 minutes | ~30:45 after interaction |
+| 5 | — (max reached, mark failed) | — |
+
+The 30-minute `response_url` window is respected by the backoff schedule — attempt 4 at ~20 minutes is the last viable retry within the window. Attempt 5 would exceed 30 minutes and is only attempted as a best-effort; if it fails, the entry is marked `failed`.
+
+**Key points**:
+- Entries with `status = 'failed'` are retained for observability (delivery managers can see undelivered interactions)
+- The queue is processed as part of the existing scheduler tick — no separate worker needed
+- This prevents silent failures where a user submitted a response successfully (DB write succeeded) but never received Slack confirmation
+- The `SlackInteractionQueue` table has no foreign keys to other entities — it's a standalone delivery log
+
+**Validates**: Requirement 5.12 (retry on Slack API failure), NFR 1.2 (reliability of notification delivery)
 
 ### Magic Link Atomic Single-Use Enforcement
 

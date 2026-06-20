@@ -68,4 +68,4 @@ All stages must pass before merge to master.
 Full feature specification at `.kiro/specs/team-health-check/`:
 - Requirements (20 functional + 4 non-functional)
 - Technical design (architecture, data models, 34 correctness properties)
-- Task list (pending generation)
+- Task list (28 groups, ~120 sub-tasks — ready for implementation)
