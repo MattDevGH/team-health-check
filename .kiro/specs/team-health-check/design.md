@@ -51,13 +51,13 @@ graph TB
     end
 
     subgraph "API Layer (Next.js Route Handlers)"
-        TEAMS[/api/teams/*]
-        SESSIONS[/api/sessions/*]
-        RESPONSES[/api/responses/*]
-        TRENDS[/api/trends/*]
-        AUTH[/api/auth/*]
-        SLACK_API[/api/slack/*]
-        SCHEDULER[/api/scheduler/*]
+        TEAMS["/api/teams/*"]
+        SESSIONS["/api/sessions/*"]
+        RESPONSES["/api/responses/*"]
+        TRENDS["/api/trends/*"]
+        AUTH["/api/auth/*"]
+        SLACK_API["/api/slack/*"]
+        SCHEDULER["/api/scheduler/*"]
     end
 
     subgraph "Service Layer"
