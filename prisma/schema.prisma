@@ -1,0 +1,19 @@
+// Replace this placeholder model with your own domain model
+// Then run: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// PLACEHOLDER - replace with your domain model
+model Item {
+  id        Int      @id @default(autoincrement())
+  title     String
+  createdAt DateTime @default(now())
+}

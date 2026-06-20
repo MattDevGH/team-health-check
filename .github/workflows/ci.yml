@@ -1,0 +1,36 @@
+# This workflow runs on every push and pull request to master.
+# It installs dependencies and runs the test suite on a fresh Ubuntu machine.
+# If tests fail, the workflow fails — PRs can be configured to require this to pass before merging.
+
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest  # fresh Linux VM, thrown away after the job
+
+    steps:
+      # 1. Check out your code onto the VM
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Install Node.js (same major version as your dev machine)
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"  # caches node_modules between runs to speed things up
+
+      # 3. Install dependencies (uses package-lock.json for exact versions)
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Run the test suite once (vitest run, not watch mode)
+      - name: Run tests
+        run: npm test
