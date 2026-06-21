@@ -526,29 +526,29 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
 
 - [ ] 20. API route handlers: Sessions, responses, and auth
 
-  - [ ] 20.1 Implement session routes
+  - [x] 20.1 Implement session routes
     - Create `src/app/api/teams/[teamId]/sessions/route.ts` (GET list, POST open manual)
     - Create `src/app/api/teams/[teamId]/sessions/[sessionId]/route.ts` (GET, PATCH close)
     - Enforce delivery_manager role for open/close
     - _Requirements: 3.5, 3.10, 19.2_
 
-  - [ ] 20.2 Implement response submission route
+  - [x] 20.2 Implement response submission route
     - Create `src/app/api/responses/route.ts` (POST)
     - Validate with `submitResponseSchema`, call ResponseService.upsert
     - Return rolling average for each answered question
     - _Requirements: 4.4, 4.6, 16.1_
 
-  - [ ] 20.3 Implement session link auth route
+  - [x] 20.3 Implement session link auth route
     - Create `src/app/api/auth/session-link/[token]/route.ts` (GET)
     - Validate token, apply rate limiting, return member/session context or 404
     - _Requirements: 6.3, 6.4, 6.7_
 
-  - [ ] 20.4 Implement magic link routes
+  - [x] 20.4 Implement magic link routes
     - Create `src/app/api/auth/magic-link/request/route.ts` (POST) — rate-limited, always returns 200
     - Create `src/app/api/auth/magic-link/verify/[token]/route.ts` (GET) — atomic claim, returns auth or genesis state
     - _Requirements: 7.1, 7.2, 7.4, 7.5, 7.8, 7.9_
 
-  - [ ] 20.5 Implement Slack pairing route
+  - [x] 20.5 Implement Slack pairing route
     - Create `src/app/api/auth/slack-pairing/route.ts` (POST)
     - Accept pairing code + memberId, call AuthService.verifyPairingCode
     - _Requirements: 2.4, 2.5_
