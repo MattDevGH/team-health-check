@@ -585,12 +585,12 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Call SchedulerService.tick()
     - _Requirements: 3.2, 3.3_
 
-- [ ] 21. Checkpoint - Ensure API route handler tests pass
+- [x] 21. Checkpoint - Ensure API route handler tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 22. Slack bot integration
 
-  - [ ] 22.1 Implement Slack signature verification middleware
+  - [x] 22.1 Implement Slack signature verification middleware
     - Create `src/lib/slack/verify-signature.ts`
     - Verify HMAC-SHA256 signature using timing-safe comparison
     - Reject requests older than 5 minutes (replay protection)
@@ -617,7 +617,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Handle no active session gracefully
     - _Requirements: 2.2, 5.14, 5.15_
 
-  - [ ] 22.5 Implement Slack prompt message formatting
+  - [x] 22.5 Implement Slack prompt message formatting
     - Create `src/lib/slack/message-builder.ts`
     - Build interactive messages with Score buttons (1-5) and optional Trend_Indicator menu
     - Include Session_Link fallback in each message
