@@ -31,7 +31,13 @@ export const scheduleSchema = z.object({
   timezone: z.string().default('Europe/London'),
 });
 
+export const updateTeamSchema = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  description: z.string().max(500).optional(),
+});
+
 export type CreateTeamInput = z.infer<typeof createTeamSchema>;
+export type UpdateTeamInput = z.infer<typeof updateTeamSchema>;
 export type AddMemberInput = z.infer<typeof addMemberSchema>;
 export type SubmitResponseInput = z.infer<typeof submitResponseSchema>;
 export type ScheduleInput = z.infer<typeof scheduleSchema>;

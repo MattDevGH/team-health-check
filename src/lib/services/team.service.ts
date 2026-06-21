@@ -18,6 +18,8 @@ export interface TeamServiceDeps {
 
 export interface TeamService {
   create(name: string, description: string | undefined, creatorId: string): Promise<Team>;
+  findById(teamId: string): Promise<Team | null>;
+  update(teamId: string, data: { name?: string; description?: string }): Promise<Team>;
   addMember(teamId: string, name: string, email?: string): Promise<TeamMember>;
   removeMember(teamId: string, memberId: string, userId: string): Promise<void>;
   getMembers(teamId: string): Promise<TeamMember[]>;
@@ -187,5 +189,28 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
     return teamRepo.list();
   }
 
-  return { create, addMember, removeMember, getMembers, listTeams, archive, unarchive };
+  /** Find a team by ID */
+  async function findById(teamId: string): Promise<Team | null> {
+    return teamRepo.findById(teamId);
+  }
+
+  /** Update team name/description */
+  async function update(teamId: string, data: { name?: string; description?: string }): Promise<Team> {
+    const team = await teamRepo.findById(teamId);
+    if (!team) {
+      throw new NotFoundError('Team not found');
+    }
+
+    const updateData: Partial<Pick<Team, 'name' | 'description'>> = {};
+    if (data.name !== undefined) {
+      updateData.name = data.name;
+    }
+    if (data.description !== undefined) {
+      updateData.description = data.description;
+    }
+
+    return teamRepo.update(teamId, updateData);
+  }
+
+  return { create, findById, update, addMember, removeMember, getMembers, listTeams, archive, unarchive };
 }

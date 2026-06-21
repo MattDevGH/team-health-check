@@ -1,4 +1,4 @@
-Any # Technical Design Document: Team Health Check
+# Technical Design Document: Team Health Check
 
 ## Overview
 

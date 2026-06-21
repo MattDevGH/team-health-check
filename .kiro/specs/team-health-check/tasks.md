@@ -498,27 +498,27 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Export configured service instances for use by route handlers
     - _Requirements: (infrastructure)_
 
-- [ ] 19. API route handlers: Team management
+- [x] 19. API route handlers: Team management
 
-  - [ ] 19.1 Implement POST /api/teams (create team)
+  - [x] 19.1 Implement POST /api/teams (create team)
     - Create `src/app/api/teams/route.ts`
     - Validate input with `createTeamSchema`, call TeamService.create, return team JSON
     - Require authenticated session (magic link session)
     - _Requirements: 1.1, 1.2, 20.1_
 
-  - [ ] 19.2 Implement GET/PATCH/DELETE /api/teams/[teamId]
+  - [x] 19.2 Implement GET/PATCH/DELETE /api/teams/[teamId]
     - Create `src/app/api/teams/[teamId]/route.ts`
     - GET: return team details; PATCH: update name/description; DELETE: archive team
     - Enforce delivery_manager role for PATCH and DELETE
     - _Requirements: 1.8, 19.2_
 
-  - [ ] 19.3 Implement POST /api/teams/genesis (create team from magic link)
+  - [x] 19.3 Implement POST /api/teams/genesis (create team from magic link)
     - Create `src/app/api/teams/genesis/route.ts`
     - Validate pending genesis token (CAS claim), create team + member + role in transaction
     - Return teamId, memberId, sessionToken
     - _Requirements: 7.9_
 
-  - [ ] 19.4 Implement team member routes
+  - [x] 19.4 Implement team member routes
     - Create `src/app/api/teams/[teamId]/members/route.ts` (GET list, POST add)
     - Create `src/app/api/teams/[teamId]/members/[memberId]/route.ts` (PATCH, DELETE remove)
     - Validate with `addMemberSchema`, enforce delivery_manager role for mutations
