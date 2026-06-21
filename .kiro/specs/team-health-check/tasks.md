@@ -170,7 +170,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: valid token creates team+member+role atomically; used token rejected; expired token rejected; concurrent calls to same token result in exactly one successful creation
     - _Requirements: 7.9, 19.4_
 
-- [~] 6. Checkpoint - Ensure team management and roles tests pass
+- [x] 6. Checkpoint - Ensure team management and roles tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 7. Session lifecycle service
@@ -223,7 +223,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: schedule saved; next window calculated correctly for timezone; DST transition handled
     - _Requirements: 3.1, 3.2, 3.11_
 
-- [ ] 8. Response submission service
+- [x] 8. Response submission service
 
   - [x] 8.1 Implement response upsert (ResponseService.upsert)
     - Create `src/lib/services/response.service.ts` with `createResponseService` factory
@@ -248,66 +248,66 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: exact average calculation; null when < 5 responses; spans previous sessions
     - _Requirements: 16.1, 16.2, 16.3, 16.4_
 
-  - [~] 8.5 Write property test for rolling average correctness
+  - [x] 8.5 Write property test for rolling average correctness
     - **Property 21: Rolling average computation correctness**
     - Generate sequences of scores; verify rolling average matches arithmetic mean of most recent N
     - _Validates: Requirements 16.1, 16.2, 16.3_
 
-- [~] 9. Checkpoint - Ensure session and response service tests pass
+- [x] 9. Checkpoint - Ensure session and response service tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 10. Authentication service
+- [x] 10. Authentication service
 
-  - [~] 10.1 Implement session link validation (AuthService.validateSessionLink)
+  - [x] 10.1 Implement session link validation (AuthService.validateSessionLink)
     - Create `src/lib/services/auth.service.ts` with `createAuthService` factory
     - Implement `validateSessionLink(token)` — validates token exists, not expired, session not closed >7 days ago
     - Return member and session IDs on success; null on invalid/expired token
     - Write failing tests: valid token returns IDs; invalid token returns null; expired link returns null
     - _Requirements: 6.3, 6.4, 6.5, 6.6_
 
-  - [~] 10.2 Write property test for session link tokens
+  - [x] 10.2 Write property test for session link tokens
     - **Property 14: Invalid session link tokens return 404**
     - Generate random strings that were never issued as tokens; verify all return null
     - _Validates: Requirements 6.4_
 
-  - [~] 10.3 Implement magic link request and verification
+  - [x] 10.3 Implement magic link request and verification
     - Implement `requestMagicLink(email)` — rate-limit (5/hour), generate token, store with 1-hour expiry
     - Always return success regardless of email existence (anti-enumeration)
     - Implement `verifyMagicLink(token)` — atomic CAS claim (single-use), return discriminated union (authenticated vs requires_team_creation)
     - Write failing tests: valid token claimed once; second claim fails; expired token fails; unknown email returns genesis state
     - _Requirements: 7.1, 7.2, 7.4, 7.5, 7.8, 7.9_
 
-  - [~] 10.4 Write property tests for magic link lifecycle
+  - [x] 10.4 Write property tests for magic link lifecycle
     - **Property 15: Magic link single-use and time-bounded**
     - **Property 34: Magic link response indistinguishability (anti-enumeration)**
     - Generate tokens; verify single-use; verify expiry after 1 hour; verify response shape identical for known/unknown emails
     - _Validates: Requirements 7.2, 7.4, 7.5, 7.8, 7.9_
 
-  - [~] 10.5 Implement Slack pairing code generation and verification
+  - [x] 10.5 Implement Slack pairing code generation and verification
     - Implement `generatePairingCode(slackUserId)` — creates 6-char code with 10-minute expiry
     - Implement `verifyPairingCode(memberId, code)` — verifies code, creates SlackIdentityLink
     - Write failing tests: valid code within 10 min succeeds; expired code fails; used code fails
     - _Requirements: 2.2, 2.3, 2.4, 2.5_
 
-  - [~] 10.6 Write property test for pairing code expiry
+  - [x] 10.6 Write property test for pairing code expiry
     - **Property 7: Pairing codes expire within 10 minutes**
     - Generate codes; verify access after 10 min fails; verify within 10 min succeeds
     - _Validates: Requirements 2.3, 2.5_
 
-  - [~] 10.7 Implement session link rate limiting
+  - [x] 10.7 Implement session link rate limiting
     - Apply rate limiter to session link validation: 10 failures per IP in 5 minutes → 15 min lockout
     - Write failing test: 11th failed attempt within 5 min returns 429
     - _Requirements: 6.7_
 
-  - [~] 10.8 Write concurrency integration tests for atomic token claims
+  - [x] 10.8 Write concurrency integration tests for atomic token claims
     - Test `AuthService.verifyMagicLink`: fire N concurrent calls with the same token; verify exactly 1 succeeds and N-1 fail; verify exactly 1 UserSession created
     - Test `GenesisService.executeGenesis`: fire N concurrent calls with the same pending token; verify exactly 1 team+member+role created; verify N-1 receive conflict/used-token error
     - Use real SQLite with Prisma to exercise actual row-level locking / CAS behaviour
     - _Validates: Property 15 (magic link single-use), Requirements 7.2, 7.9_
 
-- [ ] 11. Trend and aggregation service
+- [x] 11. Trend and aggregation service
 
-  - [~] 11.1 Implement trend data retrieval (TrendService.getSessionAverages)
+  - [x] 11.1 Implement trend data retrieval (TrendService.getSessionAverages)
     - Create `src/lib/services/trend.service.ts` with `createTrendService` factory
     - Implement `getSessionAverages(teamId, questionId)` — returns averages from materialised aggregates, ordered chronologically
     - Suppress data if fewer than 3 responses in anonymous mode (configurable threshold)
@@ -315,31 +315,31 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: correct averages returned; insufficient data suppressed; zero-response session omitted
     - _Requirements: 8.1, 8.5, 8.6, 8.7_
 
-  - [~] 11.2 Write property test for data suppression in anonymous mode
+  - [x] 11.2 Write property test for data suppression in anonymous mode
     - **Property 17: Data suppression for insufficient responses in anonymous mode**
     - Generate sessions with 0, 1, 2 responses in anonymous mode; verify suppression/omission
     - _Validates: Requirements 8.6, 8.7_
 
-  - [~] 11.3 Implement trend indicator distribution
+  - [x] 11.3 Implement trend indicator distribution
     - Implement `getTrendIndicatorDistribution(sessionId)` — returns counts of improving/stable/declining per question
     - Write failing test: known responses produce correct distribution counts
     - _Requirements: 8.4_
 
-  - [~] 11.4 Implement CSV export (TrendService.exportCSV)
+  - [x] 11.4 Implement CSV export (TrendService.exportCSV)
     - Implement `exportCSV(teamId, dateRange?)` — generates CSV with columns: session date, question, average score, response count, trend indicator distribution
     - Respect privacy mode: anonymous mode exports only aggregated data
     - Write failing tests: CSV columns correct; anonymous mode excludes individual data; date range filter works
     - _Requirements: 8.9, 8.10, 8.11_
 
-  - [~] 11.5 Write property tests for CSV export
+  - [x] 11.5 Write property tests for CSV export
     - **Property 18: CSV export serialization round-trip**
     - **Property 19: Anonymous mode CSV contains no individual data**
     - Generate trend data; export CSV; parse and verify values match; verify no individual identifiers in anonymous mode
     - _Validates: Requirements 8.9, 8.10_
 
-- [ ] 12. Privacy, availability, and streak services
+- [x] 12. Privacy, availability, and streak services
 
-  - [~] 12.1 Implement privacy mode enforcement
+  - [x] 12.1 Implement privacy mode enforcement
     - Add privacy mode checks to TrendService and ResponseService
     - Anonymous mode: suppress individual data in all API responses, dashboards, exports
     - Attributed mode: allow individual-level data for authorised roles
@@ -347,31 +347,31 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: anonymous mode hides individual data; mode switch logged
     - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.8_
 
-  - [~] 12.2 Write property test for privacy mode enforcement
+  - [x] 12.2 Write property test for privacy mode enforcement
     - **Property 29: Privacy mode prevents individual data exposure**
     - Generate teams in anonymous mode; verify no API response exposes individual scores/identifiers
     - _Validates: Requirements 14.2, 14.3, 20.6_
 
-  - [~] 12.3 Implement availability (away) marking
+  - [x] 12.3 Implement availability (away) marking
     - Create `src/lib/services/availability.service.ts` with `createAvailabilityService` factory
     - Implement mark away, remove away, check if member is away during a session
     - Away members excluded from participation counts and prompts
     - Write failing tests: away member excluded from participation; removed away re-includes
     - _Requirements: 12.1, 12.2, 12.7_
 
-  - [~] 12.4 Write property test for availability exclusion
+  - [x] 12.4 Write property test for availability exclusion
     - **Property 30: Availability exclusion from participation**
     - Generate away members; verify excluded from counts, prompts, and reminders
     - _Validates: Requirements 12.1, 12.2_
 
-  - [~] 12.5 Implement streak calculation (StreakService.calculate)
+  - [x] 12.5 Implement streak calculation (StreakService.calculate)
     - Create `src/lib/services/streak.service.ts` with `createStreakService` factory
     - Implement streak logic: consecutive sessions with ≥1 response, away sessions excluded, one missed session grace within 14 days
     - Track current and best streak
     - Write failing tests: streak counts correctly; away excluded; grace period works; streak resets after 2 misses
     - _Requirements: 17.1, 17.3, 17.4, 17.7_
 
-  - [~] 12.6 Write property tests for streak calculation
+  - [x] 12.6 Write property tests for streak calculation
     - **Property 22: Streak calculation correctness**
     - **Property 23: Cadence change preserves streak**
     - Generate participation sequences; verify streak matches expected; verify cadence change doesn't reset streak
@@ -382,7 +382,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
 
 - [ ] 14. Audit log and data deletion services
 
-  - [~] 14.1 Implement audit log service (AuditService.log)
+  - [x] 14.1 Implement audit log service (AuditService.log)
     - Create `src/lib/services/audit.service.ts` with `createAuditService` factory
     - Implement `log(entry)` — append-only, stores changeType, previous/new values, userId, UTC timestamp
     - Implement `getLog(teamId, pagination)` — read-only retrieval, most recent first

@@ -22,27 +22,18 @@ describe('Property 12: Response upsert — exactly one record per (member, quest
           // Set up a team, member, and open session
           const team = await repos.team.create({
             name: 'Test Team',
-            description: null,
             privacyMode: 'anonymous',
-            archived: false,
-            slackDeliveryStart: null,
-            slackDeliveryEnd: null,
             timezone: 'Europe/London',
           });
 
           const member = await repos.teamMember.create({
             teamId: team.id,
             name: 'Test Member',
-            email: null,
-            cadencePreference: 'weekly',
-            remindersEnabled: true,
           });
 
           const session = await repos.session.create({
             teamId: team.id,
             status: 'open',
-            scheduledOpenAt: null,
-            scheduledCloseAt: null,
           });
 
           const questionId = 'q-delivering-value';

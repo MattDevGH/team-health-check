@@ -83,3 +83,47 @@ export function resetRateLimitStore(): void {
   store.clear();
   lastCleanup = Date.now();
 }
+
+/**
+ * Checks whether a key has exceeded the rate limit WITHOUT recording a new attempt.
+ * Use when you need to check if an IP/key is blocked before performing an action.
+ *
+ * @param key - Unique identifier for the rate limit bucket
+ * @param limit - Maximum number of attempts allowed within the window
+ * @param windowMs - Time window in milliseconds
+ * @returns `true` if the key is rate limited (blocked), `false` if still under the limit
+ */
+export function isRateLimited(
+  key: string,
+  limit: number,
+  windowMs: number
+): boolean {
+  const now = Date.now();
+
+  if (now - lastCleanup >= CLEANUP_INTERVAL_MS) {
+    cleanupExpiredEntries();
+  }
+
+  const entry = store.get(key);
+  if (!entry) return false;
+
+  const recentTimestamps = entry.timestamps.filter((ts) => now - ts < windowMs);
+  return recentTimestamps.length >= limit;
+}
+
+/**
+ * Records a rate limit hit without performing a check.
+ * Use to count failures after they occur.
+ *
+ * @param key - Unique identifier for the rate limit bucket
+ */
+export function recordRateLimitHit(key: string): void {
+  const now = Date.now();
+
+  const entry = store.get(key);
+  if (!entry) {
+    store.set(key, { timestamps: [now] });
+  } else {
+    entry.timestamps.push(now);
+  }
+}
