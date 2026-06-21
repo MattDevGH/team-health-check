@@ -588,7 +588,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
 - [x] 21. Checkpoint - Ensure API route handler tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 22. Slack bot integration
+- [x] 22. Slack bot integration
 
   - [x] 22.1 Implement Slack signature verification middleware
     - Create `src/lib/slack/verify-signature.ts`
@@ -597,20 +597,20 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write unit test with known signature/body pairs
     - _Requirements: 5.6 (implicit security)_
 
-  - [ ] 22.2 Implement Slack events route
+  - [x] 22.2 Implement Slack events route
     - Create `src/app/api/slack/events/route.ts` (POST)
     - Handle URL verification challenge
     - Route relevant events (app_mention, message) to appropriate handlers
     - _Requirements: 5.14_
 
-  - [ ] 22.3 Implement Slack interactions route (response submission)
+  - [x] 22.3 Implement Slack interactions route (response submission)
     - Create `src/app/api/slack/interactions/route.ts` (POST)
     - Use immediate ack + `after()` deferred processing pattern
     - Parse interaction payload, validate scores, upsert responses
     - Send confirmation or error follow-up on failure
     - _Requirements: 5.4, 5.6, 5.7, 5.8, 5.9, 5.10, NFR 1.2_
 
-  - [ ] 22.4 Implement Slack slash commands route
+  - [x] 22.4 Implement Slack slash commands route
     - Create `src/app/api/slack/commands/route.ts` (POST)
     - Handle `/healthcheck` — respond with prompts for current session based on cadence and unanswered questions
     - Handle `/healthcheck connect` — generate pairing code
@@ -624,7 +624,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write unit tests for message structure
     - _Requirements: 5.4, 5.5_
 
-  - [ ] 22.6 Implement Slack prompt delivery with retry
+  - [x] 22.6 Implement Slack prompt delivery with retry
     - Create `src/lib/slack/delivery.ts`
     - Implement delivery with up to 3 retries, 5s minimum interval between attempts
     - Log failure if all retries exhausted
@@ -632,7 +632,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write unit tests with mocked Slack API (success, transient failure, permanent failure)
     - _Requirements: 5.12, 5.13_
 
-  - [ ] 22.7 Implement Slack bot state drift resilience with retry queue
+  - [x] 22.7 Implement Slack bot state drift resilience with retry queue
     - Create `SlackInteractionQueue` model/table (Prisma schema) with fields: id, interactionPayload (JSON), responseUrl, failureReason, retryCount, status (pending/delivered/failed), createdAt, nextRetryAt
     - Create `src/lib/slack/interaction-queue.ts` implementing queue logic
     - When a Slack `response_url` delivery fails (e.g., 30-minute response_url window expires, or API errors after retries exhausted in task 22.6), log the failed interaction to the `SlackInteractionQueue` table with failure reason

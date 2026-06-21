@@ -155,3 +155,15 @@ export interface TeamSchedule {
   timezone: string;
   createdAt: Date;
 }
+
+/** Requirements: 5.12, NFR 1.2 — Slack interaction retry queue */
+export interface SlackInteractionQueue {
+  id: string;
+  interactionPayload: string;
+  responseUrl: string;
+  failureReason: string | null;
+  retryCount: number;
+  status: string;
+  createdAt: Date;
+  nextRetryAt: Date | null;
+}
