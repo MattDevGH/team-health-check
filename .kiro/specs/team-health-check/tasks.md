@@ -377,7 +377,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Generate participation sequences; verify streak matches expected; verify cadence change doesn't reset streak
     - _Validates: Requirements 17.1, 17.3, 17.6, 17.7_
 
-- [~] 13. Checkpoint - Ensure all service layer tests pass
+- [ ] 13. Checkpoint - Ensure all service layer tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 14. Audit log and data deletion services
@@ -390,12 +390,12 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: entry created with correct fields; entries retrieved in reverse chronological order; no individual scores in audit
     - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, 18.6_
 
-  - [~] 14.2 Write property test for audit log immutability
+  - [x] 14.2 Write property test for audit log immutability
     - **Property 24: Audit log completeness and immutability**
     - Generate config changes; verify audit entry for each; verify no entry modifiable or deletable; verify no scores in entries
     - _Validates: Requirements 18.1, 18.2, 18.3, 18.6_
 
-  - [~] 14.3 Implement data deletion (GDPR self-service)
+  - [x] 14.3 Implement data deletion (GDPR self-service)
     - Add `deleteMyData(memberId)` to ResponseService
     - Removes all individual response records; preserves materialised aggregates
     - Decrements live participation count if session is active
@@ -403,7 +403,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: responses deleted; aggregates unchanged; active session participation decremented; audit entry contains hashed memberId, timestamp, actionType "data_deletion", and teamId; audit entry does NOT contain any deleted response data
     - _Requirements: NFR 4.3, NFR 4.5, NFR 4.6, NFR 4.7_
 
-  - [~] 14.4 Write property tests for data deletion
+  - [ ] 14.4 Write property tests for data deletion
     - **Property 28: Data deletion preserves materialised aggregates**
     - **Property 33: Live participation decrement on mid-session data deletion**
     - Generate members with responses and materialised aggregates; delete; verify aggregates unchanged; verify live count decremented
@@ -411,7 +411,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
 
 - [ ] 15. Notification service
 
-  - [~] 15.1 Implement notification service core
+  - [x] 15.1 Implement notification service core
     - Create `src/lib/services/notification.service.ts` with `createNotificationService` factory
     - Implement `sendSlackPrompt(memberId, session)` — only sends to Slack-linked members
     - Implement `sendClosingReminder(memberId, session)` — only sends if member hasn't completed all questions, not away, reminders enabled
@@ -419,80 +419,80 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: linked member gets prompt; unlinked member skipped; completed member skipped for reminder
     - _Requirements: 2.8, 5.2, 5.13, 13.1, 13.2, 13.3, 13.6, 13.8_
 
-  - [~] 15.2 Write property test for Slack prompt targeting
+  - [ ] 15.2 Write property test for Slack prompt targeting
     - **Property 8: Only linked members receive Slack prompts**
     - Generate teams with mix of linked/unlinked members; verify prompt recipients exactly match linked set
     - _Validates: Requirements 2.8, 5.13_
 
-  - [~] 15.3 Implement pre-session notification
+  - [ ] 15.3 Implement pre-session notification
     - Implement `sendPreSessionNotification(teamId, session)` — lists expected participants and away members; sends to configurable recipient (DM or channel)
     - Write failing test: notification includes correct expected/away lists; respects configured recipient
     - _Requirements: 12.3, 12.4, 12.5, 12.6_
 
-  - [~] 15.4 Implement micro-pulse question selection
+  - [x] 15.4 Implement micro-pulse question selection
     - Create `src/lib/services/question-selection.service.ts`
     - Implement weighted random selection: prefer unanswered questions, weight by gap since last response
     - When remaining days < unanswered questions, bundle multiple questions
     - Write failing tests: unanswered questions preferred; all 5 questions covered within session; bundling when days insufficient
     - _Requirements: 15.3, 15.4, 15.5_
 
-  - [~] 15.5 Write property test for micro-pulse question exhaustion
+  - [ ] 15.5 Write property test for micro-pulse question exhaustion
     - **Property 32: Micro-pulse question exhaustion guarantee**
     - Generate active micro-pulse members over full session; verify all 5 questions delivered exactly once
     - _Validates: Requirements 15.5, 15.6_
 
-  - [~] 15.6 Write property test for question order invariant
+  - [ ] 15.6 Write property test for question order invariant
     - **Property 20: Question order invariant**
     - Generate various sessions and members; verify questions always returned in fixed order
     - _Validates: Requirements 9.1, 9.3_
 
 - [ ] 16. Scheduler service
 
-  - [~] 16.1 Implement scheduler tick handler
+  - [x] 16.1 Implement scheduler tick handler
     - Create `src/lib/services/scheduler.service.ts` with `createSchedulerService` factory
     - Implement `tick(now)` — desired state reconciliation: open due sessions, close due sessions, materialise pending aggregates, trigger prompts/reminders
     - Idempotent: safe to call multiple times
     - Write failing tests: due session opens; due session closes; pending aggregates materialised; prompts triggered for linked members
     - _Requirements: 3.2, 3.3, 3.4, 3.9, NFR 4.4_
 
-  - [~] 16.2 Implement lazy aggregate materialisation in scheduler
+  - [ ] 16.2 Implement lazy aggregate materialisation in scheduler
     - Detect closed sessions where `materialisedAt` is null and quiet period (30s) has elapsed
     - Trigger materialisation for each pending session
     - Write failing test: session closed >30s ago gets materialised; session closed <30s ago skipped
     - _Requirements: NFR 4.4_
 
-- [~] 17. Checkpoint - Ensure notification and scheduler tests pass
+- [ ] 17. Checkpoint - Ensure notification and scheduler tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 18. Prisma repository implementations
 
-  - [~] 18.1 Implement Prisma TeamRepository and TeamMemberRepository
+  - [ ] 18.1 Implement Prisma TeamRepository and TeamMemberRepository
     - Create `src/lib/repositories/prisma/team.repository.ts`
     - Create `src/lib/repositories/prisma/team-member.repository.ts`
     - Implement all interface methods using Prisma client
     - Write integration tests against real SQLite
     - _Requirements: 1.1, 1.3, 1.5_
 
-  - [~] 18.2 Implement Prisma SessionRepository and ResponseRepository
+  - [ ] 18.2 Implement Prisma SessionRepository and ResponseRepository
     - Create `src/lib/repositories/prisma/session.repository.ts`
     - Create `src/lib/repositories/prisma/response.repository.ts`
     - Implement upsert with unique constraint on (memberId, sessionId, questionId)
     - Write integration tests against real SQLite
     - _Requirements: 3.2, 10.2_
 
-  - [~] 18.3 Implement Prisma auth-related repositories
+  - [ ] 18.3 Implement Prisma auth-related repositories
     - Create Prisma implementations for: `SessionLinkRepository`, `MagicLinkRepository`, `PairingCodeRepository`, `UserSessionRepository`, `PendingGenesisRepository`
     - Implement atomic `claimToken` using raw SQL UPDATE with WHERE conditions
     - Write integration tests for atomic claim behaviour
     - _Requirements: 6.1, 7.2, 2.4_
 
-  - [~] 18.4 Implement Prisma AuditLogRepository and SessionAggregateRepository
+  - [ ] 18.4 Implement Prisma AuditLogRepository and SessionAggregateRepository
     - Create `src/lib/repositories/prisma/audit-log.repository.ts`
     - Create `src/lib/repositories/prisma/session-aggregate.repository.ts`
     - Write integration tests
     - _Requirements: 18.1, 8.1_
 
-  - [~] 18.5 Create production repository factory and container
+  - [ ] 18.5 Create production repository factory and container
     - Create `src/lib/repositories/prisma/index.ts` exporting `createPrismaRepositories(prisma)` factory
     - Create `src/lib/container.ts` wiring production repositories to services
     - Export configured service instances for use by route handlers
@@ -500,25 +500,25 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
 
 - [ ] 19. API route handlers: Team management
 
-  - [~] 19.1 Implement POST /api/teams (create team)
+  - [ ] 19.1 Implement POST /api/teams (create team)
     - Create `src/app/api/teams/route.ts`
     - Validate input with `createTeamSchema`, call TeamService.create, return team JSON
     - Require authenticated session (magic link session)
     - _Requirements: 1.1, 1.2, 20.1_
 
-  - [~] 19.2 Implement GET/PATCH/DELETE /api/teams/[teamId]
+  - [ ] 19.2 Implement GET/PATCH/DELETE /api/teams/[teamId]
     - Create `src/app/api/teams/[teamId]/route.ts`
     - GET: return team details; PATCH: update name/description; DELETE: archive team
     - Enforce delivery_manager role for PATCH and DELETE
     - _Requirements: 1.8, 19.2_
 
-  - [~] 19.3 Implement POST /api/teams/genesis (create team from magic link)
+  - [ ] 19.3 Implement POST /api/teams/genesis (create team from magic link)
     - Create `src/app/api/teams/genesis/route.ts`
     - Validate pending genesis token (CAS claim), create team + member + role in transaction
     - Return teamId, memberId, sessionToken
     - _Requirements: 7.9_
 
-  - [~] 19.4 Implement team member routes
+  - [ ] 19.4 Implement team member routes
     - Create `src/app/api/teams/[teamId]/members/route.ts` (GET list, POST add)
     - Create `src/app/api/teams/[teamId]/members/[memberId]/route.ts` (PATCH, DELETE remove)
     - Validate with `addMemberSchema`, enforce delivery_manager role for mutations
@@ -526,46 +526,46 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
 
 - [ ] 20. API route handlers: Sessions, responses, and auth
 
-  - [~] 20.1 Implement session routes
+  - [ ] 20.1 Implement session routes
     - Create `src/app/api/teams/[teamId]/sessions/route.ts` (GET list, POST open manual)
     - Create `src/app/api/teams/[teamId]/sessions/[sessionId]/route.ts` (GET, PATCH close)
     - Enforce delivery_manager role for open/close
     - _Requirements: 3.5, 3.10, 19.2_
 
-  - [~] 20.2 Implement response submission route
+  - [ ] 20.2 Implement response submission route
     - Create `src/app/api/responses/route.ts` (POST)
     - Validate with `submitResponseSchema`, call ResponseService.upsert
     - Return rolling average for each answered question
     - _Requirements: 4.4, 4.6, 16.1_
 
-  - [~] 20.3 Implement session link auth route
+  - [ ] 20.3 Implement session link auth route
     - Create `src/app/api/auth/session-link/[token]/route.ts` (GET)
     - Validate token, apply rate limiting, return member/session context or 404
     - _Requirements: 6.3, 6.4, 6.7_
 
-  - [~] 20.4 Implement magic link routes
+  - [ ] 20.4 Implement magic link routes
     - Create `src/app/api/auth/magic-link/request/route.ts` (POST) — rate-limited, always returns 200
     - Create `src/app/api/auth/magic-link/verify/[token]/route.ts` (GET) — atomic claim, returns auth or genesis state
     - _Requirements: 7.1, 7.2, 7.4, 7.5, 7.8, 7.9_
 
-  - [~] 20.5 Implement Slack pairing route
+  - [ ] 20.5 Implement Slack pairing route
     - Create `src/app/api/auth/slack-pairing/route.ts` (POST)
     - Accept pairing code + memberId, call AuthService.verifyPairingCode
     - _Requirements: 2.4, 2.5_
 
-  - [~] 20.6 Implement schedule and trends routes
+  - [ ] 20.6 Implement schedule and trends routes
     - Create `src/app/api/teams/[teamId]/schedule/route.ts` (GET, PUT)
     - Create `src/app/api/teams/[teamId]/trends/route.ts` (GET)
     - Create `src/app/api/teams/[teamId]/export/route.ts` (GET — CSV download)
     - Enforce privacy mode on trends/export responses
     - _Requirements: 3.1, 8.1, 8.9, 20.6_
 
-  - [~] 20.7 Implement participation route
+  - [ ] 20.7 Implement participation route
     - Create `src/app/api/teams/[teamId]/sessions/[sessionId]/participation/route.ts` (GET)
     - Return responded count, total count, non-responder names (subject to privacy mode and role)
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6_
 
-  - [~] 20.8 Implement user profile and preferences routes
+  - [ ] 20.8 Implement user profile and preferences routes
     - Create `src/app/api/me/route.ts` (GET current user)
     - Create `src/app/api/me/preferences/route.ts` (PATCH — cadence, reminders)
     - Create `src/app/api/me/availability/route.ts` (POST mark away, DELETE remove away)
@@ -574,57 +574,57 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Create `src/app/api/me/delete-data/route.ts` (POST — GDPR deletion)
     - _Requirements: 13.1, 15.1, 15.2, 12.1, 12.7, 17.1, 2.6, NFR 4.3_
 
-  - [~] 20.9 Implement audit log route
+  - [ ] 20.9 Implement audit log route
     - Create `src/app/api/teams/[teamId]/audit-log/route.ts` (GET)
     - Paginated, most recent first, delivery_manager only
     - _Requirements: 18.4, 18.5, 19.2_
 
-  - [~] 20.10 Implement scheduler tick route
+  - [ ] 20.10 Implement scheduler tick route
     - Create `src/app/api/scheduler/tick/route.ts` (POST)
     - Authenticate via CRON_SECRET in Authorization header
     - Call SchedulerService.tick()
     - _Requirements: 3.2, 3.3_
 
-- [~] 21. Checkpoint - Ensure API route handler tests pass
+- [ ] 21. Checkpoint - Ensure API route handler tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 22. Slack bot integration
 
-  - [~] 22.1 Implement Slack signature verification middleware
+  - [ ] 22.1 Implement Slack signature verification middleware
     - Create `src/lib/slack/verify-signature.ts`
     - Verify HMAC-SHA256 signature using timing-safe comparison
     - Reject requests older than 5 minutes (replay protection)
     - Write unit test with known signature/body pairs
     - _Requirements: 5.6 (implicit security)_
 
-  - [~] 22.2 Implement Slack events route
+  - [ ] 22.2 Implement Slack events route
     - Create `src/app/api/slack/events/route.ts` (POST)
     - Handle URL verification challenge
     - Route relevant events (app_mention, message) to appropriate handlers
     - _Requirements: 5.14_
 
-  - [~] 22.3 Implement Slack interactions route (response submission)
+  - [ ] 22.3 Implement Slack interactions route (response submission)
     - Create `src/app/api/slack/interactions/route.ts` (POST)
     - Use immediate ack + `after()` deferred processing pattern
     - Parse interaction payload, validate scores, upsert responses
     - Send confirmation or error follow-up on failure
     - _Requirements: 5.4, 5.6, 5.7, 5.8, 5.9, 5.10, NFR 1.2_
 
-  - [~] 22.4 Implement Slack slash commands route
+  - [ ] 22.4 Implement Slack slash commands route
     - Create `src/app/api/slack/commands/route.ts` (POST)
     - Handle `/healthcheck` — respond with prompts for current session based on cadence and unanswered questions
     - Handle `/healthcheck connect` — generate pairing code
     - Handle no active session gracefully
     - _Requirements: 2.2, 5.14, 5.15_
 
-  - [~] 22.5 Implement Slack prompt message formatting
+  - [ ] 22.5 Implement Slack prompt message formatting
     - Create `src/lib/slack/message-builder.ts`
     - Build interactive messages with Score buttons (1-5) and optional Trend_Indicator menu
     - Include Session_Link fallback in each message
     - Write unit tests for message structure
     - _Requirements: 5.4, 5.5_
 
-  - [~] 22.6 Implement Slack prompt delivery with retry
+  - [ ] 22.6 Implement Slack prompt delivery with retry
     - Create `src/lib/slack/delivery.ts`
     - Implement delivery with up to 3 retries, 5s minimum interval between attempts
     - Log failure if all retries exhausted
@@ -632,7 +632,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write unit tests with mocked Slack API (success, transient failure, permanent failure)
     - _Requirements: 5.12, 5.13_
 
-  - [~] 22.7 Implement Slack bot state drift resilience with retry queue
+  - [ ] 22.7 Implement Slack bot state drift resilience with retry queue
     - Create `SlackInteractionQueue` model/table (Prisma schema) with fields: id, interactionPayload (JSON), responseUrl, failureReason, retryCount, status (pending/delivered/failed), createdAt, nextRetryAt
     - Create `src/lib/slack/interaction-queue.ts` implementing queue logic
     - When a Slack `response_url` delivery fails (e.g., 30-minute response_url window expires, or API errors after retries exhausted in task 22.6), log the failed interaction to the `SlackInteractionQueue` table with failure reason
@@ -641,12 +641,12 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: failed delivery queues interaction; scheduler tick retries queued items; successful retry marks delivered; exhausted retries marks failed; queue entry contains failure reason
     - _Requirements: 5.12, NFR 1.2_
 
-- [~] 23. Checkpoint - Ensure Slack integration tests pass
+- [ ] 23. Checkpoint - Ensure Slack integration tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 24. Web interface: feedback form and session pages
 
-  - [~] 24.1 Implement session link landing page
+  - [ ] 24.1 Implement session link landing page
     - Create `src/app/session/[token]/page.tsx`
     - Validate token via API, display questions based on cadence preference
     - Weekly mode: all 5 questions in scrollable view
@@ -654,27 +654,27 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Pre-populate previously submitted responses
     - _Requirements: 4.1, 4.2, 4.8_
 
-  - [~] 24.2 Implement feedback form component
+  - [ ] 24.2 Implement feedback form component
     - Create reusable feedback form with Score input (1-5) and optional Trend_Indicator
     - Mobile-friendly from 320px width, no horizontal scrolling
     - Display validation errors per question
     - Retain input on network error for retry
     - _Requirements: 4.3, 4.5, 4.7, 4.10_
 
-  - [~] 24.3 Implement response submission and confirmation
+  - [ ] 24.3 Implement response submission and confirmation
     - Submit responses via POST /api/responses
     - Display confirmation message on success
     - Display rolling average per question after submission
     - Show "session ended" message if session closed
     - _Requirements: 4.6, 4.9, 16.1, 16.5_
 
-  - [~] 24.4 Implement magic link request page
+  - [ ] 24.4 Implement magic link request page
     - Create `src/app/auth/login/page.tsx` with email input
     - POST to magic link request endpoint
     - Display generic success message regardless of email existence
     - _Requirements: 7.1, 7.8_
 
-  - [~] 24.5 Implement magic link verification and genesis flow
+  - [ ] 24.5 Implement magic link verification and genesis flow
     - Create `src/app/auth/magic/[token]/page.tsx`
     - Handle authenticated state: redirect to dashboard
     - Handle genesis state: display team creation form
@@ -682,7 +682,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
 
 - [ ] 25. Web interface: dashboard and team management
 
-  - [~] 25.1 Implement trend dashboard page
+  - [ ] 25.1 Implement trend dashboard page
     - Create `src/app/teams/[teamId]/dashboard/page.tsx`
     - Display line chart (Y-axis 1.0-5.0) with average score per question per closed session
     - Display "more data needed" if fewer than 2 closed sessions
@@ -690,17 +690,17 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Show trend indicator distribution for most recent session
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.8_
 
-  - [~] 25.2 Implement question detail view on dashboard
+  - [ ] 25.2 Implement question detail view on dashboard
     - Clicking a question shows average + response count per session
     - Suppress "insufficient data" for sessions below anonymity threshold
     - _Requirements: 8.5, 8.7_
 
-  - [~] 25.3 Implement CSV export button
+  - [ ] 25.3 Implement CSV export button
     - Trigger GET /api/teams/[teamId]/export with optional date range
     - Download as .csv file
     - _Requirements: 8.9, 8.11_
 
-  - [~] 25.4 Implement team management pages
+  - [ ] 25.4 Implement team management pages
     - Create `src/app/teams/[teamId]/settings/page.tsx`
     - Team name/description editing, privacy mode toggle with confirmation
     - Member list with add/remove, role assignment
@@ -709,13 +709,13 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Display which members have linked Slack identities
     - _Requirements: 1.1, 1.3, 1.6, 1.7, 2.7, 3.1, 14.4, 19.5_
 
-  - [~] 25.5 Implement participation tracking view
+  - [ ] 25.5 Implement participation tracking view
     - Create participation component within session detail page
     - Display responded/total counts
     - Show non-responder names according to privacy mode and role rules
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.6_
 
-  - [~] 25.6 Implement user profile and preferences page
+  - [ ] 25.6 Implement user profile and preferences page
     - Create `src/app/me/page.tsx`
     - Cadence preference toggle (weekly/micro-pulse)
     - Reminder enable/disable
@@ -726,44 +726,44 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Display current privacy mode when submitting
     - _Requirements: 13.1, 15.1, 15.2, 12.1, 17.1, 17.2, 17.5, 2.6, NFR 4.3, NFR 4.4, 14.7_
 
-  - [~] 25.7 Implement audit log page
+  - [ ] 25.7 Implement audit log page
     - Create `src/app/teams/[teamId]/audit-log/page.tsx`
     - Display entries chronologically (most recent first) with pagination
     - Delivery_manager access only
     - _Requirements: 18.4, 18.5_
 
-- [~] 26. Checkpoint - Ensure web interface tests pass
+- [ ] 26. Checkpoint - Ensure web interface tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 27. Integration wiring and end-to-end flows
 
-  - [~] 27.1 Wire production container to all route handlers
+  - [ ] 27.1 Wire production container to all route handlers
     - Ensure all route handlers import services from `src/lib/container.ts`
     - Verify no service directly imports Prisma
     - _Requirements: (architecture)_
 
-  - [~] 27.2 Implement email service integration (Resend)
+  - [ ] 27.2 Implement email service integration (Resend)
     - Create `src/lib/services/email.service.ts`
     - Implement magic link email delivery using Resend SDK
     - Configurable sender address via environment variable
     - _Requirements: 7.1_
 
-  - [~] 27.3 Update CI pipeline
+  - [ ] 27.3 Update CI pipeline
     - Update `.github/workflows/ci.yml` with full pipeline: install → lint → type check → test → build
     - Add Prisma generate and migrate steps
     - _Requirements: (infrastructure)_
 
-  - [~] 27.4 Write integration tests for full response submission flow
+  - [ ] 27.4 Write integration tests for full response submission flow
     - Test: session link → form render → POST response → upsert → rolling average display
     - Test: Slack interaction → immediate ack → deferred DB write → confirmation
     - _Requirements: 4.1, 4.6, 5.6, 5.8, 16.1_
 
-  - [~] 27.5 Write integration tests for session lifecycle
+  - [ ] 27.5 Write integration tests for session lifecycle
     - Test: scheduler tick opens session → links generated → tick closes session → aggregates materialised
     - Test: manual open with existing open session closes first
     - _Requirements: 3.2, 3.3, 3.4, 3.9_
 
-  - [~] 27.6 Implement CI requirement coverage check (documentation as code)
+  - [ ] 27.6 Implement CI requirement coverage check (documentation as code)
     - Create `.github/pull_request_template.md` with a "Requirements Affected" section that prompts developers to tag which Requirement IDs their changes affect (e.g., `Requirement 1.1`, `Requirement NFR 4.5`)
     - Create `scripts/check-requirement-coverage.sh` (or equivalent CI script) that parses the PR description and verifies it contains at least one requirement reference matching the pattern `Requirement \d+\.\d+` or `Requirement NFR \d+\.\d+`
     - Add a CI job step in `.github/workflows/ci.yml` that runs the coverage check on pull_request events and fails the build if no requirement reference is found
@@ -771,7 +771,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing test: PR description with requirement reference passes; PR description without requirement reference fails; script exits with non-zero code on missing reference
     - _Requirements: (documentation, traceability)_
 
-- [~] 28. Final checkpoint - Ensure all tests pass
+- [ ] 28. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

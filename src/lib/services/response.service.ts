@@ -1,9 +1,11 @@
 /**
  * Response submission service.
  * Requirements: 3.6, 3.7, 3.8, 4.4, 4.5, 10.1, 10.2, 10.3
+ * NFR 4.3, 4.5, 4.6, 4.7: GDPR self-service data deletion
  */
 
-import type { ResponseRepository, SessionRepository, TeamMemberRepository } from '@/lib/repositories/types';
+import crypto from 'crypto';
+import type { ResponseRepository, SessionRepository, TeamMemberRepository, AuditLogRepository } from '@/lib/repositories/types';
 import type { Response } from '@/lib/repositories/entities';
 import { ValidationError, NotFoundError, ConflictError, ForbiddenError } from '@/lib/errors';
 
@@ -13,6 +15,7 @@ export interface ResponseServiceDeps {
   responseRepo: ResponseRepository;
   sessionRepo: SessionRepository;
   teamMemberRepo: TeamMemberRepository;
+  auditLogRepo?: AuditLogRepository;
 }
 
 export interface ResponseService {
@@ -24,13 +27,14 @@ export interface ResponseService {
     trendIndicator?: string;
   }): Promise<Response>;
   getRollingAverage(teamId: string, questionId: string, count?: number): Promise<number | null>;
+  deleteMyData(memberId: string): Promise<void>;
 }
 
 /**
  * Factory function for creating the response service.
  */
 export function createResponseService(deps: ResponseServiceDeps): ResponseService {
-  const { responseRepo, sessionRepo, teamMemberRepo } = deps;
+  const { responseRepo, sessionRepo, teamMemberRepo, auditLogRepo } = deps;
 
   async function upsert(params: {
     memberId: string;
@@ -118,5 +122,36 @@ export function createResponseService(deps: ResponseServiceDeps): ResponseServic
     return average;
   }
 
-  return { upsert, getRollingAverage };
+  /**
+   * GDPR self-service: delete all response data for a member.
+   * Preserves materialised aggregates (computed at session close).
+   * Logs an audit entry without recording deleted data content.
+   * Requirements: NFR 4.3, 4.5, 4.6, 4.7
+   */
+  async function deleteMyData(memberId: string): Promise<void> {
+    // 1. Find the member to get their teamId
+    const member = await teamMemberRepo.findById(memberId);
+    if (!member) {
+      throw new NotFoundError('Member not found');
+    }
+
+    // 2. Delete all response records for this member
+    await responseRepo.deleteByMemberId(memberId);
+
+    // 3. Materialised aggregates are NOT affected (computed at session close)
+
+    // 4. Log audit entry with hashed memberId (never log deleted data)
+    if (auditLogRepo) {
+      const hashedId = crypto.createHash('sha256').update(memberId).digest('hex').substring(0, 8);
+      await auditLogRepo.create({
+        teamId: member.teamId,
+        changeType: 'data_deletion',
+        previousValue: '',
+        newValue: '',
+        userId: `deleted:${hashedId}`,
+      });
+    }
+  }
+
+  return { upsert, getRollingAverage, deleteMyData };
 }

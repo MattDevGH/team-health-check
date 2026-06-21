@@ -332,3 +332,89 @@ describe('ResponseService.getRollingAverage', () => {
     expect(avg).toBe(3.2);
   });
 });
+
+
+describe('ResponseService.deleteMyData', () => {
+  let repos: Repositories;
+  let responseService: ReturnType<typeof createResponseService>;
+
+  beforeEach(async () => {
+    repos = createInMemoryRepositories();
+    responseService = createResponseService({
+      responseRepo: repos.response,
+      sessionRepo: repos.session,
+      teamMemberRepo: repos.teamMember,
+      auditLogRepo: repos.auditLog,
+    });
+
+    // Seed: team and members
+    await repos.teamMember.create({ id: 'member-1', teamId: 'team-1', name: 'Alice' });
+    await repos.teamMember.create({ id: 'member-2', teamId: 'team-1', name: 'Bob' });
+
+    // Seed: session with responses
+    const session = await repos.session.create({ teamId: 'team-1', status: 'open' });
+    await repos.response.upsert({ memberId: 'member-1', sessionId: session.id, questionId: 'q-1', score: 4 });
+    await repos.response.upsert({ memberId: 'member-1', sessionId: session.id, questionId: 'q-2', score: 3 });
+    await repos.response.upsert({ memberId: 'member-2', sessionId: session.id, questionId: 'q-1', score: 5 });
+  });
+
+  it('removes all responses for the member', async () => {
+    await responseService.deleteMyData('member-1');
+
+    const sessions = await repos.session.findByTeamId('team-1');
+    const responses = await repos.response.findByMemberAndSession('member-1', sessions[0].id);
+    expect(responses).toHaveLength(0);
+  });
+
+  it('preserves other members responses (materialised aggregates unchanged)', async () => {
+    await responseService.deleteMyData('member-1');
+
+    const sessions = await repos.session.findByTeamId('team-1');
+    const otherResponses = await repos.response.findByMemberAndSession('member-2', sessions[0].id);
+    expect(otherResponses).toHaveLength(1);
+    expect(otherResponses[0].score).toBe(5);
+  });
+
+  it('audit entry has changeType "data_deletion" and hashed memberId', async () => {
+    await responseService.deleteMyData('member-1');
+
+    const auditEntries = await repos.auditLog.findByTeamId('team-1');
+    expect(auditEntries).toHaveLength(1);
+
+    const entry = auditEntries[0];
+    expect(entry.changeType).toBe('data_deletion');
+
+    // Hashed memberId: first 8 chars of SHA-256 of 'member-1', prefixed with "deleted:"
+    const crypto = await import('crypto');
+    const expectedHash = crypto.createHash('sha256').update('member-1').digest('hex').slice(0, 8);
+    expect(entry.userId).toBe(`deleted:${expectedHash}`);
+  });
+
+  it('audit entry previousValue and newValue are empty strings', async () => {
+    await responseService.deleteMyData('member-1');
+
+    const auditEntries = await repos.auditLog.findByTeamId('team-1');
+    const entry = auditEntries[0];
+    expect(entry.previousValue).toBe('');
+    expect(entry.newValue).toBe('');
+  });
+
+  it('audit entry does NOT contain response data', async () => {
+    await responseService.deleteMyData('member-1');
+
+    const auditEntries = await repos.auditLog.findByTeamId('team-1');
+    const entry = auditEntries[0];
+    const serialized = JSON.stringify(entry);
+    // Should not contain any score values or question IDs from deleted responses
+    expect(serialized).not.toContain('member-1');
+    expect(serialized).not.toContain('"score"');
+    expect(serialized).not.toContain('q-1');
+    expect(serialized).not.toContain('q-2');
+  });
+
+  it('throws NotFoundError when member does not exist', async () => {
+    await expect(
+      responseService.deleteMyData('non-existent-member')
+    ).rejects.toThrow(NotFoundError);
+  });
+});
