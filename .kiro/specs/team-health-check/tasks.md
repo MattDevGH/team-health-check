@@ -524,7 +524,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Validate with `addMemberSchema`, enforce delivery_manager role for mutations
     - _Requirements: 1.3, 1.4, 1.5, 1.6, 1.7, 19.2_
 
-- [ ] 20. API route handlers: Sessions, responses, and auth
+- [x] 20. API route handlers: Sessions, responses, and auth
 
   - [x] 20.1 Implement session routes
     - Create `src/app/api/teams/[teamId]/sessions/route.ts` (GET list, POST open manual)
@@ -553,19 +553,19 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Accept pairing code + memberId, call AuthService.verifyPairingCode
     - _Requirements: 2.4, 2.5_
 
-  - [ ] 20.6 Implement schedule and trends routes
+  - [x] 20.6 Implement schedule and trends routes
     - Create `src/app/api/teams/[teamId]/schedule/route.ts` (GET, PUT)
     - Create `src/app/api/teams/[teamId]/trends/route.ts` (GET)
     - Create `src/app/api/teams/[teamId]/export/route.ts` (GET — CSV download)
     - Enforce privacy mode on trends/export responses
     - _Requirements: 3.1, 8.1, 8.9, 20.6_
 
-  - [ ] 20.7 Implement participation route
+  - [x] 20.7 Implement participation route
     - Create `src/app/api/teams/[teamId]/sessions/[sessionId]/participation/route.ts` (GET)
     - Return responded count, total count, non-responder names (subject to privacy mode and role)
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6_
 
-  - [ ] 20.8 Implement user profile and preferences routes
+  - [x] 20.8 Implement user profile and preferences routes
     - Create `src/app/api/me/route.ts` (GET current user)
     - Create `src/app/api/me/preferences/route.ts` (PATCH — cadence, reminders)
     - Create `src/app/api/me/availability/route.ts` (POST mark away, DELETE remove away)
@@ -574,12 +574,12 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Create `src/app/api/me/delete-data/route.ts` (POST — GDPR deletion)
     - _Requirements: 13.1, 15.1, 15.2, 12.1, 12.7, 17.1, 2.6, NFR 4.3_
 
-  - [ ] 20.9 Implement audit log route
+  - [x] 20.9 Implement audit log route
     - Create `src/app/api/teams/[teamId]/audit-log/route.ts` (GET)
     - Paginated, most recent first, delivery_manager only
     - _Requirements: 18.4, 18.5, 19.2_
 
-  - [ ] 20.10 Implement scheduler tick route
+  - [x] 20.10 Implement scheduler tick route
     - Create `src/app/api/scheduler/tick/route.ts` (POST)
     - Authenticate via CRON_SECRET in Authorization header
     - Call SchedulerService.tick()
