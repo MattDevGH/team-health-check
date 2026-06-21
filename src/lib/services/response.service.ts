@@ -1,0 +1,122 @@
+/**
+ * Response submission service.
+ * Requirements: 3.6, 3.7, 3.8, 4.4, 4.5, 10.1, 10.2, 10.3
+ */
+
+import type { ResponseRepository, SessionRepository, TeamMemberRepository } from '@/lib/repositories/types';
+import type { Response } from '@/lib/repositories/entities';
+import { ValidationError, NotFoundError, ConflictError, ForbiddenError } from '@/lib/errors';
+
+const VALID_TREND_INDICATORS = ['improving', 'stable', 'declining'] as const;
+
+export interface ResponseServiceDeps {
+  responseRepo: ResponseRepository;
+  sessionRepo: SessionRepository;
+  teamMemberRepo: TeamMemberRepository;
+}
+
+export interface ResponseService {
+  upsert(params: {
+    memberId: string;
+    sessionId: string;
+    questionId: string;
+    score: number;
+    trendIndicator?: string;
+  }): Promise<Response>;
+  getRollingAverage(teamId: string, questionId: string, count?: number): Promise<number | null>;
+}
+
+/**
+ * Factory function for creating the response service.
+ */
+export function createResponseService(deps: ResponseServiceDeps): ResponseService {
+  const { responseRepo, sessionRepo, teamMemberRepo } = deps;
+
+  async function upsert(params: {
+    memberId: string;
+    sessionId: string;
+    questionId: string;
+    score: number;
+    trendIndicator?: string;
+  }): Promise<Response> {
+    // 1. Validate score is integer 1-5
+    if (!Number.isInteger(params.score) || params.score < 1 || params.score > 5) {
+      throw new ValidationError([
+        { field: 'score', message: 'Score must be an integer between 1 and 5', code: 'INVALID_SCORE' },
+      ]);
+    }
+
+    // 2. Validate trend indicator if provided
+    if (
+      params.trendIndicator !== undefined &&
+      !VALID_TREND_INDICATORS.includes(params.trendIndicator as typeof VALID_TREND_INDICATORS[number])
+    ) {
+      throw new ValidationError([
+        {
+          field: 'trendIndicator',
+          message: 'Trend indicator must be one of: improving, stable, declining',
+          code: 'INVALID_TREND_INDICATOR',
+        },
+      ]);
+    }
+
+    // 3. Find session by ID — throw NotFoundError if not found
+    const session = await sessionRepo.findById(params.sessionId);
+    if (!session) {
+      throw new NotFoundError('Session not found');
+    }
+
+    // 4. Check session status === 'open' — throw ConflictError if closed
+    if (session.status !== 'open') {
+      throw new ConflictError('Session is closed');
+    }
+
+    // 5. Find member — throw NotFoundError if not found
+    const member = await teamMemberRepo.findById(params.memberId);
+    if (!member) {
+      throw new NotFoundError('Member not found');
+    }
+
+    // 6. Check member belongs to team — throw ForbiddenError if not
+    if (member.teamId !== session.teamId) {
+      throw new ForbiddenError('Member does not belong to the session team');
+    }
+
+    // 7. Upsert response via responseRepo.upsert()
+    const response = await responseRepo.upsert({
+      memberId: params.memberId,
+      sessionId: params.sessionId,
+      questionId: params.questionId,
+      score: params.score,
+      trendIndicator: params.trendIndicator,
+    });
+
+    return response;
+  }
+
+  async function getRollingAverage(
+    teamId: string,
+    questionId: string,
+    count = 20,
+  ): Promise<number | null> {
+    // 1. Get recent responses for this team + question
+    const responses = await responseRepo.findRecentByTeamAndQuestion(teamId, questionId, count);
+
+    // 2. If fewer than 5 responses, return null
+    if (responses.length < 5) {
+      return null;
+    }
+
+    // 3. Take at most `count` responses (already limited by repo query)
+    const subset = responses.slice(0, count);
+
+    // 4. Calculate arithmetic mean, round to 1 decimal place
+    const sum = subset.reduce((acc, r) => acc + r.score, 0);
+    const average = Math.round((sum / subset.length) * 10) / 10;
+
+    // 5. Return average
+    return average;
+  }
+
+  return { upsert, getRollingAverage };
+}

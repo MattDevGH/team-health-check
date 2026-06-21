@@ -1,6 +1,3 @@
-// Replace this placeholder model with your own domain model
-// Then run: npx prisma migrate dev --name init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -8,12 +5,221 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
 }
 
-// PLACEHOLDER - replace with your domain model
-model Item {
-  id        Int      @id @default(autoincrement())
-  title     String
-  createdAt DateTime @default(now())
+model Team {
+  id                     String              @id @default(cuid())
+  name                   String
+  description            String?
+  privacyMode            String              @default("anonymous")
+  archived               Boolean             @default(false)
+  slackDeliveryStart     String?
+  slackDeliveryEnd       String?
+  timezone               String              @default("Europe/London")
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  members                TeamMember[]
+  sessions               HealthCheckSession[]
+  schedule               TeamSchedule?
+  auditLog               AuditLogEntry[]
+}
+
+model TeamMember {
+  id                     String              @id @default(cuid())
+  teamId                 String
+  name                   String
+  email                  String?
+  cadencePreference      String              @default("weekly")
+  remindersEnabled       Boolean             @default(true)
+  currentStreak          Int                 @default(0)
+  bestStreak             Int                 @default(0)
+  lastStreakSessionClose DateTime?
+  createdAt              DateTime            @default(now())
+
+  team                   Team                @relation(fields: [teamId], references: [id])
+  roles                  TeamMemberRole[]
+  responses              Response[]
+  sessionLinks           SessionLink[]
+  magicLinks             MagicLink[]
+  slackLink              SlackIdentityLink?
+  availability           Availability[]
+
+  @@unique([teamId, name, email])
+}
+
+model TeamMemberRole {
+  id                     String              @id @default(cuid())
+  memberId               String
+  teamId                 String
+  role                   String
+  assignedAt             DateTime            @default(now())
+
+  member                 TeamMember          @relation(fields: [memberId], references: [id])
+
+  @@unique([memberId, teamId, role])
+}
+
+model HealthCheckSession {
+  id                     String              @id @default(cuid())
+  teamId                 String
+  status                 String              @default("open")
+  scheduledOpenAt        DateTime?
+  scheduledCloseAt       DateTime?
+  actualOpenAt           DateTime            @default(now())
+  actualCloseAt          DateTime?
+  createdAt              DateTime            @default(now())
+
+  team                   Team                @relation(fields: [teamId], references: [id])
+  responses              Response[]
+  sessionLinks           SessionLink[]
+  aggregates             SessionAggregate[]
+}
+
+model Question {
+  id                     String              @id @default(cuid())
+  title                  String
+  description            String
+  displayOrder           Int
+
+  responses              Response[]
+  aggregates             SessionAggregate[]
+}
+
+model Response {
+  id                     String              @id @default(cuid())
+  memberId               String
+  sessionId              String
+  questionId             String
+  score                  Int
+  trendIndicator         String?
+  submittedAt            DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  member                 TeamMember          @relation(fields: [memberId], references: [id])
+  session                HealthCheckSession  @relation(fields: [sessionId], references: [id])
+  question               Question            @relation(fields: [questionId], references: [id])
+
+  @@unique([memberId, sessionId, questionId])
+}
+
+model SessionLink {
+  id                     String              @id @default(cuid())
+  token                  String              @unique
+  memberId               String
+  sessionId              String
+  expiresAt              DateTime
+  createdAt              DateTime            @default(now())
+
+  member                 TeamMember          @relation(fields: [memberId], references: [id])
+  session                HealthCheckSession  @relation(fields: [sessionId], references: [id])
+}
+
+model MagicLink {
+  id                     String              @id @default(cuid())
+  token                  String              @unique
+  memberId               String
+  used                   Boolean             @default(false)
+  expiresAt              DateTime
+  createdAt              DateTime            @default(now())
+
+  member                 TeamMember          @relation(fields: [memberId], references: [id])
+}
+
+model SlackIdentityLink {
+  id                     String              @id @default(cuid())
+  memberId               String              @unique
+  slackUserId            String              @unique
+  linkedAt               DateTime            @default(now())
+
+  member                 TeamMember          @relation(fields: [memberId], references: [id])
+}
+
+model PairingCode {
+  id                     String              @id @default(cuid())
+  code                   String              @unique
+  slackUserId            String
+  used                   Boolean             @default(false)
+  expiresAt              DateTime
+  createdAt              DateTime            @default(now())
+}
+
+model TeamSchedule {
+  id                     String              @id @default(cuid())
+  teamId                 String              @unique
+  cadence                String              @default("weekly")
+  openDay                Int
+  openTime               String
+  closeDay               Int
+  closeTime              String
+  createdAt              DateTime            @default(now())
+
+  team                   Team                @relation(fields: [teamId], references: [id])
+}
+
+model SessionAggregate {
+  id                     String              @id @default(cuid())
+  sessionId              String
+  questionId             String
+  averageScore           Float
+  responseCount          Int
+  improvingCount         Int                 @default(0)
+  stableCount            Int                 @default(0)
+  decliningCount         Int                 @default(0)
+  materialisedAt         DateTime            @default(now())
+
+  session                HealthCheckSession  @relation(fields: [sessionId], references: [id])
+  question               Question            @relation(fields: [questionId], references: [id])
+
+  @@unique([sessionId, questionId])
+}
+
+model Availability {
+  id                     String              @id @default(cuid())
+  memberId               String
+  awayFrom               DateTime
+  awayUntil              DateTime
+  createdAt              DateTime            @default(now())
+
+  member                 TeamMember          @relation(fields: [memberId], references: [id])
+}
+
+model AuditLogEntry {
+  id                     String              @id @default(cuid())
+  teamId                 String
+  changeType             String
+  previousValue          String
+  newValue               String
+  userId                 String
+  timestamp              DateTime            @default(now())
+
+  team                   Team                @relation(fields: [teamId], references: [id])
+}
+
+model UserSession {
+  id                     String              @id @default(cuid())
+  memberId               String
+  token                  String              @unique
+  expiresAt              DateTime
+  createdAt              DateTime            @default(now())
+}
+
+model PendingGenesis {
+  id                     String              @id @default(cuid())
+  token                  String              @unique
+  email                  String
+  used                   Boolean             @default(false)
+  expiresAt              DateTime
+  createdAt              DateTime            @default(now())
+}
+
+model SlackInteractionQueue {
+  id                     String              @id @default(cuid())
+  interactionPayload     String
+  responseUrl            String
+  failureReason          String?
+  retryCount             Int                 @default(0)
+  status                 String              @default("pending")
+  createdAt              DateTime            @default(now())
+  nextRetryAt            DateTime?
 }
