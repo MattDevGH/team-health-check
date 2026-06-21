@@ -377,10 +377,10 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Generate participation sequences; verify streak matches expected; verify cadence change doesn't reset streak
     - _Validates: Requirements 17.1, 17.3, 17.6, 17.7_
 
-- [ ] 13. Checkpoint - Ensure all service layer tests pass
+- [x] 13. Checkpoint - Ensure all service layer tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 14. Audit log and data deletion services
+- [x] 14. Audit log and data deletion services
 
   - [x] 14.1 Implement audit log service (AuditService.log)
     - Create `src/lib/services/audit.service.ts` with `createAuditService` factory
@@ -403,13 +403,13 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: responses deleted; aggregates unchanged; active session participation decremented; audit entry contains hashed memberId, timestamp, actionType "data_deletion", and teamId; audit entry does NOT contain any deleted response data
     - _Requirements: NFR 4.3, NFR 4.5, NFR 4.6, NFR 4.7_
 
-  - [ ] 14.4 Write property tests for data deletion
+  - [x] 14.4 Write property tests for data deletion
     - **Property 28: Data deletion preserves materialised aggregates**
     - **Property 33: Live participation decrement on mid-session data deletion**
     - Generate members with responses and materialised aggregates; delete; verify aggregates unchanged; verify live count decremented
     - _Validates: Requirements NFR 4.5, NFR 4.6_
 
-- [ ] 15. Notification service
+- [x] 15. Notification service
 
   - [x] 15.1 Implement notification service core
     - Create `src/lib/services/notification.service.ts` with `createNotificationService` factory
@@ -419,12 +419,12 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: linked member gets prompt; unlinked member skipped; completed member skipped for reminder
     - _Requirements: 2.8, 5.2, 5.13, 13.1, 13.2, 13.3, 13.6, 13.8_
 
-  - [ ] 15.2 Write property test for Slack prompt targeting
+  - [x] 15.2 Write property test for Slack prompt targeting
     - **Property 8: Only linked members receive Slack prompts**
     - Generate teams with mix of linked/unlinked members; verify prompt recipients exactly match linked set
     - _Validates: Requirements 2.8, 5.13_
 
-  - [ ] 15.3 Implement pre-session notification
+  - [x] 15.3 Implement pre-session notification
     - Implement `sendPreSessionNotification(teamId, session)` — lists expected participants and away members; sends to configurable recipient (DM or channel)
     - Write failing test: notification includes correct expected/away lists; respects configured recipient
     - _Requirements: 12.3, 12.4, 12.5, 12.6_
@@ -436,17 +436,17 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: unanswered questions preferred; all 5 questions covered within session; bundling when days insufficient
     - _Requirements: 15.3, 15.4, 15.5_
 
-  - [ ] 15.5 Write property test for micro-pulse question exhaustion
+  - [x] 15.5 Write property test for micro-pulse question exhaustion
     - **Property 32: Micro-pulse question exhaustion guarantee**
     - Generate active micro-pulse members over full session; verify all 5 questions delivered exactly once
     - _Validates: Requirements 15.5, 15.6_
 
-  - [ ] 15.6 Write property test for question order invariant
+  - [x] 15.6 Write property test for question order invariant
     - **Property 20: Question order invariant**
     - Generate various sessions and members; verify questions always returned in fixed order
     - _Validates: Requirements 9.1, 9.3_
 
-- [ ] 16. Scheduler service
+- [x] 16. Scheduler service
 
   - [x] 16.1 Implement scheduler tick handler
     - Create `src/lib/services/scheduler.service.ts` with `createSchedulerService` factory
@@ -455,44 +455,44 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: due session opens; due session closes; pending aggregates materialised; prompts triggered for linked members
     - _Requirements: 3.2, 3.3, 3.4, 3.9, NFR 4.4_
 
-  - [ ] 16.2 Implement lazy aggregate materialisation in scheduler
+  - [x] 16.2 Implement lazy aggregate materialisation in scheduler
     - Detect closed sessions where `materialisedAt` is null and quiet period (30s) has elapsed
     - Trigger materialisation for each pending session
     - Write failing test: session closed >30s ago gets materialised; session closed <30s ago skipped
     - _Requirements: NFR 4.4_
 
-- [ ] 17. Checkpoint - Ensure notification and scheduler tests pass
+- [x] 17. Checkpoint - Ensure notification and scheduler tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 18. Prisma repository implementations
 
-  - [ ] 18.1 Implement Prisma TeamRepository and TeamMemberRepository
+  - [x] 18.1 Implement Prisma TeamRepository and TeamMemberRepository
     - Create `src/lib/repositories/prisma/team.repository.ts`
     - Create `src/lib/repositories/prisma/team-member.repository.ts`
     - Implement all interface methods using Prisma client
     - Write integration tests against real SQLite
     - _Requirements: 1.1, 1.3, 1.5_
 
-  - [ ] 18.2 Implement Prisma SessionRepository and ResponseRepository
+  - [x] 18.2 Implement Prisma SessionRepository and ResponseRepository
     - Create `src/lib/repositories/prisma/session.repository.ts`
     - Create `src/lib/repositories/prisma/response.repository.ts`
     - Implement upsert with unique constraint on (memberId, sessionId, questionId)
     - Write integration tests against real SQLite
     - _Requirements: 3.2, 10.2_
 
-  - [ ] 18.3 Implement Prisma auth-related repositories
+  - [x] 18.3 Implement Prisma auth-related repositories
     - Create Prisma implementations for: `SessionLinkRepository`, `MagicLinkRepository`, `PairingCodeRepository`, `UserSessionRepository`, `PendingGenesisRepository`
     - Implement atomic `claimToken` using raw SQL UPDATE with WHERE conditions
     - Write integration tests for atomic claim behaviour
     - _Requirements: 6.1, 7.2, 2.4_
 
-  - [ ] 18.4 Implement Prisma AuditLogRepository and SessionAggregateRepository
+  - [x] 18.4 Implement Prisma AuditLogRepository and SessionAggregateRepository
     - Create `src/lib/repositories/prisma/audit-log.repository.ts`
     - Create `src/lib/repositories/prisma/session-aggregate.repository.ts`
     - Write integration tests
     - _Requirements: 18.1, 8.1_
 
-  - [ ] 18.5 Create production repository factory and container
+  - [x] 18.5 Create production repository factory and container
     - Create `src/lib/repositories/prisma/index.ts` exporting `createPrismaRepositories(prisma)` factory
     - Create `src/lib/container.ts` wiring production repositories to services
     - Export configured service instances for use by route handlers

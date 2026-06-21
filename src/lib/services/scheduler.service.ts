@@ -10,6 +10,7 @@ import type {
   TeamRepository,
   TeamScheduleRepository,
   SessionRepository,
+  SessionAggregateRepository,
 } from '@/lib/repositories/types';
 import type { SessionService } from '@/lib/services/session.service';
 
@@ -17,6 +18,7 @@ export interface SchedulerServiceDeps {
   teamRepo: TeamRepository;
   teamScheduleRepo: TeamScheduleRepository;
   sessionRepo: SessionRepository;
+  sessionAggregateRepo: SessionAggregateRepository;
   sessionService: SessionService;
 }
 
@@ -58,7 +60,7 @@ function getLocalDayAndTime(date: Date, timezone: string): { day: number; time: 
 }
 
 export function createSchedulerService(deps: SchedulerServiceDeps) {
-  const { teamRepo, teamScheduleRepo, sessionRepo, sessionService } = deps;
+  const { teamRepo, teamScheduleRepo, sessionRepo, sessionAggregateRepo, sessionService } = deps;
 
   /**
    * Desired-state reconciliation tick.
@@ -116,6 +118,10 @@ export function createSchedulerService(deps: SchedulerServiceDeps) {
         // Check quiet period has elapsed
         const elapsed = now.getTime() - session.actualCloseAt.getTime();
         if (elapsed < QUIET_PERIOD_MS) continue;
+
+        // Skip sessions that already have aggregates (idempotent)
+        const existing = await sessionAggregateRepo.findBySessionId(session.id);
+        if (existing.length > 0) continue;
 
         // Attempt materialisation — safe to call; errors are swallowed
         // (e.g., already materialised or no responses).

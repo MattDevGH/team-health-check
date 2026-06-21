@@ -13,6 +13,8 @@ export interface Team {
   slackDeliveryStart: string | null;
   slackDeliveryEnd: string | null;
   timezone: string;
+  /** Configurable recipient for pre-session notifications: 'delivery_manager' (default) or 'channel'. Requirement 12.4 */
+  preSessionRecipient: string;
   createdAt: Date;
   updatedAt: Date;
 }

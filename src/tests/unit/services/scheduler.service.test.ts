@@ -21,6 +21,7 @@ describe('SchedulerService.tick', () => {
       teamRepo: repos.team,
       teamScheduleRepo: repos.teamSchedule,
       sessionRepo: repos.session,
+      sessionAggregateRepo: repos.sessionAggregate,
       sessionService,
     });
   });
@@ -204,5 +205,57 @@ describe('SchedulerService.tick', () => {
 
     const openSession = await repos.session.findOpenByTeamId(team.id);
     expect(openSession).toBeNull();
+  });
+
+  it('does not re-materialise aggregates for sessions that already have them (idempotent)', async () => {
+    const team = await repos.team.create({ name: 'Team F', timezone: 'UTC' });
+    await repos.teamMember.create({ teamId: team.id, name: 'Frank', email: 'frank@test.com' });
+    await repos.teamSchedule.create({
+      teamId: team.id,
+      cadence: 'weekly',
+      openDay: 1,
+      openTime: '09:00',
+      closeDay: 5,
+      closeTime: '17:00',
+      timezone: 'UTC',
+    });
+
+    // Create and close a session, add a response
+    const session = await repos.session.create({ teamId: team.id, status: 'open' });
+    await repos.response.upsert({
+      memberId: 'm1',
+      sessionId: session.id,
+      questionId: 'q1',
+      score: 5,
+    });
+
+    const closeTime = new Date(Date.now() - 60_000); // 60s ago
+    await repos.session.update(session.id, {
+      status: 'closed',
+      actualCloseAt: closeTime,
+    });
+
+    // First tick materialises aggregates
+    await scheduler.tick(new Date());
+
+    const firstAggregates = await repos.sessionAggregate.findBySessionId(session.id);
+    expect(firstAggregates).toHaveLength(1);
+    expect(firstAggregates[0].averageScore).toBe(5.0);
+
+    // Add another response after materialisation (simulates late data)
+    await repos.response.upsert({
+      memberId: 'm2',
+      sessionId: session.id,
+      questionId: 'q1',
+      score: 1,
+    });
+
+    // Second tick should NOT re-materialise (aggregates already exist)
+    await scheduler.tick(new Date());
+
+    const secondAggregates = await repos.sessionAggregate.findBySessionId(session.id);
+    // Still only 1 aggregate record — not re-computed
+    expect(secondAggregates).toHaveLength(1);
+    expect(secondAggregates[0].averageScore).toBe(5.0); // original value preserved
   });
 });

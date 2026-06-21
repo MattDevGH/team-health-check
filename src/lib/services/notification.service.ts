@@ -6,6 +6,7 @@
  */
 
 import type {
+  TeamRepository,
   TeamMemberRepository,
   ResponseRepository,
   QuestionRepository,
@@ -25,6 +26,7 @@ export interface SlackLinkChecker {
 }
 
 export interface NotificationServiceDeps {
+  teamRepo: TeamRepository;
   teamMemberRepo: TeamMemberRepository;
   responseRepo: ResponseRepository;
   questionRepo: QuestionRepository;
@@ -38,6 +40,7 @@ export interface NotificationService {
   sendSlackPrompt(memberId: string, session: HealthCheckSession): Promise<boolean>;
   sendClosingReminder(memberId: string, session: HealthCheckSession): Promise<boolean>;
   sendMidSessionNudge(memberId: string, session: HealthCheckSession): Promise<boolean>;
+  sendPreSessionNotification(teamId: string, session: HealthCheckSession): Promise<void>;
 }
 
 /**
@@ -49,6 +52,7 @@ export interface NotificationService {
  */
 export function createNotificationService(deps: NotificationServiceDeps): NotificationService {
   const {
+    teamRepo,
     teamMemberRepo,
     responseRepo,
     questionRepo,
@@ -179,5 +183,42 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     return true;
   }
 
-  return { sendSlackPrompt, sendClosingReminder, sendMidSessionNudge };
+  /**
+   * Send a pre-session notification listing expected participants and away members.
+   * Requirement 12.3: Sends before a scheduled session opens.
+   * Requirement 12.4: Configurable recipient (delivery_manager DM or team channel).
+   */
+  async function sendPreSessionNotification(teamId: string, session: HealthCheckSession): Promise<void> {
+    // 1. Get team configuration for recipient preference
+    const team = await teamRepo.findById(teamId);
+    const recipient = team?.preSessionRecipient ?? 'delivery_manager';
+
+    // 2. Get all team members
+    const members = await teamMemberRepo.findByTeamId(teamId);
+
+    // 3. For each member, check if they are away during the session
+    const sessionDate = session.scheduledOpenAt ?? session.actualOpenAt;
+    const expectedParticipants: Array<{ id: string; name: string }> = [];
+    const awayMembers: Array<{ id: string; name: string }> = [];
+
+    for (const member of members) {
+      const awayRecord = await availabilityRepo.findActiveByMemberIdAndDate(member.id, sessionDate);
+      if (awayRecord !== null) {
+        awayMembers.push({ id: member.id, name: member.name });
+      } else {
+        expectedParticipants.push({ id: member.id, name: member.name });
+      }
+    }
+
+    // 4. Send notification with the lists (via notification sink)
+    await notificationSink.send(teamId, 'pre_session_notification', {
+      sessionId: session.id,
+      teamId,
+      recipient,
+      expectedParticipants,
+      awayMembers,
+    });
+  }
+
+  return { sendSlackPrompt, sendClosingReminder, sendMidSessionNudge, sendPreSessionNotification };
 }

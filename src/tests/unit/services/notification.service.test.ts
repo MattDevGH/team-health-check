@@ -43,6 +43,7 @@ describe('NotificationService', () => {
 
   function createService() {
     return createNotificationService({
+      teamRepo: repos.team,
       teamMemberRepo: repos.teamMember,
       responseRepo: repos.response,
       questionRepo: repos.question,
@@ -229,6 +230,87 @@ describe('NotificationService', () => {
 
       expect(result).toBe(false);
       expect(sink.messages).toHaveLength(0);
+    });
+  });
+
+  describe('sendPreSessionNotification', () => {
+    it('should include correct expected participants list', async () => {
+      const alice = await repos.teamMember.create({ teamId: team.id, name: 'Alice', email: 'alice@test.com' });
+      const bob = await repos.teamMember.create({ teamId: team.id, name: 'Bob', email: 'bob@test.com' });
+      // No one is away — both should be expected
+      const service = createService();
+
+      await service.sendPreSessionNotification(team.id, session);
+
+      expect(sink.messages).toHaveLength(1);
+      const payload = sink.messages[0].payload as {
+        expectedParticipants: Array<{ id: string; name: string }>;
+        awayMembers: Array<{ id: string; name: string }>;
+      };
+      expect(payload.expectedParticipants).toHaveLength(2);
+      expect(payload.expectedParticipants.map(p => p.id).sort()).toEqual([alice.id, bob.id].sort());
+      expect(payload.awayMembers).toHaveLength(0);
+    });
+
+    it('should include correct away members list', async () => {
+      const alice = await repos.teamMember.create({ teamId: team.id, name: 'Alice', email: 'alice@test.com' });
+      const bob = await repos.teamMember.create({ teamId: team.id, name: 'Bob', email: 'bob@test.com' });
+      // Bob is away during the session
+      const now = new Date();
+      await repos.availability.create({
+        memberId: bob.id,
+        awayFrom: new Date(now.getTime() - 86400000),
+        awayUntil: new Date(now.getTime() + 86400000 * 7),
+      });
+      const service = createService();
+
+      await service.sendPreSessionNotification(team.id, session);
+
+      expect(sink.messages).toHaveLength(1);
+      const payload = sink.messages[0].payload as {
+        expectedParticipants: Array<{ id: string; name: string }>;
+        awayMembers: Array<{ id: string; name: string }>;
+      };
+      expect(payload.expectedParticipants).toHaveLength(1);
+      expect(payload.expectedParticipants[0].id).toBe(alice.id);
+      expect(payload.awayMembers).toHaveLength(1);
+      expect(payload.awayMembers[0].id).toBe(bob.id);
+    });
+
+    it('should send notification via sink with both lists to default recipient (team-level)', async () => {
+      await repos.teamMember.create({ teamId: team.id, name: 'Alice', email: 'alice@test.com' });
+      const service = createService();
+
+      await service.sendPreSessionNotification(team.id, session);
+
+      expect(sink.messages).toHaveLength(1);
+      expect(sink.messages[0].memberId).toBe(team.id);
+      expect(sink.messages[0].type).toBe('pre_session_notification');
+      const payload = sink.messages[0].payload as {
+        sessionId: string;
+        teamId: string;
+        recipient: string;
+        expectedParticipants: Array<{ id: string; name: string }>;
+        awayMembers: Array<{ id: string; name: string }>;
+      };
+      expect(payload.sessionId).toBe(session.id);
+      expect(payload.teamId).toBe(team.id);
+      expect(payload.recipient).toBe('delivery_manager');
+    });
+
+    it('should respect configured recipient when set to channel', async () => {
+      // Update team to use channel as pre-session notification recipient
+      await repos.team.update(team.id, { preSessionRecipient: 'channel' });
+      await repos.teamMember.create({ teamId: team.id, name: 'Alice', email: 'alice@test.com' });
+      const service = createService();
+
+      await service.sendPreSessionNotification(team.id, session);
+
+      expect(sink.messages).toHaveLength(1);
+      const payload = sink.messages[0].payload as {
+        recipient: string;
+      };
+      expect(payload.recipient).toBe('channel');
     });
   });
 });

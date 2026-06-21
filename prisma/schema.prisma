@@ -16,6 +16,7 @@ model Team {
   slackDeliveryStart     String?
   slackDeliveryEnd       String?
   timezone               String              @default("Europe/London")
+  preSessionRecipient    String              @default("delivery_manager")
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
 

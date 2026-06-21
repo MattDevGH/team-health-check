@@ -16,6 +16,7 @@ export class InMemoryTeamRepository implements TeamRepository {
       slackDeliveryStart: null,
       slackDeliveryEnd: null,
       timezone: data.timezone ?? 'Europe/London',
+      preSessionRecipient: 'delivery_manager',
       createdAt: now,
       updatedAt: now,
     };
@@ -29,7 +30,7 @@ export class InMemoryTeamRepository implements TeamRepository {
 
   async update(
     id: string,
-    data: Partial<Pick<Team, 'name' | 'description' | 'privacyMode' | 'archived' | 'slackDeliveryStart' | 'slackDeliveryEnd' | 'timezone'>>
+    data: Partial<Pick<Team, 'name' | 'description' | 'privacyMode' | 'archived' | 'slackDeliveryStart' | 'slackDeliveryEnd' | 'timezone' | 'preSessionRecipient'>>
   ): Promise<Team> {
     const existing = this.store.get(id);
     if (!existing) {

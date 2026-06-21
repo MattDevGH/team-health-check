@@ -26,7 +26,7 @@ import type {
 export interface TeamRepository {
   create(data: { name: string; description?: string; privacyMode?: string; timezone?: string }): Promise<Team>;
   findById(id: string): Promise<Team | null>;
-  update(id: string, data: Partial<Pick<Team, 'name' | 'description' | 'privacyMode' | 'archived' | 'slackDeliveryStart' | 'slackDeliveryEnd' | 'timezone'>>): Promise<Team>;
+  update(id: string, data: Partial<Pick<Team, 'name' | 'description' | 'privacyMode' | 'archived' | 'slackDeliveryStart' | 'slackDeliveryEnd' | 'timezone' | 'preSessionRecipient'>>): Promise<Team>;
   list(): Promise<Team[]>;
 }
 
