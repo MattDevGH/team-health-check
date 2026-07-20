@@ -1,31 +1,36 @@
 /**
  * PATCH /api/me/preferences — Update cadence preference and/or reminders
  *
- * Requirements: 15.1, 15.2
+ * Requirements: 15.1, 15.2, 2.1, 2.4
  * Thin route handler: validate input, update member preferences.
+ * Uses getAuthContext for cookie-based authentication (no x-member-id header).
  */
+
+import { NextRequest } from 'next/server';
 
 import { withErrorHandling } from '@/lib/api-utils';
 import { ValidationError, NotFoundError } from '@/lib/errors';
-import { createInMemoryRepositories } from '@/lib/repositories';
-import { createContainer } from '@/lib/container';
+import { repos } from '@/lib/container-production';
+import { createGetAuthContext } from '@/lib/auth/with-auth';
 
-const repos = createInMemoryRepositories();
-const container = createContainer(repos);
+// Test seam: allows route tests to seed data via repos
+export { repos as _repos };
 
-export { repos as _repos, container as _container };
+// Wire auth at module level using production repos
+const getAuthContext = createGetAuthContext({ userSessionRepo: repos.userSession });
 
 const VALID_CADENCES = ['session', 'micro_pulse'] as const;
 
 export const PATCH = withErrorHandling(async (request: Request) => {
-  const memberId = request.headers.get('x-member-id');
-  if (!memberId) {
-    throw new ValidationError([
-      { field: 'x-member-id', message: 'Missing member ID header', code: 'MISSING_HEADER' },
-    ]);
+  const auth = await getAuthContext(request as NextRequest);
+  if (!auth) {
+    return Response.json(
+      { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+      { status: 401 },
+    );
   }
 
-  const member = await repos.teamMember.findById(memberId);
+  const member = await repos.teamMember.findById(auth.memberId);
   if (!member) {
     throw new NotFoundError('Member not found');
   }
@@ -59,6 +64,6 @@ export const PATCH = withErrorHandling(async (request: Request) => {
     updates.remindersEnabled = body.remindersEnabled;
   }
 
-  const updated = await repos.teamMember.update(memberId, updates);
+  const updated = await repos.teamMember.update(auth.memberId, updates);
   return Response.json(updated);
 });

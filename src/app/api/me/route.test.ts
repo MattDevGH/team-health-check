@@ -1,57 +1,93 @@
 /**
- * Tests for /api/me/* route handlers
- * Requirements: 13.1, 15.1, 15.2, 12.1, 12.7, 17.1, 2.6, NFR 4.3
+ * Tests for /api/me/* route handlers (auth-migrated)
+ * Requirements: 13.1, 15.1, 15.2, 12.1, 12.7, 17.1, 2.1, 2.4, 2.6, NFR 4.3
+ *
+ * All routes now use cookie-based auth via getAuthContext.
+ * Tests verify: no cookie → 401, valid cookie → correct operation.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
 
 import { GET, _repos as meRepos } from './route';
 import { PATCH, _repos as prefsRepos } from './preferences/route';
-import { POST as PostAvailability, DELETE as DeleteAvailability, _repos as availRepos } from './availability/route';
+import {
+  POST as PostAvailability,
+  DELETE as DeleteAvailability,
+  _repos as availRepos,
+} from './availability/route';
 import { GET as GetStreak, _repos as streakRepos } from './streak/route';
-import { DELETE as DeleteSlackLink } from './slack-link/route';
+import { DELETE as DeleteSlackLink, _repos as slackLinkRepos } from './slack-link/route';
 import { POST as PostDeleteData, _repos as deleteRepos } from './delete-data/route';
 
-function makeRequest(method: string, headers: Record<string, string> = {}, body?: unknown): Request {
-  const init: RequestInit = {
-    method,
-    headers: { 'Content-Type': 'application/json', ...headers },
-  };
-  if (body !== undefined) {
-    init.body = JSON.stringify(body);
+/**
+ * Helper: build a NextRequest with optional session cookie and body.
+ */
+function makeAuthRequest(
+  method: string,
+  opts: { cookie?: string; body?: unknown; url?: string } = {},
+): NextRequest {
+  const url = opts.url ?? 'http://localhost/api/me';
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  if (opts.cookie) {
+    headers.set('cookie', `session=${opts.cookie}`);
   }
-  return new Request('http://localhost/api/me', init);
+  const init: { method: string; headers: Headers; body?: string } = { method, headers };
+  if (opts.body !== undefined) {
+    init.body = JSON.stringify(opts.body);
+  }
+  return new NextRequest(url, init);
 }
 
+/**
+ * Helper: create a valid session in the userSession repo and return the token.
+ */
+async function createSession(
+  repos: { userSession: { create: (data: { memberId: string; token: string; expiresAt: Date }) => Promise<unknown> } },
+  memberId: string,
+): Promise<string> {
+  const token = `session-token-${Date.now()}-${Math.random()}`;
+  await repos.userSession.create({
+    memberId,
+    token,
+    expiresAt: new Date(Date.now() + 60_000), // 1 minute in the future
+  });
+  return token;
+}
+
+// ─── GET /api/me ───────────────────────────────────────────────────────────────
+
 describe('GET /api/me', () => {
-  beforeEach(() => {
-    // Reset repos by clearing internal stores
-  });
-
-  it('returns 400 when x-member-id header is missing', async () => {
-    const req = makeRequest('GET');
+  it('returns 401 when no session cookie is present', async () => {
+    const req = makeAuthRequest('GET');
     const res = await GET(req);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
     const body = await res.json();
-    expect(body.error.code).toBe('VALIDATION_ERROR');
+    expect(body.error.code).toBe('UNAUTHORIZED');
   });
 
-  it('returns 404 when member does not exist', async () => {
-    const req = makeRequest('GET', { 'x-member-id': 'nonexistent' });
+  it('returns 401 when session cookie is invalid', async () => {
+    const req = makeAuthRequest('GET', { cookie: 'invalid-token' });
+    const res = await GET(req);
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 when member does not exist (valid cookie, unknown member)', async () => {
+    const token = await createSession(meRepos, 'nonexistent-member');
+    const req = makeAuthRequest('GET', { cookie: token });
     const res = await GET(req);
     expect(res.status).toBe(404);
   });
 
-  it('returns member profile on success', async () => {
+  it('returns member profile with valid session cookie', async () => {
     const member = await meRepos.teamMember.create({
       teamId: 'team-1',
       name: 'Alice',
       email: 'alice@example.com',
     });
-    // Need the team to exist for team creation in repo
-    await meRepos.team.create({ name: 'Team 1' });
+    const token = await createSession(meRepos, member.id);
 
-    const req = makeRequest('GET', { 'x-member-id': member.id });
+    const req = makeAuthRequest('GET', { cookie: token });
     const res = await GET(req);
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -60,15 +96,23 @@ describe('GET /api/me', () => {
   });
 });
 
+// ─── PATCH /api/me/preferences ─────────────────────────────────────────────────
+
 describe('PATCH /api/me/preferences', () => {
-  it('returns 400 when x-member-id header is missing', async () => {
-    const req = makeRequest('PATCH', {}, { cadencePreference: 'session' });
+  it('returns 401 when no session cookie is present', async () => {
+    const req = makeAuthRequest('PATCH', { body: { cadencePreference: 'session' } });
     const res = await PATCH(req);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error.code).toBe('UNAUTHORIZED');
   });
 
   it('returns 404 when member does not exist', async () => {
-    const req = makeRequest('PATCH', { 'x-member-id': 'nonexistent' }, { cadencePreference: 'session' });
+    const token = await createSession(prefsRepos, 'nonexistent');
+    const req = makeAuthRequest('PATCH', {
+      cookie: token,
+      body: { cadencePreference: 'session' },
+    });
     const res = await PATCH(req);
     expect(res.status).toBe(404);
   });
@@ -79,8 +123,12 @@ describe('PATCH /api/me/preferences', () => {
       name: 'Bob',
       email: 'bob@example.com',
     });
+    const token = await createSession(prefsRepos, member.id);
 
-    const req = makeRequest('PATCH', { 'x-member-id': member.id }, { cadencePreference: 'invalid' });
+    const req = makeAuthRequest('PATCH', {
+      cookie: token,
+      body: { cadencePreference: 'invalid' },
+    });
     const res = await PATCH(req);
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -93,34 +141,46 @@ describe('PATCH /api/me/preferences', () => {
       name: 'Carol',
       email: 'carol@example.com',
     });
+    const token = await createSession(prefsRepos, member.id);
 
-    const req = makeRequest('PATCH', { 'x-member-id': member.id }, { remindersEnabled: 'yes' });
+    const req = makeAuthRequest('PATCH', {
+      cookie: token,
+      body: { remindersEnabled: 'yes' },
+    });
     const res = await PATCH(req);
     expect(res.status).toBe(400);
   });
 
-  it('updates cadence preference successfully', async () => {
+  it('updates cadence preference with valid cookie', async () => {
     const member = await prefsRepos.teamMember.create({
       teamId: 'team-1',
       name: 'Dave',
       email: 'dave@example.com',
     });
+    const token = await createSession(prefsRepos, member.id);
 
-    const req = makeRequest('PATCH', { 'x-member-id': member.id }, { cadencePreference: 'micro_pulse' });
+    const req = makeAuthRequest('PATCH', {
+      cookie: token,
+      body: { cadencePreference: 'micro_pulse' },
+    });
     const res = await PATCH(req);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.cadencePreference).toBe('micro_pulse');
   });
 
-  it('updates reminders enabled successfully', async () => {
+  it('updates reminders enabled with valid cookie', async () => {
     const member = await prefsRepos.teamMember.create({
       teamId: 'team-1',
       name: 'Eve',
       email: 'eve@example.com',
     });
+    const token = await createSession(prefsRepos, member.id);
 
-    const req = makeRequest('PATCH', { 'x-member-id': member.id }, { remindersEnabled: false });
+    const req = makeAuthRequest('PATCH', {
+      cookie: token,
+      body: { remindersEnabled: false },
+    });
     const res = await PATCH(req);
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -128,15 +188,25 @@ describe('PATCH /api/me/preferences', () => {
   });
 });
 
+// ─── POST /api/me/availability ──────────────────────────────────────────────────
+
 describe('POST /api/me/availability', () => {
-  it('returns 400 when x-member-id header is missing', async () => {
-    const req = makeRequest('POST', {}, { awayFrom: '2025-01-01', awayUntil: '2025-01-05' });
+  it('returns 401 when no session cookie is present', async () => {
+    const req = makeAuthRequest('POST', {
+      body: { awayFrom: '2025-01-01', awayUntil: '2025-01-05' },
+    });
     const res = await PostAvailability(req);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error.code).toBe('UNAUTHORIZED');
   });
 
   it('returns 404 when member does not exist', async () => {
-    const req = makeRequest('POST', { 'x-member-id': 'nonexistent' }, { awayFrom: '2025-01-01', awayUntil: '2025-01-05' });
+    const token = await createSession(availRepos, 'nonexistent');
+    const req = makeAuthRequest('POST', {
+      cookie: token,
+      body: { awayFrom: '2025-01-01', awayUntil: '2025-01-05' },
+    });
     const res = await PostAvailability(req);
     expect(res.status).toBe(404);
   });
@@ -147,8 +217,9 @@ describe('POST /api/me/availability', () => {
       name: 'Frank',
       email: 'frank@example.com',
     });
+    const token = await createSession(availRepos, member.id);
 
-    const req = makeRequest('POST', { 'x-member-id': member.id }, {});
+    const req = makeAuthRequest('POST', { cookie: token, body: {} });
     const res = await PostAvailability(req);
     expect(res.status).toBe(400);
   });
@@ -159,25 +230,27 @@ describe('POST /api/me/availability', () => {
       name: 'Grace',
       email: 'grace@example.com',
     });
+    const token = await createSession(availRepos, member.id);
 
-    const req = makeRequest('POST', { 'x-member-id': member.id }, {
-      awayFrom: '2025-01-10',
-      awayUntil: '2025-01-05',
+    const req = makeAuthRequest('POST', {
+      cookie: token,
+      body: { awayFrom: '2025-01-10', awayUntil: '2025-01-05' },
     });
     const res = await PostAvailability(req);
     expect(res.status).toBe(400);
   });
 
-  it('marks member as away successfully', async () => {
+  it('marks member as away with valid cookie', async () => {
     const member = await availRepos.teamMember.create({
       teamId: 'team-1',
       name: 'Heidi',
       email: 'heidi@example.com',
     });
+    const token = await createSession(availRepos, member.id);
 
-    const req = makeRequest('POST', { 'x-member-id': member.id }, {
-      awayFrom: '2025-01-01T00:00:00Z',
-      awayUntil: '2025-01-10T00:00:00Z',
+    const req = makeAuthRequest('POST', {
+      cookie: token,
+      body: { awayFrom: '2025-01-01T00:00:00Z', awayUntil: '2025-01-10T00:00:00Z' },
     });
     const res = await PostAvailability(req);
     expect(res.status).toBe(201);
@@ -186,26 +259,31 @@ describe('POST /api/me/availability', () => {
   });
 });
 
+// ─── DELETE /api/me/availability ────────────────────────────────────────────────
+
 describe('DELETE /api/me/availability', () => {
-  it('returns 400 when x-member-id header is missing', async () => {
-    const req = makeRequest('DELETE', {}, { availabilityId: 'some-id' });
+  it('returns 401 when no session cookie is present', async () => {
+    const req = makeAuthRequest('DELETE', { body: { availabilityId: 'some-id' } });
     const res = await DeleteAvailability(req);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error.code).toBe('UNAUTHORIZED');
   });
 
   it('returns 400 when availabilityId is missing', async () => {
-    const req = makeRequest('DELETE', { 'x-member-id': 'member-1' }, {});
+    const token = await createSession(availRepos, 'member-1');
+    const req = makeAuthRequest('DELETE', { cookie: token, body: {} });
     const res = await DeleteAvailability(req);
     expect(res.status).toBe(400);
   });
 
-  it('removes availability successfully', async () => {
-    // Create a member and mark them away first
+  it('removes availability with valid cookie', async () => {
     const member = await availRepos.teamMember.create({
       teamId: 'team-1',
       name: 'Ivan',
       email: 'ivan@example.com',
     });
+    const token = await createSession(availRepos, member.id);
 
     const availability = await availRepos.availability.create({
       memberId: member.id,
@@ -213,7 +291,10 @@ describe('DELETE /api/me/availability', () => {
       awayUntil: new Date('2025-01-10'),
     });
 
-    const req = makeRequest('DELETE', { 'x-member-id': member.id }, { availabilityId: availability.id });
+    const req = makeAuthRequest('DELETE', {
+      cookie: token,
+      body: { availabilityId: availability.id },
+    });
     const res = await DeleteAvailability(req);
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -221,14 +302,18 @@ describe('DELETE /api/me/availability', () => {
   });
 });
 
+// ─── GET /api/me/streak ─────────────────────────────────────────────────────────
+
 describe('GET /api/me/streak', () => {
-  it('returns 400 when x-member-id header is missing', async () => {
-    const req = makeRequest('GET');
+  it('returns 401 when no session cookie is present', async () => {
+    const req = makeAuthRequest('GET');
     const res = await GetStreak(req);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error.code).toBe('UNAUTHORIZED');
   });
 
-  it('returns streak for existing member', async () => {
+  it('returns streak for existing member with valid cookie', async () => {
     await streakRepos.team.create({ name: 'Team Streak' });
     const teams = await streakRepos.team.list();
     const team = teams[teams.length - 1];
@@ -238,8 +323,9 @@ describe('GET /api/me/streak', () => {
       name: 'Judy',
       email: 'judy@example.com',
     });
+    const token = await createSession(streakRepos, member.id);
 
-    const req = makeRequest('GET', { 'x-member-id': member.id });
+    const req = makeAuthRequest('GET', { cookie: token });
     const res = await GetStreak(req);
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -250,15 +336,20 @@ describe('GET /api/me/streak', () => {
   });
 });
 
+// ─── DELETE /api/me/slack-link ───────────────────────────────────────────────────
+
 describe('DELETE /api/me/slack-link', () => {
-  it('returns 400 when x-member-id header is missing', async () => {
-    const req = makeRequest('DELETE');
+  it('returns 401 when no session cookie is present', async () => {
+    const req = makeAuthRequest('DELETE');
     const res = await DeleteSlackLink(req);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error.code).toBe('UNAUTHORIZED');
   });
 
-  it('returns success placeholder response', async () => {
-    const req = makeRequest('DELETE', { 'x-member-id': 'member-1' });
+  it('returns success with valid session cookie', async () => {
+    const token = await createSession(slackLinkRepos, 'member-1');
+    const req = makeAuthRequest('DELETE', { cookie: token });
     const res = await DeleteSlackLink(req);
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -266,15 +357,20 @@ describe('DELETE /api/me/slack-link', () => {
   });
 });
 
+// ─── POST /api/me/delete-data ───────────────────────────────────────────────────
+
 describe('POST /api/me/delete-data', () => {
-  it('returns 400 when x-member-id header is missing', async () => {
-    const req = makeRequest('POST', {}, { confirm: true });
+  it('returns 401 when no session cookie is present', async () => {
+    const req = makeAuthRequest('POST', { body: { confirm: true } });
     const res = await PostDeleteData(req);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error.code).toBe('UNAUTHORIZED');
   });
 
   it('returns 404 when member does not exist', async () => {
-    const req = makeRequest('POST', { 'x-member-id': 'nonexistent' }, { confirm: true });
+    const token = await createSession(deleteRepos, 'nonexistent');
+    const req = makeAuthRequest('POST', { cookie: token, body: { confirm: true } });
     const res = await PostDeleteData(req);
     expect(res.status).toBe(404);
   });
@@ -285,8 +381,9 @@ describe('POST /api/me/delete-data', () => {
       name: 'Karl',
       email: 'karl@example.com',
     });
+    const token = await createSession(deleteRepos, member.id);
 
-    const req = makeRequest('POST', { 'x-member-id': member.id }, {});
+    const req = makeAuthRequest('POST', { cookie: token, body: {} });
     const res = await PostDeleteData(req);
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -299,13 +396,14 @@ describe('POST /api/me/delete-data', () => {
       name: 'Laura',
       email: 'laura@example.com',
     });
+    const token = await createSession(deleteRepos, member.id);
 
-    const req = makeRequest('POST', { 'x-member-id': member.id }, { confirm: false });
+    const req = makeAuthRequest('POST', { cookie: token, body: { confirm: false } });
     const res = await PostDeleteData(req);
     expect(res.status).toBe(400);
   });
 
-  it('deletes data successfully with confirmation', async () => {
+  it('deletes data successfully with confirmation and valid cookie', async () => {
     await deleteRepos.team.create({ name: 'Team Delete' });
     const teams = await deleteRepos.team.list();
     const team = teams[teams.length - 1];
@@ -315,8 +413,9 @@ describe('POST /api/me/delete-data', () => {
       name: 'Mallory',
       email: 'mallory@example.com',
     });
+    const token = await createSession(deleteRepos, member.id);
 
-    const req = makeRequest('POST', { 'x-member-id': member.id }, { confirm: true });
+    const req = makeAuthRequest('POST', { cookie: token, body: { confirm: true } });
     const res = await PostDeleteData(req);
     expect(res.status).toBe(200);
     const body = await res.json();

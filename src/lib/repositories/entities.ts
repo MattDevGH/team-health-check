@@ -156,6 +156,14 @@ export interface TeamSchedule {
   createdAt: Date;
 }
 
+/** Requirement 7.1: Slack identity persistence */
+export interface SlackIdentityLink {
+  id: string;
+  memberId: string;
+  slackUserId: string;
+  createdAt: Date;
+}
+
 /** Requirements: 5.12, NFR 1.2 — Slack interaction retry queue */
 export interface SlackInteractionQueue {
   id: string;

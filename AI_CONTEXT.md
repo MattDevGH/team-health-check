@@ -20,7 +20,7 @@ Team Health Check — a lightweight feedback tool for delivery teams, inspired b
 
 | Layer       | Choice                        | Notes |
 |-------------|-------------------------------|-------|
-| Framework   | Next.js 15 (App Router)       | Read node_modules/next/dist/docs/ before writing Next-specific code |
+| Framework   | Next.js 16 (App Router)       | Read node_modules/next/dist/docs/ before writing Next-specific code |
 | Language    | TypeScript (strict)           | No JS files in src/. No `any` types. |
 | ORM         | Prisma 7 + better-sqlite3     | Driver adapter pattern. Config in prisma.config.ts |
 | DB (dev)    | SQLite (prisma/dev.db)        | Gitignored. Run: npx prisma migrate dev --name init |
@@ -54,34 +54,38 @@ src/
   app/
     api/                    # Route handlers (thin controllers)
       teams/               # Team CRUD, members, sessions, schedule, trends, export, audit
-      responses/           # Response submission (upsert)
+      responses/           # Response submission (cookie auth, body-based sessionId)
       auth/                # Session links, magic links, Slack pairing
-      slack/               # Events, interactions, commands
-      scheduler/           # Cron-triggered session lifecycle
+      slack/               # Events, interactions, commands (/healthcheck)
+      scheduler/           # Cron-triggered session lifecycle + notification dispatch
       me/                  # User profile, preferences, availability, streak, data deletion
     page.tsx
     layout.tsx
     globals.css
   lib/
+    auth/                  # Auth helpers: session-cookie, with-auth, authorize-team-member
     services/              # Business logic (factory functions)
     repositories/
-      types.ts             # Repository interfaces
+      types.ts             # Repository interfaces (incl. SlackIdentityLinkRepository)
       prisma/              # Production implementations
       in-memory/           # Test fakes
+    slack/                 # Slack delivery, message builder, notification sink, link checker
     validation/            # Zod schemas
-    prisma.ts              # Singleton PrismaClient
-    container.ts           # Production wiring (creates services with real repos)
+    prisma.ts              # Environment-aware PrismaClient (Turso or better-sqlite3)
+    container.ts           # Service factory with optional EmailService
+    container-production.ts # Production wiring (Prisma repos + Resend email)
     rate-limit.ts          # Rate limiting utility
-    api-utils.ts           # withErrorHandling wrapper, error classes
+    api-utils.ts           # withErrorHandling wrapper
+    errors.ts              # AppError, ForbiddenError, NotFoundError, etc.
   tests/
     setup.ts               # msw server lifecycle
-    mocks/                 # msw handlers
+    mocks/                 # msw handlers (aligned to actual API contracts)
     properties/            # Property-based tests (fast-check)
     unit/services/         # Service unit tests (in-memory repos)
     unit/validation/       # Schema tests
     integration/           # Real database tests
     ui/                    # Component + accessibility tests
-    e2e/                   # Playwright browser tests
+e2e/                       # Playwright browser tests (happy-path, accessibility)
 prisma/
   schema.prisma            # Domain models (Team, TeamMember, Session, Response, etc.)
   seed.ts                  # Fixed 5 questions
@@ -107,6 +111,9 @@ prisma.config.ts           # Prisma 7 datasource config
 | Resend for email | Simple, free tier sufficient, Vercel integration |
 | Zod for validation | Runtime type safety, co-located schemas |
 | fast-check for property tests | Formal correctness properties from design doc |
+| Route-handler auth helper (`withAuth`) over Edge middleware | Vercel Edge Runtime can't run Prisma/Turso; route handlers run in Node.js |
+| Cookie-based session over Authorization header | Browsers set cookies automatically; no client-side token management |
+| SlackIdentityLinkRepository (DB-backed) | Replaces in-memory Map; persists across server restarts |
 
 ---
 
@@ -137,7 +144,9 @@ prisma.config.ts           # Prisma 7 datasource config
 
 ## CI Pipeline (GitHub Actions)
 
-Install → Lint → Type Check → Unit+Property Tests → Build → E2E Tests
+**Job 1 (`ci`):** Install → Lint → Type Check → Unit+Property Tests → Build
+**Job 2 (`e2e`):** Install → Build → Playwright E2E Tests (depends on `ci`)
+**Job 3 (`requirement-coverage`):** PR description coverage check (on PRs only)
 
 All stages must pass. Branch protection requires CI green before merge.
 
@@ -160,10 +169,29 @@ All stages must pass. Branch protection requires CI green before merge.
 
 ## Spec Status
 
-Full spec at `.kiro/specs/team-health-check/`:
+### Original spec: `.kiro/specs/team-health-check/`
 - `requirements.md` — 20 requirements + 4 NFRs (complete, includes Slack retry queue and GDPR audit specifics)
 - `design.md` — Architecture, data models, 34 correctness properties, testing strategy, SOLID, TDD, SlackInteractionQueue, documentation-as-code CI (complete)
 - `tasks.md` — 28 task groups, ~120 sub-tasks including property tests (complete)
+
+### Completed spec: `.kiro/specs/integration-hardening/`
+- `requirements.md` — 13 requirements covering auth/cookie foundation, session-link enrichment, response submission, protected routes, notification wiring, Slack identity, Turso production DB, E2E tests, MSW alignment, and repo hygiene
+- `design.md` — Integration architecture, 12 correctness properties, auth helper design, cookie scoping, notification sink pattern
+- `tasks.md` — 21 task groups, 49 leaf tasks — **all completed**
+
+---
+
+## Auth Architecture (Post-Integration-Hardening)
+
+- **Cookie-based sessions**: Magic link verification and session-link validation set `session` httpOnly cookie
+- **`getAuthContext`**: Factory function (`createGetAuthContext`) extracts + validates session cookie against UserSessionRepository
+- **`withAuth`**: Factory-created HOF wrapper that enforces auth on route handlers (401 if invalid)
+- **`authorizeTeamMember`**: Factory function verifying member belongs to requested team (403 if not)
+- **`authorizeDeliveryManager`**: Extends team membership check with delivery_manager role requirement
+- **All `/api/me/*`, `/api/teams/*`, `/api/responses` routes**: Protected via cookie auth
+- **Slack identity**: Persistent DB-backed SlackIdentityLink records (replaces in-memory Map)
+- **Notification wiring**: Scheduler tick → NotificationService → ProductionNotificationSink → Slack API
+- **Turso**: Environment-aware Prisma client (better-sqlite3 locally, @libsql/client in production)
 
 ---
 
@@ -175,8 +203,11 @@ Full spec at `.kiro/specs/team-health-check/`:
 
 ## Outstanding Work
 
-- Implement domain model (replace placeholder Item schema)
-- Build service layer with repository pattern
-- Expand CI pipeline (lint, typecheck, e2e stages)
-- Add Playwright, fast-check, zod, date-fns-tz dependencies
-- Create PR template and requirement coverage CI script
+- Design system / component library (currently ad-hoc Tailwind)
+- Dark mode support
+- Responsive navigation / shared layout
+- CSRF protection on form submissions
+- Rate limiting on non-auth endpoints
+- Session revocation UI
+- Load/performance testing
+- End-to-end Slack integration test (against real workspace)

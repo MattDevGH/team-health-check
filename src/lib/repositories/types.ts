@@ -20,6 +20,7 @@ import type {
   UserSession,
   PendingGenesis,
   TeamSchedule,
+  SlackIdentityLink,
 } from './entities';
 
 /** Requirement 1.1: Team creation and management */
@@ -120,6 +121,7 @@ export interface PairingCodeRepository {
 export interface UserSessionRepository {
   create(data: { memberId: string; token: string; expiresAt: Date }): Promise<UserSession>;
   findByToken(token: string): Promise<UserSession | null>;
+  findValidByMemberId(memberId: string): Promise<UserSession | null>;
 }
 
 /** Requirement 7.9: Pending genesis for new team creation */
@@ -134,4 +136,13 @@ export interface TeamScheduleRepository {
   create(data: { teamId: string; cadence: string; openDay: number; openTime: string; closeDay: number; closeTime: string; timezone: string }): Promise<TeamSchedule>;
   findByTeamId(teamId: string): Promise<TeamSchedule | null>;
   update(teamId: string, data: Partial<Pick<TeamSchedule, 'cadence' | 'openDay' | 'openTime' | 'closeDay' | 'closeTime' | 'timezone'>>): Promise<TeamSchedule>;
+}
+
+/** Requirements 7.1, 7.2, 7.3: Slack identity link persistence */
+export interface SlackIdentityLinkRepository {
+  create(data: { memberId: string; slackUserId: string }): Promise<SlackIdentityLink>;
+  findByMemberId(memberId: string): Promise<SlackIdentityLink | null>;
+  findBySlackUserId(slackUserId: string): Promise<SlackIdentityLink | null>;
+  upsertByMemberId(memberId: string, slackUserId: string): Promise<SlackIdentityLink>;
+  delete(memberId: string): Promise<void>;
 }

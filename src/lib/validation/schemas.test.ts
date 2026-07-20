@@ -150,6 +150,7 @@ describe('addMemberSchema', () => {
 describe('submitResponseSchema', () => {
   it('accepts valid responses', () => {
     const result = submitResponseSchema.safeParse({
+      sessionId: 'session-1',
       responses: [
         { questionId: 'q-1', score: 3 },
         { questionId: 'q-2', score: 5, trendIndicator: 'improving' },
@@ -159,12 +160,20 @@ describe('submitResponseSchema', () => {
   });
 
   it('rejects empty responses array', () => {
-    const result = submitResponseSchema.safeParse({ responses: [] });
+    const result = submitResponseSchema.safeParse({ sessionId: 'session-1', responses: [] });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects missing sessionId', () => {
+    const result = submitResponseSchema.safeParse({
+      responses: [{ questionId: 'q-1', score: 3 }],
+    });
     expect(result.success).toBe(false);
   });
 
   it('rejects score below 1', () => {
     const result = submitResponseSchema.safeParse({
+      sessionId: 'session-1',
       responses: [{ questionId: 'q-1', score: 0 }],
     });
     expect(result.success).toBe(false);
@@ -172,6 +181,7 @@ describe('submitResponseSchema', () => {
 
   it('rejects score above 5', () => {
     const result = submitResponseSchema.safeParse({
+      sessionId: 'session-1',
       responses: [{ questionId: 'q-1', score: 6 }],
     });
     expect(result.success).toBe(false);
@@ -179,6 +189,7 @@ describe('submitResponseSchema', () => {
 
   it('rejects non-integer score', () => {
     const result = submitResponseSchema.safeParse({
+      sessionId: 'session-1',
       responses: [{ questionId: 'q-1', score: 3.5 }],
     });
     expect(result.success).toBe(false);
@@ -186,6 +197,7 @@ describe('submitResponseSchema', () => {
 
   it('accepts score at boundary 1', () => {
     const result = submitResponseSchema.safeParse({
+      sessionId: 'session-1',
       responses: [{ questionId: 'q-1', score: 1 }],
     });
     expect(result.success).toBe(true);
@@ -193,6 +205,7 @@ describe('submitResponseSchema', () => {
 
   it('accepts score at boundary 5', () => {
     const result = submitResponseSchema.safeParse({
+      sessionId: 'session-1',
       responses: [{ questionId: 'q-1', score: 5 }],
     });
     expect(result.success).toBe(true);
@@ -202,6 +215,7 @@ describe('submitResponseSchema', () => {
     const indicators = ['improving', 'stable', 'declining'] as const;
     for (const trendIndicator of indicators) {
       const result = submitResponseSchema.safeParse({
+        sessionId: 'session-1',
         responses: [{ questionId: 'q-1', score: 3, trendIndicator }],
       });
       expect(result.success).toBe(true);
@@ -210,6 +224,7 @@ describe('submitResponseSchema', () => {
 
   it('rejects invalid trend indicator', () => {
     const result = submitResponseSchema.safeParse({
+      sessionId: 'session-1',
       responses: [{ questionId: 'q-1', score: 3, trendIndicator: 'bad' }],
     });
     expect(result.success).toBe(false);
@@ -217,6 +232,7 @@ describe('submitResponseSchema', () => {
 
   it('accepts missing trend indicator', () => {
     const result = submitResponseSchema.safeParse({
+      sessionId: 'session-1',
       responses: [{ questionId: 'q-1', score: 3 }],
     });
     expect(result.success).toBe(true);

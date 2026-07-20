@@ -122,6 +122,7 @@ describe('Validation Schema Properties', () => {
           fc.integer({ min: 1, max: 5 }),
           (validScore) => {
             const result = submitResponseSchema.safeParse({
+              sessionId: 'session-1',
               responses: [
                 {
                   questionId: 'q-delivering-value',
@@ -141,6 +142,7 @@ describe('Validation Schema Properties', () => {
           fc.integer({ min: -1000, max: 0 }),
           (tooLow) => {
             const result = submitResponseSchema.safeParse({
+              sessionId: 'session-1',
               responses: [
                 {
                   questionId: 'q-delivering-value',
@@ -160,6 +162,7 @@ describe('Validation Schema Properties', () => {
           fc.integer({ min: 6, max: 1000 }),
           (tooHigh) => {
             const result = submitResponseSchema.safeParse({
+              sessionId: 'session-1',
               responses: [
                 {
                   questionId: 'q-delivering-value',
@@ -181,6 +184,7 @@ describe('Validation Schema Properties', () => {
           ),
           (floatScore) => {
             const result = submitResponseSchema.safeParse({
+              sessionId: 'session-1',
               responses: [
                 {
                   questionId: 'q-delivering-value',

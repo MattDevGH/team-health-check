@@ -2,28 +2,57 @@
  * GET /api/teams/[teamId]/members — List team members
  * POST /api/teams/[teamId]/members — Add a team member
  *
- * Requirements: 1.3, 1.4, 1.5, 1.7, 19.2
- * Thin route handler: validate input, call service, format response.
+ * Requirements: 1.3, 1.4, 1.5, 1.7, 9.1, 9.2, 19.2
+ * Thin route handler: validate input, enforce auth + team membership, call service, format response.
+ * Uses cookie-based auth via getAuthContext + authorizeTeamMember.
  */
+
+import { NextRequest } from 'next/server';
 
 import { withErrorHandling } from '@/lib/api-utils';
 import { addMemberSchema } from '@/lib/validation/schemas';
 import { ValidationError } from '@/lib/errors';
-import { createInMemoryRepositories } from '@/lib/repositories';
-import { createContainer } from '@/lib/container';
+import { container, repos } from '@/lib/container-production';
+import { createGetAuthContext } from '@/lib/auth/with-auth';
+import { createAuthorizeTeamMember } from '@/lib/auth/authorize-team-member';
 
-// For now, use in-memory repos until production wiring is complete (task 27.1)
-const repos = createInMemoryRepositories();
-const container = createContainer(repos);
+// Test seam: allows route tests to seed data via repos
+export { repos as _repos };
 
-export const GET = withErrorHandling(async (request, context) => {
+// Wire auth at module level using production repos
+const getAuthContext = createGetAuthContext({ userSessionRepo: repos.userSession });
+const authorizeTeamMember = createAuthorizeTeamMember({ teamMemberRepo: repos.teamMember });
+
+export const GET = withErrorHandling(async (request: Request, context) => {
   const { teamId } = await context!.params;
+
+  const auth = await getAuthContext(request as NextRequest);
+  if (!auth) {
+    return Response.json(
+      { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+      { status: 401 },
+    );
+  }
+
+  await authorizeTeamMember(auth.memberId, teamId);
+
   const members = await container.team.getMembers(teamId);
   return Response.json(members);
 });
 
-export const POST = withErrorHandling(async (request, context) => {
+export const POST = withErrorHandling(async (request: Request, context) => {
   const { teamId } = await context!.params;
+
+  const auth = await getAuthContext(request as NextRequest);
+  if (!auth) {
+    return Response.json(
+      { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+      { status: 401 },
+    );
+  }
+
+  await authorizeTeamMember(auth.memberId, teamId);
+
   const body = await request.json();
 
   // Validate input with Zod schema
@@ -37,9 +66,6 @@ export const POST = withErrorHandling(async (request, context) => {
       }))
     );
   }
-
-  // TODO: Enforce delivery_manager role for mutations once auth is wired
-  // await container.permission.requireRole(teamId, userId, 'delivery_manager');
 
   const member = await container.team.addMember(
     teamId,

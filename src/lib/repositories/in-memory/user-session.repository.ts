@@ -20,4 +20,11 @@ export class InMemoryUserSessionRepository implements UserSessionRepository {
   async findByToken(token: string): Promise<UserSession | null> {
     return [...this.store.values()].find(s => s.token === token) ?? null;
   }
+
+  async findValidByMemberId(memberId: string): Promise<UserSession | null> {
+    const now = new Date();
+    return [...this.store.values()].find(
+      s => s.memberId === memberId && s.expiresAt > now
+    ) ?? null;
+  }
 }

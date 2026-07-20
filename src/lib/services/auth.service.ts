@@ -15,7 +15,9 @@ import type {
   PairingCodeRepository,
   SessionLinkRepository,
   SessionRepository,
+  SlackIdentityLinkRepository,
 } from '@/lib/repositories/types';
+import type { EmailService } from '@/lib/services/email.service';
 
 export type MagicLinkVerifyResult =
   | { status: 'authenticated'; memberId: string; sessionToken: string }
@@ -29,6 +31,8 @@ export interface AuthServiceDeps {
   pendingGenesisRepo?: PendingGenesisRepository;
   sessionLinkRepo?: SessionLinkRepository;
   sessionRepo?: SessionRepository;
+  slackIdentityLinkRepo?: SlackIdentityLinkRepository;
+  emailService?: EmailService;
 }
 
 export interface AuthService {
@@ -78,7 +82,7 @@ function generateRandomCode(): string {
  * Accepts repository dependencies via injection.
  */
 export function createAuthService(deps: AuthServiceDeps): AuthService {
-  const { pairingCodeRepo, magicLinkRepo, teamMemberRepo, userSessionRepo, pendingGenesisRepo, sessionLinkRepo, sessionRepo } = deps;
+  const { pairingCodeRepo, magicLinkRepo, teamMemberRepo, userSessionRepo, pendingGenesisRepo, sessionLinkRepo, sessionRepo, slackIdentityLinkRepo, emailService } = deps;
 
   /**
    * Generate a pairing code for Slack identity linking.
@@ -101,10 +105,10 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
   /**
    * Verify a pairing code submitted by a team member.
    * Returns { slackUserId } on success, null if code is expired, used, or non-existent.
-   * Requirements 2.4, 2.5
+   * Requirements 2.4, 2.5, 7.1, 7.2
    */
   async function verifyPairingCode(
-    _memberId: string,
+    memberId: string,
     code: string
   ): Promise<{ slackUserId: string } | null> {
     const stored = await pairingCodeRepo.findByCode(code);
@@ -114,6 +118,12 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
     if (stored.expiresAt < new Date()) return null;
 
     await pairingCodeRepo.markUsed(stored.id);
+
+    // Persist Slack identity link (upsert to handle re-linking)
+    if (slackIdentityLinkRepo) {
+      await slackIdentityLinkRepo.upsertByMemberId(memberId, stored.slackUserId);
+    }
+
     return { slackUserId: stored.slackUserId };
   }
 
@@ -149,6 +159,18 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
         email,
         expiresAt,
       });
+    }
+
+    // Send email (anti-enumeration: swallow errors)
+    // Requirement 6.1: Call EmailService after token persistence
+    // Requirement 6.3: Swallow failures — user must not know if email succeeded
+    if (emailService) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+      try {
+        await emailService.sendMagicLink(email, token, baseUrl);
+      } catch (err) {
+        console.error('Email delivery failed:', err);
+      }
     }
   }
 

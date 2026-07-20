@@ -3,28 +3,41 @@
  *
  * Handles:
  * - `/healthcheck connect` — generates a pairing code for Slack identity linking (Req 2.2)
- * - `/healthcheck` — responds with prompts for current session based on cadence (Req 5.15)
- * - No active session — returns informative ephemeral message (Req 5.16)
+ * - `/healthcheck` — responds with prompts for current session based on cadence (Req 5.15, 7.4)
+ * - No active session — returns informative ephemeral message (Req 5.16, 7.4)
+ * - Unlinked user — returns pairing instructions (Req 7.4)
  *
  * Architecture: Verify signature, parse form data, route by command text.
- * Thin route handler: no business logic — delegates to services.
+ * Thin route handler: no business logic — delegates to services/repos.
  *
- * Requirements: 2.2, 5.14, 5.15, 5.16
+ * Requirements: 2.2, 5.14, 5.15, 5.16, 7.4
  */
 
 import { withErrorHandling } from '@/lib/api-utils';
 import { verifySlackSignature } from '@/lib/slack/verify-signature';
-import { createInMemoryRepositories } from '@/lib/repositories';
-import { createContainer } from '@/lib/container';
+import { container as prodContainer } from '@/lib/container-production';
+import { repos as prodRepos } from '@/lib/container-production';
 import type { Container } from '@/lib/container';
-
-// Default container — uses in-memory repos until production wiring (task 27.1)
-const repos = createInMemoryRepositories();
-let container: Container = createContainer(repos);
+import type { Repositories } from '@/lib/repositories';
 
 /** Test seam: allows tests to inject a container with pre-populated data */
+let _containerOverride: Container | null = null;
+let _reposOverride: Repositories | null = null;
+
 export function _setContainer(c: Container): void {
-  container = c;
+  _containerOverride = c;
+}
+
+export function _setRepos(r: Repositories): void {
+  _reposOverride = r;
+}
+
+function getContainer(): Container {
+  return _containerOverride ?? prodContainer;
+}
+
+function getRepos(): Repositories {
+  return _reposOverride ?? prodRepos;
 }
 
 export const POST = withErrorHandling(async (request: Request) => {
@@ -60,7 +73,8 @@ export const POST = withErrorHandling(async (request: Request) => {
  * Requirement 2.2: self-service command initiates identity linking.
  */
 async function handleConnect(slackUserId: string): Promise<Response> {
-  const code = await container.auth.generatePairingCode(slackUserId);
+  const c = getContainer();
+  const code = await c.auth.generatePairingCode(slackUserId);
 
   return Response.json({
     response_type: 'ephemeral',
@@ -70,21 +84,47 @@ async function handleConnect(slackUserId: string): Promise<Response> {
 
 /**
  * Handle `/healthcheck` — show health check prompt for current session.
+ * Requirement 7.4: Use SlackIdentityLinkRepository to identify the member.
  * Requirement 5.15: on-demand slash command responds with appropriate prompts.
  * Requirement 5.16: no active session returns informative message.
- *
- * TODO: When SlackIdentityLink repository is available, look up member
- * by Slack user ID, find their team, get active session, and build prompt
- * based on cadence preference and unanswered questions.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function handleHealthCheck(slackUserId: string): Promise<Response> {
-  // TODO: Look up member by Slack ID via SlackIdentityLink repository
-  // TODO: Get active session for member's team
-  // TODO: Build prompt based on cadence preference and unanswered questions
-  // For now, return the no-active-session message as a graceful default
+  const r = getRepos();
+
+  // Step 1: Look up Slack identity link
+  const link = await r.slackIdentityLink.findBySlackUserId(slackUserId);
+
+  if (!link) {
+    // Unlinked user — return pairing instructions
+    return Response.json({
+      response_type: 'ephemeral',
+      text: 'Your Slack account is not linked to a Team Health Check member.\nUse `/healthcheck connect` to generate a pairing code and link your account.',
+    });
+  }
+
+  // Step 2: Look up the member to find their team
+  const member = await r.teamMember.findById(link.memberId);
+  if (!member) {
+    // Member no longer exists — treat as unlinked
+    return Response.json({
+      response_type: 'ephemeral',
+      text: 'Your Slack account is not linked to a Team Health Check member.\nUse `/healthcheck connect` to generate a pairing code and link your account.',
+    });
+  }
+
+  // Step 3: Find open session for the member's team
+  const openSession = await r.session.findOpenByTeamId(member.teamId);
+
+  if (!openSession) {
+    return Response.json({
+      response_type: 'ephemeral',
+      text: 'No active health check session for your team. Check back when one is open!',
+    });
+  }
+
+  // Step 4: Return health check prompt with session info
   return Response.json({
     response_type: 'ephemeral',
-    text: 'No active health check session for your team. Check back when one is open!',
+    text: `You have an active health check session open for your team. Submit your responses to share how things are going!\nSession started: ${openSession.actualOpenAt.toISOString().split('T')[0]}`,
   });
 }

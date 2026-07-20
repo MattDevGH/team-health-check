@@ -11,6 +11,7 @@ export const addMemberSchema = z.object({
 });
 
 export const submitResponseSchema = z.object({
+  sessionId: z.string().min(1),
   responses: z
     .array(
       z.object({

@@ -19,6 +19,7 @@ import type {
   UserSessionRepository,
   PendingGenesisRepository,
   TeamScheduleRepository,
+  SlackIdentityLinkRepository,
 } from './types';
 
 import { InMemoryTeamRepository } from './in-memory/team.repository';
@@ -36,6 +37,7 @@ import { InMemoryPairingCodeRepository } from './in-memory/pairing-code.reposito
 import { InMemoryUserSessionRepository } from './in-memory/user-session.repository';
 import { InMemoryPendingGenesisRepository } from './in-memory/pending-genesis.repository';
 import { InMemoryTeamScheduleRepository } from './in-memory/team-schedule.repository';
+import { InMemorySlackIdentityLinkRepository } from './in-memory/slack-identity-link.repository';
 
 export interface Repositories {
   team: TeamRepository;
@@ -53,6 +55,7 @@ export interface Repositories {
   userSession: UserSessionRepository;
   pendingGenesis: PendingGenesisRepository;
   teamSchedule: TeamScheduleRepository;
+  slackIdentityLink: SlackIdentityLinkRepository;
 }
 
 /**
@@ -80,6 +83,7 @@ export function createInMemoryRepositories(): Repositories {
   const userSession = new InMemoryUserSessionRepository();
   const pendingGenesis = new InMemoryPendingGenesisRepository();
   const teamSchedule = new InMemoryTeamScheduleRepository();
+  const slackIdentityLink = new InMemorySlackIdentityLinkRepository();
 
   return {
     team,
@@ -97,6 +101,7 @@ export function createInMemoryRepositories(): Repositories {
     userSession,
     pendingGenesis,
     teamSchedule,
+    slackIdentityLink,
   };
 }
 

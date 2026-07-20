@@ -18,6 +18,35 @@ const MAX_RETRIES = 3;
 const DEFAULT_RETRY_DELAY_MS = 5000;
 
 /**
+ * Creates a SlackApiClient that calls the Slack Web API via fetch.
+ * Requirement 8.3: Production notification sink calls Slack API.
+ */
+export function createSlackApiClient(botToken: string): SlackApiClient {
+  return {
+    async postMessage(params: { channel: string; blocks: unknown[] }): Promise<{ ok: boolean; error?: string }> {
+      const response = await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${botToken}`,
+        },
+        body: JSON.stringify({
+          channel: params.channel,
+          blocks: params.blocks,
+        }),
+      });
+
+      if (!response.ok) {
+        return { ok: false, error: `HTTP ${response.status}` };
+      }
+
+      const data = await response.json() as { ok: boolean; error?: string };
+      return { ok: data.ok, error: data.error };
+    },
+  };
+}
+
+/**
  * Delivers a Slack message with retry logic.
  * Retries up to 3 times with a configurable delay between attempts (default 5s).
  * Logs to console.error if all retries are exhausted.

@@ -1,6 +1,4 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createInMemoryRepositories } from '@/lib/repositories';
-import { createContainer } from '@/lib/container';
 import { POST, GET } from './route';
 
 // Requirements: 1.1, 1.2, 20.1

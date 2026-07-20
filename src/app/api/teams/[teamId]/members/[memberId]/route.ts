@@ -7,12 +7,7 @@
  */
 
 import { withErrorHandling } from '@/lib/api-utils';
-import { createInMemoryRepositories } from '@/lib/repositories';
-import { createContainer } from '@/lib/container';
-
-// For now, use in-memory repos until production wiring is complete (task 27.1)
-const repos = createInMemoryRepositories();
-const container = createContainer(repos);
+import { container } from '@/lib/container-production';
 
 export const DELETE = withErrorHandling(async (request, context) => {
   const { teamId, memberId } = await context!.params;

@@ -7,14 +7,9 @@
  */
 
 import { withErrorHandling } from '@/lib/api-utils';
-import { createInMemoryRepositories } from '@/lib/repositories';
-import { createContainer } from '@/lib/container';
+import { container, repos } from '@/lib/container-production';
 
-// For now, use in-memory repos until production wiring is complete (task 27.1)
-const repos = createInMemoryRepositories();
-const container = createContainer(repos);
-
-// Exported for test access to seed data
+// Test seam: allows route tests to seed data via repos
 export { repos as _testRepos };
 
 /**

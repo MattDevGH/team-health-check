@@ -1,31 +1,46 @@
 /**
  * GET /api/teams/[teamId]/audit-log — Paginated audit log retrieval
  *
- * Requirements: 18.4, 18.5, 19.2
+ * Requirements: 9.4, 18.4, 18.5, 19.2
+ * - 9.4: delivery_manager role enforcement for audit-log
  * - 18.4: Retrieve audit log entries for a team (most recent first)
  * - 18.5: Cursor-based pagination support
  * - 19.2: delivery_manager role enforcement
  *
- * Thin route handler: enforce role, parse pagination, call service, format response.
+ * Thin route handler: enforce auth + delivery_manager role, parse pagination, call service, format response.
+ * Uses cookie-based auth via getAuthContext + authorizeDeliveryManager.
  */
 
+import { NextRequest } from 'next/server';
+
 import { withErrorHandling } from '@/lib/api-utils';
-import { createInMemoryRepositories } from '@/lib/repositories';
-import { createContainer } from '@/lib/container';
+import { container, repos } from '@/lib/container-production';
+import { createGetAuthContext } from '@/lib/auth/with-auth';
+import { createAuthorizeDeliveryManager } from '@/lib/auth/authorize-team-member';
 
-// For now, use in-memory repos until production wiring is complete (task 27.1)
-const repos = createInMemoryRepositories();
-const container = createContainer(repos);
+// Test seam: allows route tests to seed data via repos
+export { repos as _repos };
 
-// Exported for test access to seed data
-export { repos as _testRepos };
+// Wire auth at module level using production repos
+const getAuthContext = createGetAuthContext({ userSessionRepo: repos.userSession });
+const authorizeDeliveryManager = createAuthorizeDeliveryManager({
+  teamMemberRepo: repos.teamMember,
+  teamMemberRoleRepo: repos.teamMemberRole,
+});
 
-export const GET = withErrorHandling(async (request, context) => {
+export const GET = withErrorHandling(async (request: Request, context) => {
   const { teamId } = await context!.params;
 
-  // Enforce delivery_manager role (Requirement 19.2)
-  const userId = request.headers.get('x-user-id') ?? '';
-  await container.permission.requireRole(teamId, userId, 'delivery_manager');
+  const auth = await getAuthContext(request as NextRequest);
+  if (!auth) {
+    return Response.json(
+      { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+      { status: 401 },
+    );
+  }
+
+  // Enforce delivery_manager role (Requirement 9.4, 19.2)
+  await authorizeDeliveryManager(auth.memberId, teamId);
 
   // Parse pagination params from URL (Requirement 18.5)
   const url = new URL(request.url);

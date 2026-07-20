@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createInMemoryRepositories, type Repositories } from '@/lib/repositories';
-import { createTrendService, type TrendDistribution, type SessionAverage } from '@/lib/services/trend.service';
+import { createTrendService, type TrendDistribution } from '@/lib/services/trend.service';
 import { InMemorySessionAggregateRepository } from '@/lib/repositories/in-memory/session-aggregate.repository';
 
 describe('TrendService.getSessionAverages', () => {

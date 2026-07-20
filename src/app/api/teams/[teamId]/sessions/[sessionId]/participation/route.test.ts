@@ -46,8 +46,8 @@ describe('GET /api/teams/[teamId]/sessions/[sessionId]/participation', () => {
   it('returns responded count and total count (Req 11.1)', async () => {
     const team = await repos.team.create({ name: 'Count Team', privacyMode: 'attributed' });
     const member1 = await repos.teamMember.create({ teamId: team.id, name: 'Alice' });
-    const member2 = await repos.teamMember.create({ teamId: team.id, name: 'Bob' });
-    const member3 = await repos.teamMember.create({ teamId: team.id, name: 'Charlie' });
+    const _member2 = await repos.teamMember.create({ teamId: team.id, name: 'Bob' });
+    const _member3 = await repos.teamMember.create({ teamId: team.id, name: 'Charlie' });
     const session = await repos.session.create({ teamId: team.id, status: 'open' });
 
     // Only member1 responded

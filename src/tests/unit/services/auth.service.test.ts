@@ -3,6 +3,7 @@ import { createInMemoryRepositories, type Repositories } from '@/lib/repositorie
 import { createAuthService, type AuthService } from '@/lib/services/auth.service';
 import { resetRateLimitStore } from '@/lib/rate-limit';
 import { RateLimitError } from '@/lib/errors';
+import { InMemoryEmailService } from '@/lib/services/email.service';
 
 describe('AuthService.generatePairingCode', () => {
   let repos: Repositories;
@@ -138,6 +139,53 @@ describe('AuthService.verifyPairingCode', () => {
 });
 
 
+describe('AuthService.verifyPairingCode — SlackIdentityLink persistence', () => {
+  let repos: Repositories;
+  let authService: AuthService;
+
+  beforeEach(() => {
+    repos = createInMemoryRepositories();
+    authService = createAuthService({
+      pairingCodeRepo: repos.pairingCode,
+      slackIdentityLinkRepo: repos.slackIdentityLink,
+    });
+  });
+
+  it('creates a SlackIdentityLink record on successful pairing code verification', async () => {
+    const code = await authService.generatePairingCode('USLACK_ABC');
+
+    await authService.verifyPairingCode('member-42', code);
+
+    const link = await repos.slackIdentityLink.findByMemberId('member-42');
+    expect(link).not.toBeNull();
+    expect(link!.memberId).toBe('member-42');
+    expect(link!.slackUserId).toBe('USLACK_ABC');
+  });
+
+  it('upserts on re-verification for same memberId (no duplicate)', async () => {
+    // First pairing
+    const code1 = await authService.generatePairingCode('USLACK_FIRST');
+    await authService.verifyPairingCode('member-42', code1);
+
+    // Second pairing with a different slack user
+    const code2 = await authService.generatePairingCode('USLACK_SECOND');
+    await authService.verifyPairingCode('member-42', code2);
+
+    // Should only have one link for this member, with the latest slackUserId
+    const link = await repos.slackIdentityLink.findByMemberId('member-42');
+    expect(link).not.toBeNull();
+    expect(link!.slackUserId).toBe('USLACK_SECOND');
+
+    // Verify no duplicates by checking the old slackUserId is gone
+    const oldLink = await repos.slackIdentityLink.findBySlackUserId('USLACK_FIRST');
+    // The record for member-42 should now point to USLACK_SECOND
+    if (oldLink) {
+      // If found, it should not be for member-42
+      expect(oldLink.memberId).not.toBe('member-42');
+    }
+  });
+});
+
 describe('AuthService.validateSessionLinkWithRateLimit', () => {
   let repos: Repositories;
   let authService: AuthService;
@@ -223,5 +271,145 @@ describe('AuthService.validateSessionLinkWithRateLimit', () => {
     // ip2 should still work fine
     const result = await authService.validateSessionLinkWithRateLimit('bad-token', ip2);
     expect(result).toBeNull();
+  });
+});
+
+describe('AuthService.requestMagicLink — EmailService integration', () => {
+  let repos: Repositories;
+  let authService: AuthService;
+  let emailService: InMemoryEmailService;
+
+  beforeEach(() => {
+    resetRateLimitStore();
+    repos = createInMemoryRepositories();
+    emailService = new InMemoryEmailService();
+    authService = createAuthService({
+      pairingCodeRepo: repos.pairingCode,
+      magicLinkRepo: repos.magicLink,
+      teamMemberRepo: repos.teamMember,
+      userSessionRepo: repos.userSession,
+      pendingGenesisRepo: repos.pendingGenesis,
+      emailService,
+    });
+  });
+
+  afterEach(() => {
+    resetRateLimitStore();
+  });
+
+  it('calls EmailService.sendMagicLink for existing members', async () => {
+    // Create an existing member
+    await repos.teamMember.create({
+      id: 'member-email-1',
+      teamId: 'team-1',
+      name: 'Bob',
+      email: 'bob@example.com',
+    });
+
+    await authService.requestMagicLink('bob@example.com');
+
+    expect(emailService.sentEmails).toHaveLength(1);
+    expect(emailService.sentEmails[0].to).toBe('bob@example.com');
+    expect(emailService.sentEmails[0].token).toBeTruthy();
+    expect(emailService.sentEmails[0].baseUrl).toBeTruthy();
+  });
+
+  it('calls EmailService.sendMagicLink for new users (pending genesis)', async () => {
+    await authService.requestMagicLink('newuser@example.com');
+
+    expect(emailService.sentEmails).toHaveLength(1);
+    expect(emailService.sentEmails[0].to).toBe('newuser@example.com');
+    expect(emailService.sentEmails[0].token).toBeTruthy();
+    expect(emailService.sentEmails[0].baseUrl).toBeTruthy();
+  });
+
+  it('swallows email failure (anti-enumeration) — function returns normally', async () => {
+    // Create an existing member
+    await repos.teamMember.create({
+      id: 'member-email-2',
+      teamId: 'team-1',
+      name: 'Carol',
+      email: 'carol@example.com',
+    });
+
+    // Replace emailService with one that throws
+    const failingEmailService = {
+      sendMagicLink: vi.fn().mockRejectedValue(new Error('Network timeout')),
+    };
+    const authWithFailingEmail = createAuthService({
+      pairingCodeRepo: repos.pairingCode,
+      magicLinkRepo: repos.magicLink,
+      teamMemberRepo: repos.teamMember,
+      userSessionRepo: repos.userSession,
+      pendingGenesisRepo: repos.pendingGenesis,
+      emailService: failingEmailService,
+    });
+
+    // Should NOT throw — anti-enumeration
+    await expect(authWithFailingEmail.requestMagicLink('carol@example.com')).resolves.toBeUndefined();
+  });
+
+  it('includes baseUrl from NEXT_PUBLIC_APP_URL env variable', async () => {
+    const originalUrl = process.env.NEXT_PUBLIC_APP_URL;
+    process.env.NEXT_PUBLIC_APP_URL = 'https://myapp.example.com';
+
+    await repos.teamMember.create({
+      id: 'member-email-3',
+      teamId: 'team-1',
+      name: 'Dave',
+      email: 'dave@example.com',
+    });
+
+    await authService.requestMagicLink('dave@example.com');
+
+    expect(emailService.sentEmails[0].baseUrl).toBe('https://myapp.example.com');
+
+    // Cleanup
+    if (originalUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_APP_URL;
+    } else {
+      process.env.NEXT_PUBLIC_APP_URL = originalUrl;
+    }
+  });
+
+  it('does not call EmailService when rate limited', async () => {
+    await repos.teamMember.create({
+      id: 'member-email-4',
+      teamId: 'team-1',
+      name: 'Eve',
+      email: 'eve@example.com',
+    });
+
+    // Exhaust rate limit (5 per hour)
+    for (let i = 0; i < 5; i++) {
+      await authService.requestMagicLink('eve@example.com');
+    }
+
+    emailService.sentEmails.length = 0; // Reset tracking
+
+    // 6th request should be rate-limited — no email sent
+    await authService.requestMagicLink('eve@example.com');
+    expect(emailService.sentEmails).toHaveLength(0);
+  });
+
+  it('does not call EmailService when emailService dep is not provided', async () => {
+    const authWithoutEmail = createAuthService({
+      pairingCodeRepo: repos.pairingCode,
+      magicLinkRepo: repos.magicLink,
+      teamMemberRepo: repos.teamMember,
+      userSessionRepo: repos.userSession,
+      pendingGenesisRepo: repos.pendingGenesis,
+      // No emailService provided
+    });
+
+    await repos.teamMember.create({
+      id: 'member-email-5',
+      teamId: 'team-1',
+      name: 'Frank',
+      email: 'frank@example.com',
+    });
+
+    // Should work fine without email service — no errors
+    await expect(authWithoutEmail.requestMagicLink('frank@example.com')).resolves.toBeUndefined();
   });
 });

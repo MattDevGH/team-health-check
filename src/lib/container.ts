@@ -32,6 +32,12 @@ import type { PrivacyService } from './services/privacy.service';
 import type { AvailabilityService } from './services/availability.service';
 import type { StreakService } from './services/streak.service';
 import type { QuestionSelectionService } from './services/question-selection.service';
+import type { EmailService } from './services/email.service';
+
+/** Optional service overrides for production wiring */
+export interface ContainerOptions {
+  emailService?: EmailService;
+}
 
 /** Typed container exposing all wired service instances */
 export interface Container {
@@ -56,7 +62,7 @@ export interface Container {
  * NotificationService and SchedulerService require additional dependencies
  * (sinks, other services) and are wired separately at the route handler level.
  */
-export function createContainer(repos: Repositories): Container {
+export function createContainer(repos: Repositories, options?: ContainerOptions): Container {
   const auditLog = createAuditService({ auditLogRepo: repos.auditLog });
 
   const team = createTeamService({
@@ -99,6 +105,7 @@ export function createContainer(repos: Repositories): Container {
     pendingGenesisRepo: repos.pendingGenesis,
     sessionLinkRepo: repos.sessionLink,
     sessionRepo: repos.session,
+    emailService: options?.emailService,
   });
 
   const genesis = createGenesisService({

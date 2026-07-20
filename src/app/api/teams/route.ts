@@ -9,12 +9,7 @@
 import { withErrorHandling } from '@/lib/api-utils';
 import { createTeamSchema } from '@/lib/validation/schemas';
 import { ValidationError } from '@/lib/errors';
-import { createInMemoryRepositories } from '@/lib/repositories';
-import { createContainer } from '@/lib/container';
-
-// For now, use in-memory repos until production wiring is complete (task 27.1)
-const repos = createInMemoryRepositories();
-const container = createContainer(repos);
+import { container } from '@/lib/container-production';
 
 export const POST = withErrorHandling(async (request: Request) => {
   const body = await request.json();

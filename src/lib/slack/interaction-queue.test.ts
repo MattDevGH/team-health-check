@@ -35,7 +35,7 @@ describe('interaction-queue', () => {
 
   describe('processPending', () => {
     it('calls deliverFn for each pending entry', async () => {
-      const { repo, queue } = createTestQueue();
+      const { queue } = createTestQueue();
 
       await queue.enqueue({
         interactionPayload: '{"text":"msg1"}',

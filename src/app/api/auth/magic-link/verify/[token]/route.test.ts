@@ -1,18 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createInMemoryRepositories } from '@/lib/repositories';
-import { createContainer } from '@/lib/container';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Requirements: 7.2, 7.4, 7.9
+// Requirements: 1.1, 1.5, 7.2, 7.4, 7.9
 
 describe('GET /api/auth/magic-link/verify/[token]', () => {
-  let GET: typeof import('./route').GET;
-  let repos: ReturnType<typeof createInMemoryRepositories>;
-
   beforeEach(async () => {
-    const mod = await import('./route');
-    GET = mod.GET;
-    // We need repos to seed test data — grab the module-level repos
-    // For route tests, we rely on the route's internal container
+    // Each test imports the module fresh for isolation
+    vi.unstubAllEnvs();
   });
 
   it('returns authenticated result for valid magic link token', async () => {
@@ -46,6 +39,162 @@ describe('GET /api/auth/magic-link/verify/[token]', () => {
     expect(body.status).toBe('authenticated');
     expect(body.memberId).toBe('member-1');
     expect(body.sessionToken).toBeDefined();
+  });
+
+  it('sets Set-Cookie header with session token on successful authentication', async () => {
+    const { GET: handler, _testContainer } = await import('./route');
+
+    if (_testContainer) {
+      const repos = _testContainer._repos;
+      await repos.teamMember.create({
+        id: 'member-cookie-1',
+        email: 'cookie@example.com',
+        name: 'Cookie User',
+        teamId: 'team-1',
+      });
+      await repos.magicLink.create({
+        token: 'cookie-token-abc',
+        memberId: 'member-cookie-1',
+        expiresAt: new Date(Date.now() + 3600000),
+      });
+    }
+
+    const request = new Request('http://localhost/api/auth/magic-link/verify/cookie-token-abc');
+    const context = { params: Promise.resolve({ token: 'cookie-token-abc' }) };
+
+    const response = await handler(request, context);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.status).toBe('authenticated');
+
+    // Verify Set-Cookie header is present with the session token
+    const setCookie = response.headers.get('Set-Cookie');
+    expect(setCookie).not.toBeNull();
+    expect(setCookie).toContain(`session=${body.sessionToken}`);
+  });
+
+  it('Set-Cookie header contains HttpOnly, SameSite=lax, and Max-Age=604800', async () => {
+    const { GET: handler, _testContainer } = await import('./route');
+
+    if (_testContainer) {
+      const repos = _testContainer._repos;
+      await repos.teamMember.create({
+        id: 'member-cookie-2',
+        email: 'attrs@example.com',
+        name: 'Attrs User',
+        teamId: 'team-1',
+      });
+      await repos.magicLink.create({
+        token: 'attrs-token-def',
+        memberId: 'member-cookie-2',
+        expiresAt: new Date(Date.now() + 3600000),
+      });
+    }
+
+    const request = new Request('http://localhost/api/auth/magic-link/verify/attrs-token-def');
+    const context = { params: Promise.resolve({ token: 'attrs-token-def' }) };
+
+    const response = await handler(request, context);
+    expect(response.status).toBe(200);
+
+    const setCookie = response.headers.get('Set-Cookie');
+    expect(setCookie).not.toBeNull();
+    expect(setCookie).toContain('HttpOnly');
+    expect(setCookie).toContain('SameSite=lax');
+    expect(setCookie).toContain('Max-Age=604800');
+  });
+
+  it('Set-Cookie header includes Secure flag in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+
+    // Re-import to pick up new env
+    vi.resetModules();
+    const { GET: handler, _testContainer } = await import('./route');
+
+    if (_testContainer) {
+      const repos = _testContainer._repos;
+      await repos.teamMember.create({
+        id: 'member-cookie-3',
+        email: 'secure@example.com',
+        name: 'Secure User',
+        teamId: 'team-1',
+      });
+      await repos.magicLink.create({
+        token: 'secure-token-ghi',
+        memberId: 'member-cookie-3',
+        expiresAt: new Date(Date.now() + 3600000),
+      });
+    }
+
+    const request = new Request('http://localhost/api/auth/magic-link/verify/secure-token-ghi');
+    const context = { params: Promise.resolve({ token: 'secure-token-ghi' }) };
+
+    const response = await handler(request, context);
+    expect(response.status).toBe(200);
+
+    const setCookie = response.headers.get('Set-Cookie');
+    expect(setCookie).not.toBeNull();
+    expect(setCookie).toContain('Secure');
+  });
+
+  it('Set-Cookie header omits Secure flag in non-production without HTTPS', async () => {
+    vi.stubEnv('NODE_ENV', 'test');
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
+
+    vi.resetModules();
+    const { GET: handler, _testContainer } = await import('./route');
+
+    if (_testContainer) {
+      const repos = _testContainer._repos;
+      await repos.teamMember.create({
+        id: 'member-cookie-4',
+        email: 'nosecure@example.com',
+        name: 'NoSecure User',
+        teamId: 'team-1',
+      });
+      await repos.magicLink.create({
+        token: 'nosecure-token-jkl',
+        memberId: 'member-cookie-4',
+        expiresAt: new Date(Date.now() + 3600000),
+      });
+    }
+
+    const request = new Request('http://localhost/api/auth/magic-link/verify/nosecure-token-jkl');
+    const context = { params: Promise.resolve({ token: 'nosecure-token-jkl' }) };
+
+    const response = await handler(request, context);
+    expect(response.status).toBe(200);
+
+    const setCookie = response.headers.get('Set-Cookie');
+    expect(setCookie).not.toBeNull();
+    expect(setCookie).not.toContain('Secure');
+  });
+
+  it('does NOT set Set-Cookie header for genesis (requires_team_creation) result', async () => {
+    const { GET: handler, _testContainer } = await import('./route');
+
+    if (_testContainer) {
+      const repos = _testContainer._repos;
+      await repos.pendingGenesis.create({
+        token: 'genesis-no-cookie-456',
+        email: 'genesis-nocookie@example.com',
+        expiresAt: new Date(Date.now() + 3600000),
+      });
+    }
+
+    const request = new Request('http://localhost/api/auth/magic-link/verify/genesis-no-cookie-456');
+    const context = { params: Promise.resolve({ token: 'genesis-no-cookie-456' }) };
+
+    const response = await handler(request, context);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.status).toBe('requires_team_creation');
+
+    // Genesis flow should NOT set a cookie — cookie is set after team creation completes
+    const setCookie = response.headers.get('Set-Cookie');
+    expect(setCookie).toBeNull();
   });
 
   it('returns genesis state for pending genesis token', async () => {

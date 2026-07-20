@@ -29,6 +29,14 @@ export class PrismaUserSessionRepository implements UserSessionRepository {
     return record ? this.mapToEntity(record) : null;
   }
 
+  async findValidByMemberId(memberId: string): Promise<UserSession | null> {
+    const record = await this.prisma.userSession.findFirst({
+      where: { memberId, expiresAt: { gt: new Date() } },
+      orderBy: { expiresAt: 'desc' },
+    });
+    return record ? this.mapToEntity(record) : null;
+  }
+
   private mapToEntity(record: PrismaUserSession): UserSession {
     return {
       id: record.id,

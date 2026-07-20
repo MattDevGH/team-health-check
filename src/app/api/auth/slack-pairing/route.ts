@@ -10,12 +10,10 @@
 
 import { withErrorHandling } from '@/lib/api-utils';
 import { ValidationError, NotFoundError } from '@/lib/errors';
-import { createInMemoryRepositories } from '@/lib/repositories';
-import { createContainer } from '@/lib/container';
+import { container } from '@/lib/container-production';
 
-// For now, use in-memory repos until production wiring is complete (task 27.1)
-const repos = createInMemoryRepositories();
-export const container = createContainer(repos);
+// Test seam: allows route tests to access container
+export { container };
 
 export const POST = withErrorHandling(async (request: Request) => {
   const body = await request.json();

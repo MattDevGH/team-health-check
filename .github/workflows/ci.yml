@@ -1,6 +1,5 @@
-# This workflow runs on every push and pull request to master.
-# It installs dependencies and runs the test suite on a fresh Ubuntu machine.
-# If tests fail, the workflow fails — PRs can be configured to require this to pass before merging.
+# Full CI pipeline: Install → Prisma Generate → Prisma Migrate → Lint → Type Check → Test → Build
+# Runs on every push and pull request to master. All steps fail fast on error.
 
 name: CI
 
@@ -10,27 +9,104 @@ on:
   pull_request:
     branches: [master]
 
+env:
+  DATABASE_URL: file:./test.db
+
 jobs:
-  test:
-    name: Run tests
-    runs-on: ubuntu-latest  # fresh Linux VM, thrown away after the job
+  ci:
+    name: Lint, Type Check, Test, Build
+    runs-on: ubuntu-latest
 
     steps:
-      # 1. Check out your code onto the VM
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Install Node.js (same major version as your dev machine)
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "npm"  # caches node_modules between runs to speed things up
+          cache: npm
 
-      # 3. Install dependencies (uses package-lock.json for exact versions)
       - name: Install dependencies
         run: npm ci
 
-      # 4. Run the test suite once (vitest run, not watch mode)
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Push database schema
+        run: npx prisma db push
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
       - name: Run tests
         run: npm test
+
+      - name: Build
+        run: npm run build
+
+  e2e:
+    name: Playwright E2E Tests
+    runs-on: ubuntu-latest
+    needs: ci
+
+    env:
+      TEST_MODE: "true"
+      CRON_SECRET: test-secret
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      DATABASE_URL: file:./test.db
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Push database schema
+        run: npx prisma db push
+
+      - name: Build Next.js
+        run: npm run build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
+
+  requirement-coverage:
+    name: Requirement Coverage Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check requirement references in PR description
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          chmod +x scripts/check-requirement-coverage.sh
+          ./scripts/check-requirement-coverage.sh

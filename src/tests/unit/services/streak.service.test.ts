@@ -78,7 +78,7 @@ describe('StreakService.calculate', () => {
     const closeDate3 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const s1 = await createClosedSession(closeDate1);
-    const s2 = await createClosedSession(closeDate2);
+    const _s2 = await createClosedSession(closeDate2);
     const s3 = await createClosedSession(closeDate3);
 
     // Member responded to sessions 1 and 3, but was away for session 2
@@ -106,7 +106,7 @@ describe('StreakService.calculate', () => {
     const closeDate3 = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);  // 7 days after s2
 
     const s1 = await createClosedSession(closeDate1);
-    const s2 = await createClosedSession(closeDate2);
+    const _s2 = await createClosedSession(closeDate2);
     const s3 = await createClosedSession(closeDate3);
 
     // Member responded to s1 and s3, missed s2 (not away, just didn't respond)
@@ -129,8 +129,8 @@ describe('StreakService.calculate', () => {
     const closeDate4 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const s1 = await createClosedSession(closeDate1);
-    const s2 = await createClosedSession(closeDate2);
-    const s3 = await createClosedSession(closeDate3);
+    const _s2 = await createClosedSession(closeDate2);
+    const _s3 = await createClosedSession(closeDate3);
     const s4 = await createClosedSession(closeDate4);
 
     // Member responded to s1, then missed s2 and s3 (two consecutive), then responded to s4
@@ -157,8 +157,8 @@ describe('StreakService.calculate', () => {
     const s1 = await createClosedSession(closeDate1);
     const s2 = await createClosedSession(closeDate2);
     const s3 = await createClosedSession(closeDate3);
-    const s4 = await createClosedSession(closeDate4);
-    const s5 = await createClosedSession(closeDate5);
+    const _s4 = await createClosedSession(closeDate4);
+    const _s5 = await createClosedSession(closeDate5);
     const s6 = await createClosedSession(closeDate6);
 
     // First 3 sessions responded, then 2 missed, then 1 responded

@@ -10,6 +10,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import crypto from 'node:crypto';
 import { POST, _repos as repos } from './route';
 
+/** Helper to seed a SlackIdentityLink via the repository */
+async function linkSlackUser(slackUserId: string, memberId: string) {
+  await repos.slackIdentityLink.create({ slackUserId, memberId });
+}
+
 /** Helper to generate a valid Slack signature for a body/timestamp */
 function signRequest(body: string, timestamp: string): string {
   const secret = 'test-slack-signing-secret';
@@ -103,9 +108,8 @@ describe('POST /api/slack/interactions', () => {
     const member = await repos.teamMember.create({ teamId: team.id, name: 'Test User', email: 'test@example.com' });
     const session = await repos.session.create({ teamId: team.id, status: 'open' });
 
-    // Wire the Slack identity via the slackIdentityStore
-    const { _slackIdentityStore } = await import('./route');
-    _slackIdentityStore.set('USLACK123', member.id);
+    // Wire the Slack identity via the SlackIdentityLink repository
+    await linkSlackUser('USLACK123', member.id);
 
     const payload = buildInteractionPayload({
       user: { id: 'USLACK123', name: 'testuser' },
@@ -135,8 +139,7 @@ describe('POST /api/slack/interactions', () => {
     const member = await repos.teamMember.create({ teamId: team.id, name: 'User 2', email: 'user2@example.com' });
     await repos.session.create({ teamId: team.id, status: 'open' });
 
-    const { _slackIdentityStore } = await import('./route');
-    _slackIdentityStore.set('UINVALID1', member.id);
+    await linkSlackUser('UINVALID1', member.id);
 
     const payload = buildInteractionPayload({
       user: { id: 'UINVALID1', name: 'baduser' },
@@ -164,8 +167,7 @@ describe('POST /api/slack/interactions', () => {
     const member = await repos.teamMember.create({ teamId: team.id, name: 'User 3', email: 'user3@example.com' });
     await repos.session.create({ teamId: team.id, status: 'open' });
 
-    const { _slackIdentityStore } = await import('./route');
-    _slackIdentityStore.set('ULOW1', member.id);
+    await linkSlackUser('ULOW1', member.id);
 
     const payload = buildInteractionPayload({
       user: { id: 'ULOW1', name: 'lowuser' },
@@ -192,8 +194,7 @@ describe('POST /api/slack/interactions', () => {
     const member = await repos.teamMember.create({ teamId: team.id, name: 'Upserter', email: 'upsert@example.com' });
     const session = await repos.session.create({ teamId: team.id, status: 'open' });
 
-    const { _slackIdentityStore } = await import('./route');
-    _slackIdentityStore.set('UUPSERT1', member.id);
+    await linkSlackUser('UUPSERT1', member.id);
 
     // First submission: score 2
     const payload1 = buildInteractionPayload({
@@ -240,8 +241,7 @@ describe('POST /api/slack/interactions', () => {
     const member = await repos.teamMember.create({ teamId: team.id, name: 'Late User', email: 'late@example.com' });
     const session = await repos.session.create({ teamId: team.id, status: 'closed' });
 
-    const { _slackIdentityStore } = await import('./route');
-    _slackIdentityStore.set('UCLOSED1', member.id);
+    await linkSlackUser('UCLOSED1', member.id);
 
     const payload = buildInteractionPayload({
       user: { id: 'UCLOSED1', name: 'lateuser' },
@@ -265,6 +265,7 @@ describe('POST /api/slack/interactions', () => {
   });
 
   it('returns 200 ack when Slack user has no linked identity', async () => {
+    // Requirement 7.3: unknown Slack userId → ack 200 but no processing
     const payload = buildInteractionPayload({
       user: { id: 'UUNKNOWN999', name: 'ghost' },
       actions: [
@@ -283,13 +284,73 @@ describe('POST /api/slack/interactions', () => {
     expect(res.status).toBe(200);
   });
 
+  it('resolves Slack userId from SlackIdentityLink repository to correct memberId', async () => {
+    // Requirement 7.3: Slack userId in DB → resolves to memberId and processes interaction
+    const team = await repos.team.create({ name: 'Repo Resolution Team' });
+    const member = await repos.teamMember.create({ teamId: team.id, name: 'Linked User', email: 'linked@example.com' });
+    const session = await repos.session.create({ teamId: team.id, status: 'open' });
+
+    // Seed via repository (not in-memory Map)
+    await linkSlackUser('UREPO_LINKED', member.id);
+
+    const payload = buildInteractionPayload({
+      user: { id: 'UREPO_LINKED', name: 'linkeduser' },
+      actions: [
+        {
+          action_id: 'score_q-delivering-value_4',
+          block_id: 'score_q-delivering-value',
+          value: 'q-delivering-value:4',
+          type: 'button',
+        },
+      ],
+    });
+
+    const req = makeSignedRequest(payload);
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    // Verify the response was persisted for the correct member
+    const responses = await repos.response.findByMemberAndSession(member.id, session.id);
+    expect(responses).toHaveLength(1);
+    expect(responses[0].questionId).toBe('q-delivering-value');
+    expect(responses[0].score).toBe(4);
+  });
+
+  it('returns 200 ack without processing when Slack userId has no SlackIdentityLink record', async () => {
+    // Requirement 7.3: unknown Slack userId → no DB record → graceful 200 ack
+    const team = await repos.team.create({ name: 'No Link Team' });
+    const member = await repos.teamMember.create({ teamId: team.id, name: 'Orphan', email: 'orphan@example.com' });
+    const session = await repos.session.create({ teamId: team.id, status: 'open' });
+
+    // Deliberately do NOT link UORPHAN_SLACK to any member
+
+    const payload = buildInteractionPayload({
+      user: { id: 'UORPHAN_SLACK', name: 'orphanuser' },
+      actions: [
+        {
+          action_id: 'score_q-delivering-value_3',
+          block_id: 'score_q-delivering-value',
+          value: 'q-delivering-value:3',
+          type: 'button',
+        },
+      ],
+    });
+
+    const req = makeSignedRequest(payload);
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    // Verify no response was stored for the member
+    const responses = await repos.response.findByMemberAndSession(member.id, session.id);
+    expect(responses).toHaveLength(0);
+  });
+
   it('handles multiple actions in a single interaction payload', async () => {
     const team = await repos.team.create({ name: 'Multi-Action Team' });
     const member = await repos.teamMember.create({ teamId: team.id, name: 'Multi User', email: 'multi@example.com' });
     const session = await repos.session.create({ teamId: team.id, status: 'open' });
 
-    const { _slackIdentityStore } = await import('./route');
-    _slackIdentityStore.set('UMULTI1', member.id);
+    await linkSlackUser('UMULTI1', member.id);
 
     const payload = buildInteractionPayload({
       user: { id: 'UMULTI1', name: 'multiuser' },

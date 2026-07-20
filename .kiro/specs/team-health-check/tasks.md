@@ -464,7 +464,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
 - [x] 17. Checkpoint - Ensure notification and scheduler tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 18. Prisma repository implementations
+- [x] 18. Prisma repository implementations
 
   - [x] 18.1 Implement Prisma TeamRepository and TeamMemberRepository
     - Create `src/lib/repositories/prisma/team.repository.ts`
@@ -641,12 +641,12 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing tests: failed delivery queues interaction; scheduler tick retries queued items; successful retry marks delivered; exhausted retries marks failed; queue entry contains failure reason
     - _Requirements: 5.12, NFR 1.2_
 
-- [ ] 23. Checkpoint - Ensure Slack integration tests pass
+- [x] 23. Checkpoint - Ensure Slack integration tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 24. Web interface: feedback form and session pages
+- [x] 24. Web interface: feedback form and session pages
 
-  - [ ] 24.1 Implement session link landing page
+  - [x] 24.1 Implement session link landing page
     - Create `src/app/session/[token]/page.tsx`
     - Validate token via API, display questions based on cadence preference
     - Weekly mode: all 5 questions in scrollable view
@@ -654,35 +654,35 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Pre-populate previously submitted responses
     - _Requirements: 4.1, 4.2, 4.8_
 
-  - [ ] 24.2 Implement feedback form component
+  - [x] 24.2 Implement feedback form component
     - Create reusable feedback form with Score input (1-5) and optional Trend_Indicator
     - Mobile-friendly from 320px width, no horizontal scrolling
     - Display validation errors per question
     - Retain input on network error for retry
     - _Requirements: 4.3, 4.5, 4.7, 4.10_
 
-  - [ ] 24.3 Implement response submission and confirmation
+  - [x] 24.3 Implement response submission and confirmation
     - Submit responses via POST /api/responses
     - Display confirmation message on success
     - Display rolling average per question after submission
     - Show "session ended" message if session closed
     - _Requirements: 4.6, 4.9, 16.1, 16.5_
 
-  - [ ] 24.4 Implement magic link request page
+  - [x] 24.4 Implement magic link request page
     - Create `src/app/auth/login/page.tsx` with email input
     - POST to magic link request endpoint
     - Display generic success message regardless of email existence
     - _Requirements: 7.1, 7.8_
 
-  - [ ] 24.5 Implement magic link verification and genesis flow
+  - [x] 24.5 Implement magic link verification and genesis flow
     - Create `src/app/auth/magic/[token]/page.tsx`
     - Handle authenticated state: redirect to dashboard
     - Handle genesis state: display team creation form
     - _Requirements: 7.3, 7.9_
 
-- [ ] 25. Web interface: dashboard and team management
+- [x] 25. Web interface: dashboard and team management
 
-  - [ ] 25.1 Implement trend dashboard page
+  - [x] 25.1 Implement trend dashboard page
     - Create `src/app/teams/[teamId]/dashboard/page.tsx`
     - Display line chart (Y-axis 1.0-5.0) with average score per question per closed session
     - Display "more data needed" if fewer than 2 closed sessions
@@ -690,17 +690,17 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Show trend indicator distribution for most recent session
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.8_
 
-  - [ ] 25.2 Implement question detail view on dashboard
+  - [x] 25.2 Implement question detail view on dashboard
     - Clicking a question shows average + response count per session
     - Suppress "insufficient data" for sessions below anonymity threshold
     - _Requirements: 8.5, 8.7_
 
-  - [ ] 25.3 Implement CSV export button
+  - [x] 25.3 Implement CSV export button
     - Trigger GET /api/teams/[teamId]/export with optional date range
     - Download as .csv file
     - _Requirements: 8.9, 8.11_
 
-  - [ ] 25.4 Implement team management pages
+  - [x] 25.4 Implement team management pages
     - Create `src/app/teams/[teamId]/settings/page.tsx`
     - Team name/description editing, privacy mode toggle with confirmation
     - Member list with add/remove, role assignment
@@ -709,13 +709,13 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Display which members have linked Slack identities
     - _Requirements: 1.1, 1.3, 1.6, 1.7, 2.7, 3.1, 14.4, 19.5_
 
-  - [ ] 25.5 Implement participation tracking view
+  - [x] 25.5 Implement participation tracking view
     - Create participation component within session detail page
     - Display responded/total counts
     - Show non-responder names according to privacy mode and role rules
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.6_
 
-  - [ ] 25.6 Implement user profile and preferences page
+  - [x] 25.6 Implement user profile and preferences page
     - Create `src/app/me/page.tsx`
     - Cadence preference toggle (weekly/micro-pulse)
     - Reminder enable/disable
@@ -726,44 +726,44 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Display current privacy mode when submitting
     - _Requirements: 13.1, 15.1, 15.2, 12.1, 17.1, 17.2, 17.5, 2.6, NFR 4.3, NFR 4.4, 14.7_
 
-  - [ ] 25.7 Implement audit log page
+  - [x] 25.7 Implement audit log page
     - Create `src/app/teams/[teamId]/audit-log/page.tsx`
     - Display entries chronologically (most recent first) with pagination
     - Delivery_manager access only
     - _Requirements: 18.4, 18.5_
 
-- [ ] 26. Checkpoint - Ensure web interface tests pass
+- [x] 26. Checkpoint - Ensure web interface tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 27. Integration wiring and end-to-end flows
+- [x] 27. Integration wiring and end-to-end flows
 
-  - [ ] 27.1 Wire production container to all route handlers
+  - [x] 27.1 Wire production container to all route handlers
     - Ensure all route handlers import services from `src/lib/container.ts`
     - Verify no service directly imports Prisma
     - _Requirements: (architecture)_
 
-  - [ ] 27.2 Implement email service integration (Resend)
+  - [x] 27.2 Implement email service integration (Resend)
     - Create `src/lib/services/email.service.ts`
     - Implement magic link email delivery using Resend SDK
     - Configurable sender address via environment variable
     - _Requirements: 7.1_
 
-  - [ ] 27.3 Update CI pipeline
+  - [x] 27.3 Update CI pipeline
     - Update `.github/workflows/ci.yml` with full pipeline: install → lint → type check → test → build
     - Add Prisma generate and migrate steps
     - _Requirements: (infrastructure)_
 
-  - [ ] 27.4 Write integration tests for full response submission flow
+  - [x] 27.4 Write integration tests for full response submission flow
     - Test: session link → form render → POST response → upsert → rolling average display
     - Test: Slack interaction → immediate ack → deferred DB write → confirmation
     - _Requirements: 4.1, 4.6, 5.6, 5.8, 16.1_
 
-  - [ ] 27.5 Write integration tests for session lifecycle
+  - [x] 27.5 Write integration tests for session lifecycle
     - Test: scheduler tick opens session → links generated → tick closes session → aggregates materialised
     - Test: manual open with existing open session closes first
     - _Requirements: 3.2, 3.3, 3.4, 3.9_
 
-  - [ ] 27.6 Implement CI requirement coverage check (documentation as code)
+  - [x] 27.6 Implement CI requirement coverage check (documentation as code)
     - Create `.github/pull_request_template.md` with a "Requirements Affected" section that prompts developers to tag which Requirement IDs their changes affect (e.g., `Requirement 1.1`, `Requirement NFR 4.5`)
     - Create `scripts/check-requirement-coverage.sh` (or equivalent CI script) that parses the PR description and verifies it contains at least one requirement reference matching the pattern `Requirement \d+\.\d+` or `Requirement NFR \d+\.\d+`
     - Add a CI job step in `.github/workflows/ci.yml` that runs the coverage check on pull_request events and fails the build if no requirement reference is found
@@ -771,7 +771,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - Write failing test: PR description with requirement reference passes; PR description without requirement reference fails; script exits with non-zero code on missing reference
     - _Requirements: (documentation, traceability)_
 
-- [ ] 28. Final checkpoint - Ensure all tests pass
+- [x] 28. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

@@ -11,21 +11,10 @@
 
 import { withErrorHandling } from '@/lib/api-utils';
 import { verifySlackSignature } from '@/lib/slack/verify-signature';
-import { createInMemoryRepositories } from '@/lib/repositories';
-import { createContainer } from '@/lib/container';
+import { container, repos } from '@/lib/container-production';
 
-// Wired repos/container (in-memory for now; production wiring via task 27.1)
-const repos = createInMemoryRepositories();
-const container = createContainer(repos);
-
-/**
- * In-memory Slack user ID → memberId mapping.
- * In production this would be backed by the SlackIdentityLink table via Prisma.
- * Exposed for test seeding.
- */
-const slackIdentityStore = new Map<string, string>();
-
-export { repos as _repos, container as _container, slackIdentityStore as _slackIdentityStore };
+// Test seam: allows route tests to seed data via repos
+export { repos as _repos, container as _container };
 
 /**
  * Slack interaction payload types for type safety.
@@ -46,10 +35,12 @@ interface SlackInteractionPayload {
 
 /**
  * Resolves a Slack user ID to the internal memberId.
+ * Queries the SlackIdentityLink repository (backed by DB in production).
  * Returns null if no identity link exists.
  */
 async function resolveMemberId(slackUserId: string): Promise<string | null> {
-  return slackIdentityStore.get(slackUserId) ?? null;
+  const link = await repos.slackIdentityLink.findBySlackUserId(slackUserId);
+  return link?.memberId ?? null;
 }
 
 /**
@@ -111,7 +102,6 @@ export const POST = withErrorHandling(async (request: Request): Promise<Response
     const memberId = await resolveMemberId(slackUserId);
     if (!memberId) {
       // User not linked — ack but cannot process (Req 5.9: inform user session ended)
-      // In production, would send a follow-up via response_url explaining they need to link
       return new Response(null, { status: 200 });
     }
 
@@ -119,7 +109,6 @@ export const POST = withErrorHandling(async (request: Request): Promise<Response
     const sessionId = await findOpenSessionForMember(memberId);
     if (!sessionId) {
       // No open session — Req 5.9: session ended, reject submission gracefully
-      // In production, would send follow-up via response_url informing session is closed
       return new Response(null, { status: 200 });
     }
 
@@ -145,13 +134,9 @@ export const POST = withErrorHandling(async (request: Request): Promise<Response
         });
       } catch {
         // Swallow errors per action — continue processing remaining actions
-        // In production, would queue a follow-up error message via response_url
         continue;
       }
     }
-
-    // Req 5.8: Confirmation would be sent via response_url in production
-    // For MVP, the 200 ack serves as acknowledgement
   }
 
   // Return 200 to acknowledge (Slack requires response within 3 seconds)
