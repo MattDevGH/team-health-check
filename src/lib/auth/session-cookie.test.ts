@@ -13,8 +13,6 @@ import {
 } from './session-cookie';
 
 describe('session-cookie', () => {
-  const originalEnv = process.env;
-
   beforeEach(() => {
     vi.stubEnv('NODE_ENV', 'test');
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');

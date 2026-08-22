@@ -13,7 +13,6 @@ import { prisma } from './prisma';
 import { createPrismaRepositories } from './repositories/prisma';
 import { createContainer } from './container';
 import { createResendEmailService } from './services/email.service';
-import { createAuthService } from './services/auth.service';
 import type { Container } from './container';
 
 /** Production repositories backed by Prisma + SQLite */

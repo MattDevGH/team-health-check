@@ -6,7 +6,7 @@
  * should be called for eligible (Slack-linked, available) members.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createInMemoryRepositories } from '@/lib/repositories';
 import { createSchedulerService } from '@/lib/services/scheduler.service';
 import { createSessionService } from '@/lib/services/session.service';
@@ -66,7 +66,7 @@ describe('POST /api/scheduler/tick — notification wiring', () => {
 
     // Create two members
     const member1 = await repos.teamMember.create({ teamId: team.id, name: 'Alice', email: 'alice@test.com' });
-    const member2 = await repos.teamMember.create({ teamId: team.id, name: 'Bob', email: 'bob@test.com' });
+    await repos.teamMember.create({ teamId: team.id, name: 'Bob', email: 'bob@test.com' });
 
     // Only member1 has a Slack link (eligible)
     await repos.slackIdentityLink.create({ memberId: member1.id, slackUserId: 'U_ALICE' });

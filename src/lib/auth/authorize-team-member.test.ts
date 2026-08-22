@@ -14,12 +14,10 @@ import { ForbiddenError } from '../errors';
 
 describe('authorizeTeamMember', () => {
   let teamMemberRepo: InMemoryTeamMemberRepository;
-  let teamMemberRoleRepo: InMemoryTeamMemberRoleRepository;
   let authorizeTeamMember: (memberId: string, teamId: string) => Promise<void>;
 
   beforeEach(() => {
     teamMemberRepo = new InMemoryTeamMemberRepository();
-    teamMemberRoleRepo = new InMemoryTeamMemberRoleRepository();
     authorizeTeamMember = createAuthorizeTeamMember({ teamMemberRepo });
   });
 

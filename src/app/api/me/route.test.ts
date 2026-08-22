@@ -6,7 +6,7 @@
  * Tests verify: no cookie → 401, valid cookie → correct operation.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { NextRequest } from 'next/server';
 
 import { GET, _repos as meRepos } from './route';

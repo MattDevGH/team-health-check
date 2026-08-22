@@ -47,17 +47,6 @@ const trendIndicatorArb = fc.oneof(
 const questionSubsetArb = fc.shuffledSubarray([...QUESTION_IDS], { minLength: 1 });
 
 /**
- * Arbitrary for a single response item: { questionId, score, trendIndicator? }
- */
-function responseItemArb(questionId: string) {
-  return fc.record({
-    questionId: fc.constant(questionId),
-    score: scoreArb,
-    trendIndicator: trendIndicatorArb,
-  });
-}
-
-/**
  * Helper to build a POST request with session cookie and JSON body.
  */
 function makePostRequest(sessionToken: string, body: unknown): NextRequest {
