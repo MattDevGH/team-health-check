@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createInMemoryRepositories, type Repositories } from '@/lib/repositories';
 import { createAuthService, type AuthService } from '@/lib/services/auth.service';
 import { createGenesisService } from '@/lib/services/genesis.service';
+import { InMemoryEmailService } from '@/lib/services/email.service';
 import { NotFoundError, ConflictError } from '@/lib/errors';
 
 const CONCURRENCY = 5;
@@ -104,7 +105,10 @@ describe('Atomic token claims - concurrency', () => {
 
       // 3. Fire N concurrent calls with the same token
       const results = await Promise.allSettled(
-        Array.from({ length: CONCURRENCY }, () => genesisService.executeGenesis(token))
+        Array.from({ length: CONCURRENCY }, () => genesisService.executeGenesis({
+          token,
+          teamName: 'Startup Team',
+        }))
       );
 
       // 4. Count successes and failures
@@ -137,5 +141,51 @@ describe('Atomic token claims - concurrency', () => {
       expect(members[0].id).toBe(successResult.memberId);
       expect(members[0].email).toBe('founder@startup.com');
     });
+  });
+});
+
+describe('new-user request → verify → genesis chain', () => {
+  it('creates one submitted team and conflicts on a second genesis attempt', async () => {
+    const repos = createInMemoryRepositories();
+    const emailService = new InMemoryEmailService();
+    const authService = createAuthService({
+      pairingCodeRepo: repos.pairingCode,
+      magicLinkRepo: repos.magicLink,
+      teamMemberRepo: repos.teamMember,
+      userSessionRepo: repos.userSession,
+      pendingGenesisRepo: repos.pendingGenesis,
+      emailService,
+    });
+    const genesisService = createGenesisService({
+      pendingGenesisRepo: repos.pendingGenesis,
+      teamRepo: repos.team,
+      teamMemberRepo: repos.teamMember,
+      teamMemberRoleRepo: repos.teamMemberRole,
+      userSessionRepo: repos.userSession,
+    });
+
+    await authService.requestMagicLink('founder@example.com');
+    const token = emailService.sentEmails[0].token;
+
+    await expect(authService.verifyMagicLink(token)).resolves.toEqual({
+      status: 'requires_team_creation',
+      pendingToken: token,
+      email: 'founder@example.com',
+    });
+    expect((await repos.pendingGenesis.findByToken(token))?.used).toBe(false);
+
+    const input = {
+      token,
+      teamName: 'Genesis Team',
+      description: 'Created through the complete new-user flow',
+    };
+    const result = await genesisService.executeGenesis(input);
+
+    expect(await repos.team.findById(result.teamId)).toMatchObject({
+      name: input.teamName,
+      description: input.description,
+    });
+    await expect(genesisService.executeGenesis(input)).rejects.toThrow(ConflictError);
+    expect(await repos.team.list()).toHaveLength(1);
   });
 });

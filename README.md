@@ -31,8 +31,13 @@ and relevant acceptance validation pass.
 
 Integration hardening is currently on `feat/integration-hardening`, pending
 full automated validation, real browser and Slack acceptance validation, and a
-pull request. Keep it on the feature branch until that validation is complete;
-do not merge or push it directly to `master`.
+pull request. Manual browser validation found and fixed the new-user
+verify→genesis double-claim, structured API error rendering crash, submitted
+team name/description persistence, and missing genesis session cookie. Resume
+hands-on validation with a fresh magic link because the previous token was
+consumed. Playwright happy paths still require hardening, so `master` remains
+blocked until browser/Slack acceptance and CI are green; do not merge or push
+this branch directly to `master`.
 
 ## Environment Variables
 
@@ -246,7 +251,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (922 tests across 111 files)
+npm test            # unit + property tests (932 tests across 111 files)
 npm run test:watch  # watch mode for TDD (unit only)
 npx playwright test # e2e browser tests (happy-path + accessibility)
 ```
@@ -255,15 +260,17 @@ npx playwright test # e2e browser tests (happy-path + accessibility)
 |-------|---------|
 | Unit tests | Service logic with in-memory repository fakes |
 | Property tests | 12 formal correctness invariants (fast-check, 100 iterations each) |
-| Integration tests | Full flows against real SQLite |
+| Integration tests | Full flows against real SQLite plus focused in-memory request→verify→genesis chain coverage |
 | Accessibility tests | WCAG 2.1 AA compliance (jest-axe + Playwright axe-core) |
-| E2E tests | Browser user flows — happy path, cookie persistence, accessibility |
+| E2E tests | Browser user flows — happy path, cookie persistence, accessibility; happy paths still require hardening before merge |
+
+The focused genesis regression suite covers non-mutating pending-token verification, the single CAS claim during genesis, one-success/second-conflict behavior, submitted team details, route validation plus session cookie creation, and safe rendering of structured or malformed API errors.
 
 ## CI/CD
 
 GitHub Actions pipeline with two jobs:
 
-1. **`ci`** — Install → Lint → Type Check → Unit+Property Tests (922 tests) → Build
+1. **`ci`** — Install → Lint → Type Check → Unit+Property Tests (932 tests) → Build
 2. **`e2e`** — Install → Build → Playwright E2E Tests (depends on `ci` passing)
 
 A **requirement coverage** check also runs on PRs to verify requirement IDs are referenced.

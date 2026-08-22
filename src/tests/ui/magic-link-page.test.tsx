@@ -54,7 +54,12 @@ function mockInvalidToken() {
   server.use(
     http.get('/api/auth/magic-link/verify/:token', () => {
       return HttpResponse.json(
-        { error: 'Magic link is expired or has already been used' },
+        {
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Magic link is expired or has already been used',
+          },
+        },
         { status: 404 },
       );
     }),
@@ -207,7 +212,12 @@ describe('Magic Link Verification Page', () => {
       server.use(
         http.post('/api/teams/genesis', () => {
           return HttpResponse.json(
-            { error: 'Token is already used or expired' },
+            {
+              error: {
+                code: 'CONFLICT',
+                message: 'Token is already used or expired',
+              },
+            },
             { status: 409 },
           );
         }),
@@ -226,6 +236,25 @@ describe('Magic Link Verification Page', () => {
         expect(screen.getByText(/already used or expired/i)).toBeInTheDocument();
       });
     });
+
+    it('uses a generic fallback when genesis returns a non-JSON error', async () => {
+      const user = userEvent.setup();
+      server.use(
+        http.post('/api/teams/genesis', () => new HttpResponse('upstream failure', {
+          status: 502,
+          headers: { 'Content-Type': 'text/plain' },
+        })),
+      );
+
+      render(<MagicLinkPage params={Promise.resolve({ token: 'genesis-token' })} />);
+      await screen.findByLabelText(/team name/i);
+      await user.type(screen.getByLabelText(/team name/i), 'My Team');
+      await user.click(screen.getByRole('button', { name: /create team/i }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Failed to create team. Please try again.',
+      );
+    });
   });
 
   describe('Error state (expired/invalid token)', () => {
@@ -237,6 +266,21 @@ describe('Magic Link Verification Page', () => {
       await waitFor(() => {
         expect(screen.getByText(/expired or has already been used/i)).toBeInTheDocument();
       });
+    });
+
+    it('uses a string fallback for malformed structured errors', async () => {
+      server.use(
+        http.get('/api/auth/magic-link/verify/:token', () => HttpResponse.json(
+          { error: { code: 'NOT_FOUND' } },
+          { status: 404 },
+        )),
+      );
+
+      render(<MagicLinkPage params={Promise.resolve({ token: 'malformed-token' })} />);
+
+      expect(await screen.findByText(
+        'Magic link is expired or has already been used',
+      )).toBeInTheDocument();
     });
 
     it('offers a link to request a new magic link', async () => {

@@ -19,8 +19,12 @@ and relevant acceptance validation pass.
 
 **Current branch status:** Integration hardening is on
 `feat/integration-hardening`, pending full automated validation, real browser
-and Slack acceptance validation, and a pull request. It must not be merged to
-`master` until that validation is complete.
+and Slack acceptance validation, and a pull request. Manual browser validation
+found and fixed the new-user verify→genesis double-claim, structured API error
+rendering crash, submitted team-details persistence, and missing genesis session
+cookie. Hands-on validation must resume with a fresh magic link because the
+previous token was consumed. Playwright happy paths still require hardening,
+and `master` remains blocked until browser/Slack acceptance and CI are green.
 
 ---
 
@@ -191,7 +195,8 @@ All stages must pass. Branch protection requires CI green before merge.
 
 ## Auth Architecture (Post-Integration-Hardening)
 
-- **Cookie-based sessions**: Magic link verification and session-link validation set `session` httpOnly cookie
+- **Cookie-based sessions**: Magic link verification, genesis completion, and session-link validation set the `session` httpOnly cookie
+- **New-user genesis claim ownership**: Magic-link verification reads and validates unused/unexpired `PendingGenesis` records without mutation; genesis execution performs the only CAS claim, persists validated team name/description, and establishes the browser session
 - **`getAuthContext`**: Factory function (`createGetAuthContext`) extracts + validates session cookie against UserSessionRepository
 - **`withAuth`**: Factory-created HOF wrapper that enforces auth on route handlers (401 if invalid)
 - **`authorizeTeamMember`**: Factory function verifying member belongs to requested team (403 if not)

@@ -6,19 +6,25 @@
  */
 
 import { withErrorHandling } from '@/lib/api-utils';
-import { ValidationError } from '@/lib/errors';
+import { buildSetCookieHeader } from '@/lib/auth/session-cookie';
 import { container } from '@/lib/container-production';
+import { ValidationError } from '@/lib/errors';
+import { genesisSchema } from '@/lib/validation/schemas';
 
 export const POST = withErrorHandling(async (request: Request) => {
-  const body = await request.json();
+  const body: unknown = await request.json();
+  const parsed = genesisSchema.safeParse(body);
 
-  if (!body.token || typeof body.token !== 'string') {
-    throw new ValidationError([
-      { field: 'token', message: 'Token is required', code: 'REQUIRED' },
-    ]);
+  if (!parsed.success) {
+    throw new ValidationError(parsed.error.issues.map((issue) => ({
+      field: issue.path.join('.'),
+      message: issue.message,
+      code: issue.code,
+    })));
   }
 
-  const result = await container.genesis.executeGenesis(body.token);
-
-  return Response.json(result, { status: 201 });
+  const result = await container.genesis.executeGenesis(parsed.data);
+  const response = Response.json(result, { status: 201 });
+  response.headers.set('Set-Cookie', buildSetCookieHeader(result.sessionToken));
+  return response;
 });

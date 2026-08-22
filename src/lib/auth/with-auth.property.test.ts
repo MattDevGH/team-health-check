@@ -32,6 +32,7 @@ const memberIdArb = fc.stringMatching(/^mem_[a-z0-9]{8,16}$/);
 const expiredDateArb = fc.date({
   min: new Date('2020-01-01'),
   max: new Date(Date.now() - 1000), // At least 1 second in the past
+  noInvalidDate: true,
 });
 
 /**

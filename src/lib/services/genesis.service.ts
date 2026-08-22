@@ -25,6 +25,12 @@ export interface GenesisServiceDeps {
   userSessionRepo: UserSessionRepository;
 }
 
+export interface GenesisInput {
+  token: string;
+  teamName: string;
+  description?: string;
+}
+
 export interface GenesisResult {
   teamId: string;
   memberId: string;
@@ -50,21 +56,24 @@ export function createGenesisService(deps: GenesisServiceDeps) {
    * The CAS pattern on claimToken ensures that concurrent calls to the
    * same token will result in exactly one successful creation.
    */
-  async function executeGenesis(token: string): Promise<GenesisResult> {
+  async function executeGenesis(input: GenesisInput): Promise<GenesisResult> {
     // 1. Atomically claim the token (CAS)
-    const genesis = await pendingGenesisRepo.claimToken(token);
+    const genesis = await pendingGenesisRepo.claimToken(input.token);
 
     if (!genesis) {
       // Distinguish between "token not found" and "used/expired"
-      const existing = await pendingGenesisRepo.findByToken(token);
+      const existing = await pendingGenesisRepo.findByToken(input.token);
       if (!existing) {
         throw new NotFoundError('Genesis token not found');
       }
       throw new ConflictError('Genesis token is already used or expired');
     }
 
-    // 2. Create Team with default name
-    const team = await teamRepo.create({ name: 'My Team' });
+    // 2. Create Team with the submitted details
+    const team = await teamRepo.create({
+      name: input.teamName,
+      description: input.description,
+    });
 
     // 3. Create TeamMember with the email from the genesis record
     const member = await teamMemberRepo.create({

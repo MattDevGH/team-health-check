@@ -175,9 +175,9 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
   }
 
   /**
-   * Verify a magic link token — atomic CAS claim (single-use).
-   * Returns discriminated union: authenticated vs requires_team_creation.
-   * Requirement 7.2: single-use; Requirement 7.4: expired/used returns error.
+   * Verify a magic link token.
+   * Existing-member links are claimed here, while pending genesis records are
+   * only validated. Genesis execution owns the sole CAS claim for new users.
    */
   async function verifyMagicLink(token: string): Promise<MagicLinkVerifyResult> {
     if (!magicLinkRepo || !userSessionRepo || !pendingGenesisRepo) {
@@ -203,17 +203,16 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
       };
     }
 
-    const genesis = await pendingGenesisRepo.claimToken(token);
-
-    if (genesis) {
-      return {
-        status: 'requires_team_creation',
-        pendingToken: genesis.token,
-        email: genesis.email,
-      };
+    const genesis = await pendingGenesisRepo.findByToken(token);
+    if (!genesis || genesis.used || genesis.expiresAt <= new Date()) {
+      throw new NotFoundError('Invalid or expired access link');
     }
 
-    throw new NotFoundError('Invalid or expired access link');
+    return {
+      status: 'requires_team_creation',
+      pendingToken: genesis.token,
+      email: genesis.email,
+    };
   }
 
   /**

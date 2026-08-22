@@ -1,9 +1,16 @@
 /**
- * Tests for POST /api/teams/genesis
- * Requirement 7.9: Create team from magic link for unknown email
+ * Tests for POST /api/teams/genesis.
+ * Validates: Requirements 1.5, 7.9
  */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { describe, it, expect } from 'vitest';
+const { executeGenesis } = vi.hoisted(() => ({
+  executeGenesis: vi.fn(),
+}));
+
+vi.mock('@/lib/container-production', () => ({
+  container: { genesis: { executeGenesis } },
+}));
 
 import { POST } from './route';
 
@@ -16,51 +23,76 @@ function makeRequest(body: unknown): Request {
 }
 
 describe('POST /api/teams/genesis', () => {
+  beforeEach(() => {
+    executeGenesis.mockReset();
+  });
 
-  it('returns 400 when token is missing', async () => {
-    const response = await POST(makeRequest({}));
+  it.each([
+    [{ teamName: 'A Team' }, 'token'],
+    [{ token: 'pending-token' }, 'teamName'],
+    [{ token: 123, teamName: 'A Team' }, 'token'],
+    [{ token: 'pending-token', teamName: '' }, 'teamName'],
+    [{ token: 'pending-token', teamName: 'A Team', description: 123 }, 'description'],
+  ])('returns 400 when the JSON contract is invalid', async (body, field) => {
+    const response = await POST(makeRequest(body));
+
     expect(response.status).toBe(400);
-
-    const body = await response.json();
-    expect(body.error.code).toBe('VALIDATION_ERROR');
-    expect(body.error.errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: 'token', code: 'REQUIRED' }),
-      ])
-    );
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'VALIDATION_ERROR',
+        errors: expect.arrayContaining([expect.objectContaining({ field })]),
+      },
+    });
+    expect(executeGenesis).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when token is not a string', async () => {
-    const response = await POST(makeRequest({ token: 123 }));
-    expect(response.status).toBe(400);
+  it('passes validated team details to genesis and sets the session cookie', async () => {
+    executeGenesis.mockResolvedValue({
+      teamId: 'team-1',
+      memberId: 'member-1',
+      sessionToken: 'session-token-abc',
+    });
 
-    const body = await response.json();
-    expect(body.error.code).toBe('VALIDATION_ERROR');
+    const response = await POST(makeRequest({
+      token: ' pending-token ',
+      teamName: ' Platform Engineering ',
+      description: 'Delivery platform',
+    }));
+
+    expect(executeGenesis).toHaveBeenCalledWith({
+      token: 'pending-token',
+      teamName: 'Platform Engineering',
+      description: 'Delivery platform',
+    });
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual({
+      teamId: 'team-1',
+      memberId: 'member-1',
+      sessionToken: 'session-token-abc',
+    });
+    const cookie = response.headers.get('Set-Cookie');
+    expect(cookie).toContain('session=session-token-abc');
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('SameSite=lax');
+    expect(cookie).toContain('Max-Age=604800');
   });
 
-  it('returns 400 when token is empty string', async () => {
-    const response = await POST(makeRequest({ token: '' }));
-    expect(response.status).toBe(400);
+  it('accepts an omitted optional description', async () => {
+    executeGenesis.mockResolvedValue({
+      teamId: 'team-2',
+      memberId: 'member-2',
+      sessionToken: 'session-token-def',
+    });
 
-    const body = await response.json();
-    expect(body.error.code).toBe('VALIDATION_ERROR');
-  });
+    const response = await POST(makeRequest({
+      token: 'pending-token',
+      teamName: 'No Description Team',
+    }));
 
-  it('returns 404 when token does not exist', async () => {
-    const response = await POST(makeRequest({ token: 'nonexistent-token' }));
-    expect(response.status).toBe(404);
-
-    const body = await response.json();
-    expect(body.error.code).toBe('NOT_FOUND');
-  });
-
-  it('returns 201 with teamId, memberId, sessionToken on success', async () => {
-    // This test requires seeding a pending genesis token in the route's repos.
-    // Since the route uses module-level repos, we test the service integration
-    // more thoroughly in the service tests. Here we verify the route shape.
-    // We'll verify 404 behavior which exercises the full path through the handler.
-    const response = await POST(makeRequest({ token: 'valid-looking-token' }));
-    // Will be 404 since the module-level repos have no seeded data
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(201);
+    expect(executeGenesis).toHaveBeenCalledWith({
+      token: 'pending-token',
+      teamName: 'No Description Team',
+    });
   });
 });

@@ -23,6 +23,25 @@ interface PageProps {
   params: Promise<{ token: string }>;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getApiErrorMessage(payload: unknown, fallback: string): string {
+  if (!isRecord(payload)) return fallback;
+  const error = payload.error;
+  if (typeof error === 'string' && error.trim()) return error;
+  if (!isRecord(error) || typeof error.message !== 'string' || !error.message.trim()) {
+    return fallback;
+  }
+  return error.message;
+}
+
+async function readApiError(response: Response, fallback: string): Promise<string> {
+  const payload: unknown = await response.json().catch(() => null);
+  return getApiErrorMessage(payload, fallback);
+}
+
 export default function MagicLinkPage({ params }: PageProps) {
   const router = useRouter();
   const [state, setState] = useState<VerifyState>({ phase: 'loading' });
@@ -41,12 +60,12 @@ export default function MagicLinkPage({ params }: PageProps) {
         const res = await fetch(`/api/auth/magic-link/verify/${token}`);
 
         if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
+          const message = await readApiError(
+            res,
+            'Magic link is expired or has already been used',
+          );
           if (!cancelled) {
-            setState({
-              phase: 'error',
-              message: body.error ?? 'Magic link is expired or has already been used',
-            });
+            setState({ phase: 'error', message });
           }
           return;
         }
@@ -105,8 +124,10 @@ export default function MagicLinkPage({ params }: PageProps) {
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setFormError(data.error ?? 'Failed to create team. Please try again.');
+        setFormError(await readApiError(
+          res,
+          'Failed to create team. Please try again.',
+        ));
         setIsSubmitting(false);
         return;
       }

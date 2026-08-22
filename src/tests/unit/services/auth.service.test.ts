@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { createInMemoryRepositories, type Repositories } from '@/lib/repositories';
 import { createAuthService, type AuthService } from '@/lib/services/auth.service';
 import { resetRateLimitStore } from '@/lib/rate-limit';
-import { RateLimitError } from '@/lib/errors';
+import { NotFoundError, RateLimitError } from '@/lib/errors';
 import { InMemoryEmailService } from '@/lib/services/email.service';
 
 describe('AuthService.generatePairingCode', () => {
@@ -183,6 +183,58 @@ describe('AuthService.verifyPairingCode — SlackIdentityLink persistence', () =
       // If found, it should not be for member-42
       expect(oldLink.memberId).not.toBe('member-42');
     }
+  });
+});
+
+describe('AuthService.verifyMagicLink — pending genesis validation', () => {
+  let repos: Repositories;
+  let authService: AuthService;
+
+  beforeEach(() => {
+    repos = createInMemoryRepositories();
+    authService = createAuthService({
+      pairingCodeRepo: repos.pairingCode,
+      magicLinkRepo: repos.magicLink,
+      teamMemberRepo: repos.teamMember,
+      userSessionRepo: repos.userSession,
+      pendingGenesisRepo: repos.pendingGenesis,
+    });
+  });
+
+  it('validates an unused pending genesis token without consuming it', async () => {
+    await repos.pendingGenesis.create({
+      token: 'pending-valid',
+      email: 'new@example.com',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const result = await authService.verifyMagicLink('pending-valid');
+
+    expect(result).toEqual({
+      status: 'requires_team_creation',
+      pendingToken: 'pending-valid',
+      email: 'new@example.com',
+    });
+    expect((await repos.pendingGenesis.findByToken('pending-valid'))?.used).toBe(false);
+  });
+
+  it.each([
+    ['unknown', 'pending-unknown'],
+    ['expired', 'pending-expired'],
+    ['already used', 'pending-used'],
+  ])('rejects an %s pending genesis token', async (scenario, token) => {
+    if (scenario !== 'unknown') {
+      await repos.pendingGenesis.create({
+        token,
+        email: `${scenario.replace(' ', '-')}@example.com`,
+        expiresAt: new Date(Date.now() + (scenario === 'expired' ? -1_000 : 60_000)),
+      });
+    }
+    if (scenario === 'already used') {
+      await repos.pendingGenesis.claimToken(token);
+    }
+
+    await expect(authService.verifyMagicLink(token)).rejects.toThrow(NotFoundError);
   });
 });
 

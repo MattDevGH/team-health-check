@@ -5,6 +5,12 @@ export const createTeamSchema = z.object({
   description: z.string().max(500).optional(),
 });
 
+export const genesisSchema = z.object({
+  token: z.string().trim().min(1),
+  teamName: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(500).optional(),
+});
+
 export const addMemberSchema = z.object({
   name: z.string().trim().min(1).max(100),
   email: z.string().email().optional(),
