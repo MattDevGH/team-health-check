@@ -11,8 +11,16 @@
 
 Team Health Check — a lightweight feedback tool for delivery teams, inspired by the Spotify Squad Health Check Model. Collects regular health-check responses via web interface and Slack bot, visualises trends over time.
 
-**Repo:** [Replace with GitHub URL]
-**Branch:** master (single branch, push directly)
+**Repo:** https://github.com/MattDevGH/team-health-check.git
+
+**Branch policy:** `master` is the stable/default branch. Feature work uses
+`feat/<feature-name>` branches and merges through a pull request only after CI
+and relevant acceptance validation pass.
+
+**Current branch status:** Integration hardening is on
+`feat/integration-hardening`, pending full automated validation, real browser
+and Slack acceptance validation, and a pull request. It must not be merged to
+`master` until that validation is complete.
 
 ---
 

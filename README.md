@@ -23,6 +23,17 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+## Development and Branching Workflow
+
+`master` is the stable/default branch. Create feature work on
+`feat/<feature-name>` branches, then merge through a pull request only after CI
+and relevant acceptance validation pass.
+
+Integration hardening is currently on `feat/integration-hardening`, pending
+full automated validation, real browser and Slack acceptance validation, and a
+pull request. Keep it on the feature branch until that validation is complete;
+do not merge or push it directly to `master`.
+
 ## Environment Variables
 
 Copy the example file and fill in your values:
