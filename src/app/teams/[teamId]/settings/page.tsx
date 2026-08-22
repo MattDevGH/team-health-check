@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import { TeamDetailsSection } from './team-details-section';
 import { PrivacyModeSection } from './privacy-mode-section';
 import { MembersSection, type Member } from './members-section';
+import { normalizeMembers } from './member-contract';
 import { ScheduleSection, type ScheduleData } from './schedule-section';
 import { SlackDeliverySection } from './slack-delivery-section';
 
@@ -50,16 +51,16 @@ export default function TeamSettingsPage({ params }: PageProps) {
           fetch(`/api/teams/${teamId}/schedule`),
         ]);
 
-        if (!teamRes.ok) {
+        if (!teamRes.ok || !membersRes.ok) {
           if (!cancelled) {
-            setError('Failed to load team');
+            setError(!teamRes.ok ? 'Failed to load team' : 'Failed to load team members');
             setLoading(false);
           }
           return;
         }
 
         const teamData: TeamData = await teamRes.json();
-        const membersData: Member[] = await membersRes.json();
+        const membersData = normalizeMembers(await membersRes.json());
         const scheduleData = await scheduleRes.json();
 
         if (!cancelled) {

@@ -14,7 +14,7 @@ import { addMemberSchema } from '@/lib/validation/schemas';
 import { ValidationError } from '@/lib/errors';
 import { container, repos } from '@/lib/container-production';
 import { createGetAuthContext } from '@/lib/auth/with-auth';
-import { createAuthorizeTeamMember } from '@/lib/auth/authorize-team-member';
+import { createAuthorizeDeliveryManager, createAuthorizeTeamMember } from '@/lib/auth/authorize-team-member';
 
 // Test seam: allows route tests to seed data via repos
 export { repos as _repos };
@@ -22,6 +22,10 @@ export { repos as _repos };
 // Wire auth at module level using production repos
 const getAuthContext = createGetAuthContext({ userSessionRepo: repos.userSession });
 const authorizeTeamMember = createAuthorizeTeamMember({ teamMemberRepo: repos.teamMember });
+const authorizeDeliveryManager = createAuthorizeDeliveryManager({
+  teamMemberRepo: repos.teamMember,
+  teamMemberRoleRepo: repos.teamMemberRole,
+});
 
 export const GET = withErrorHandling(async (request: Request, context) => {
   const { teamId } = await context!.params;
@@ -51,7 +55,7 @@ export const POST = withErrorHandling(async (request: Request, context) => {
     );
   }
 
-  await authorizeTeamMember(auth.memberId, teamId);
+  await authorizeDeliveryManager(auth.memberId, teamId);
 
   const body = await request.json();
 

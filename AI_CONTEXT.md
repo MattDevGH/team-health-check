@@ -18,12 +18,15 @@ Team Health Check — a lightweight feedback tool for delivery teams, inspired b
 and relevant acceptance validation pass.
 
 **Current branch status:** Integration hardening is on
-`feat/integration-hardening`, pending full automated validation, real browser
-and Slack acceptance validation, and a pull request. Manual browser validation
-found and fixed the new-user verify→genesis double-claim, structured API error
-rendering crash, submitted team-details persistence, and missing genesis session
-cookie. Hands-on validation must resume with a fresh magic link because the
-previous token was consumed. Playwright happy paths still require hardening,
+`feat/integration-hardening`, pending real browser and Slack acceptance
+validation and a pull request. Manual browser validation exposed a live
+settings-contract issue: member responses omitted role and Slack-link relations,
+which could crash team settings. The member-management fix is now complete on
+this branch: stable member-summary DTOs, explicit roles on add, authenticated
+role replacement/removal, final-delivery-manager protection, and visible UI
+errors are covered by service, route, and RTL regressions. Manual browser
+validation is still in progress and must resume with a fresh magic link because
+the previous token was consumed. Playwright happy paths still require hardening,
 and `master` remains blocked until browser/Slack acceptance and CI are green.
 
 ---
@@ -126,6 +129,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | Route-handler auth helper (`withAuth`) over Edge middleware | Vercel Edge Runtime can't run Prisma/Turso; route handlers run in Node.js |
 | Cookie-based session over Authorization header | Browsers set cookies automatically; no client-side token management |
 | SlackIdentityLinkRepository (DB-backed) | Replaces in-memory Map; persists across server restarts |
+| Stable member-summary API contract | TeamService assembles roles and optional Slack link through injected repositories; UI normalizes legacy omissions |
 
 ---
 
@@ -151,6 +155,9 @@ prisma.config.ts           # Prisma 7 datasource config
 | Integration | Vitest + real SQLite | ~50ms/test | Data layer, full flows |
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
+
+The Vitest suite now contains **957 tests**, including member-summary contract,
+member mutation authorization/final-manager, and legacy UI boundary regressions.
 
 ---
 
@@ -202,6 +209,7 @@ All stages must pass. Branch protection requires CI green before merge.
 - **`authorizeTeamMember`**: Factory function verifying member belongs to requested team (403 if not)
 - **`authorizeDeliveryManager`**: Extends team membership check with delivery_manager role requirement
 - **All `/api/me/*`, `/api/teams/*`, `/api/responses` routes**: Protected via cookie auth
+- **Member management**: GET/POST/PATCH return a stable member-summary DTO; delivery managers can add, replace roles, and remove members with final-manager protection
 - **Slack identity**: Persistent DB-backed SlackIdentityLink records (replaces in-memory Map)
 - **Notification wiring**: Scheduler tick → NotificationService → ProductionNotificationSink → Slack API
 - **Turso**: Environment-aware Prisma client (better-sqlite3 locally, @libsql/client in production)

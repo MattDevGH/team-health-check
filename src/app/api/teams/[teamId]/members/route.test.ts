@@ -146,6 +146,11 @@ describe('POST /api/teams/[teamId]/members', () => {
       name: 'Dave',
       email: 'dave@members.test',
     });
+    await repos.teamMemberRole.assign({
+      memberId: member.id,
+      teamId: team.id,
+      role: 'delivery_manager',
+    });
     const token = await createSession(member.id);
 
     const { req, ctx } = makeRequest('POST', {
@@ -169,6 +174,11 @@ describe('POST /api/teams/[teamId]/members', () => {
       teamId: team.id,
       name: 'Eve',
       email: 'eve@members.test',
+    });
+    await repos.teamMemberRole.assign({
+      memberId: member.id,
+      teamId: team.id,
+      role: 'delivery_manager',
     });
     const token = await createSession(member.id);
 

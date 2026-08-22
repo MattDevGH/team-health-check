@@ -4,6 +4,8 @@
  * Requirements: 1.1, 1.3, 3.2, 10.1
  */
 
+import type { TeamRole } from '@/lib/contracts/member-summary';
+
 import type {
   Team,
   TeamMember,
@@ -105,7 +107,9 @@ export interface AvailabilityRepository {
 /** Requirement 19.1: Role-based access control */
 export interface TeamMemberRoleRepository {
   assign(data: { memberId: string; teamId: string; role: string }): Promise<TeamMemberRole>;
+  replace(data: { memberId: string; teamId: string; role: TeamRole }): Promise<TeamMemberRole>;
   remove(memberId: string, teamId: string, role: string): Promise<void>;
+  removeMemberWithRoleProtection(memberId: string, teamId: string): Promise<void>;
   findByMemberAndTeam(memberId: string, teamId: string): Promise<TeamMemberRole[]>;
   countByTeamAndRole(teamId: string, role: string): Promise<number>;
 }

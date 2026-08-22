@@ -78,7 +78,9 @@ export function createInMemoryRepositories(): Repositories {
   const sessionAggregate = new InMemorySessionAggregateRepository();
   const question = new InMemoryQuestionRepository();
   const availability = new InMemoryAvailabilityRepository();
-  const teamMemberRole = new InMemoryTeamMemberRoleRepository();
+  const teamMemberRole = new InMemoryTeamMemberRoleRepository({
+    removeMember: (memberId) => teamMember.remove(memberId),
+  });
   const pairingCode = new InMemoryPairingCodeRepository();
   const userSession = new InMemoryUserSessionRepository();
   const pendingGenesis = new InMemoryPendingGenesisRepository();

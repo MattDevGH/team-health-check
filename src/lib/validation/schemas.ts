@@ -16,6 +16,10 @@ export const addMemberSchema = z.object({
   email: z.string().email().optional(),
 });
 
+export const memberRoleSchema = z.object({
+  role: z.enum(['delivery_manager', 'team_member']),
+});
+
 export const submitResponseSchema = z.object({
   sessionId: z.string().min(1),
   responses: z

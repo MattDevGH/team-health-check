@@ -30,14 +30,16 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 and relevant acceptance validation pass.
 
 Integration hardening is currently on `feat/integration-hardening`, pending
-full automated validation, real browser and Slack acceptance validation, and a
-pull request. Manual browser validation found and fixed the new-user
-verify→genesis double-claim, structured API error rendering crash, submitted
-team name/description persistence, and missing genesis session cookie. Resume
-hands-on validation with a fresh magic link because the previous token was
-consumed. Playwright happy paths still require hardening, so `master` remains
-blocked until browser/Slack acceptance and CI are green; do not merge or push
-this branch directly to `master`.
+real browser and Slack acceptance validation and a pull request. Manual browser
+validation exposed a live settings-contract issue where member responses omitted
+role and Slack-link relations and could crash team settings. The completed
+member-management fix now returns stable member summaries, assigns explicit
+roles, enforces authenticated delivery-manager role changes/removals with
+final-manager protection, and visibly renders structured mutation errors.
+Hands-on validation is still in progress and must resume with a fresh magic link
+because the previous token was consumed. Playwright happy paths still require
+hardening, so `master` remains blocked until browser/Slack acceptance and CI are
+green; do not merge or push this branch directly to `master`.
 
 ## Environment Variables
 
@@ -243,6 +245,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 - **Repository pattern** for testability — services depend on interfaces, not Prisma directly
 - **Factory injection** — services created via factory functions accepting dependencies
 - **Thin route handlers** — validate input (Zod), enforce auth, call service, format response
+- **Stable member summaries** — TeamService composes roles and optional Slack identity links through injected repositories
 - **Typed errors** — all errors extend `AppError`, mapped to HTTP status codes automatically
 - **Environment-aware DB** — Turso (libSQL) in production, better-sqlite3 locally
 
@@ -251,7 +254,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (932 tests across 111 files)
+npm test            # unit + property tests (957 tests across the Vitest suite)
 npm run test:watch  # watch mode for TDD (unit only)
 npx playwright test # e2e browser tests (happy-path + accessibility)
 ```
@@ -270,7 +273,7 @@ The focused genesis regression suite covers non-mutating pending-token verificat
 
 GitHub Actions pipeline with two jobs:
 
-1. **`ci`** — Install → Lint → Type Check → Unit+Property Tests (932 tests) → Build
+1. **`ci`** — Install → Lint → Type Check → Unit+Property Tests (957 tests) → Build
 2. **`e2e`** — Install → Build → Playwright E2E Tests (depends on `ci` passing)
 
 A **requirement coverage** check also runs on PRs to verify requirement IDs are referenced.

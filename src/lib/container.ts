@@ -69,6 +69,7 @@ export function createContainer(repos: Repositories, options?: ContainerOptions)
     teamRepo: repos.team,
     teamMemberRepo: repos.teamMember,
     teamMemberRoleRepo: repos.teamMemberRole,
+    slackIdentityLinkRepo: repos.slackIdentityLink,
     auditLogRepo: repos.auditLog,
     sessionRepo: repos.session,
   });

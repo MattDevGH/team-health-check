@@ -5,13 +5,17 @@
 
 import { ValidationError, ConflictError, NotFoundError } from '@/lib/errors';
 import { addMemberSchema } from '@/lib/validation/schemas';
-import type { TeamRepository, TeamMemberRepository, TeamMemberRoleRepository, AuditLogRepository, SessionRepository } from '@/lib/repositories/types';
-import type { Team, TeamMember } from '@/lib/repositories/entities';
+import type { MemberSummary, TeamRole } from '@/lib/contracts/member-summary';
+import type { TeamRepository, TeamMemberRepository, TeamMemberRoleRepository, SlackIdentityLinkRepository, AuditLogRepository, SessionRepository } from '@/lib/repositories/types';
+import type { Team } from '@/lib/repositories/entities';
+
+import { assembleMemberSummary } from './member-summary';
 
 export interface TeamServiceDeps {
   teamRepo: TeamRepository;
   teamMemberRepo: TeamMemberRepository;
   teamMemberRoleRepo: TeamMemberRoleRepository;
+  slackIdentityLinkRepo?: SlackIdentityLinkRepository;
   auditLogRepo: AuditLogRepository;
   sessionRepo: SessionRepository;
 }
@@ -20,9 +24,10 @@ export interface TeamService {
   create(name: string, description: string | undefined, creatorId: string): Promise<Team>;
   findById(teamId: string): Promise<Team | null>;
   update(teamId: string, data: { name?: string; description?: string }): Promise<Team>;
-  addMember(teamId: string, name: string, email?: string): Promise<TeamMember>;
+  addMember(teamId: string, name: string, email?: string): Promise<MemberSummary>;
   removeMember(teamId: string, memberId: string, userId: string): Promise<void>;
-  getMembers(teamId: string): Promise<TeamMember[]>;
+  updateMemberRole(teamId: string, memberId: string, role: TeamRole, actorId: string): Promise<MemberSummary>;
+  getMembers(teamId: string): Promise<MemberSummary[]>;
   listTeams(): Promise<Team[]>;
   archive(teamId: string, userId: string): Promise<void>;
   unarchive(teamId: string, userId: string): Promise<void>;
@@ -33,7 +38,7 @@ export interface TeamService {
  * Accepts repository dependencies via injection.
  */
 export function createTeamService(deps: TeamServiceDeps): TeamService {
-  const { teamRepo, teamMemberRepo, teamMemberRoleRepo, auditLogRepo, sessionRepo } = deps;
+  const { teamRepo, teamMemberRepo, teamMemberRoleRepo, slackIdentityLinkRepo, auditLogRepo, sessionRepo } = deps;
 
   async function create(name: string, description: string | undefined, creatorId: string): Promise<Team> {
     const trimmedName = name.trim();
@@ -76,51 +81,40 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
     return team;
   }
 
-  async function addMember(teamId: string, name: string, email?: string): Promise<TeamMember> {
-    // 1. Validate name and email using Zod schema (handles trim + min/max + email format)
+  async function addMember(teamId: string, name: string, email?: string): Promise<MemberSummary> {
     const parsed = addMemberSchema.safeParse({ name, email });
     if (!parsed.success) {
-      const fields = parsed.error.issues.map((issue) => ({
+      throw new ValidationError(parsed.error.issues.map((issue) => ({
         field: issue.path.join('.') || undefined,
         message: issue.message,
         code: issue.code,
-      }));
-      throw new ValidationError(fields);
+      })));
     }
 
-    const trimmedName = parsed.data.name;
-    const validatedEmail = parsed.data.email;
-
-    // 2. Check uniqueness via teamMemberRepo.findByTeamAndNameEmail
-    const existing = await teamMemberRepo.findByTeamAndNameEmail(teamId, trimmedName, validatedEmail);
+    const existing = await teamMemberRepo.findByTeamAndNameEmail(teamId, parsed.data.name, parsed.data.email);
     if (existing) {
       throw new ConflictError(
-        `Member with name "${trimmedName}" and email "${validatedEmail ?? ''}" already exists in this team`
+        `Member with name "${parsed.data.name}" and email "${parsed.data.email ?? ''}" already exists in this team`
       );
     }
 
-    // 3. Create member
     const member = await teamMemberRepo.create({
       teamId,
-      name: trimmedName,
-      email: validatedEmail,
+      name: parsed.data.name,
+      email: parsed.data.email,
     });
-
-    return member;
+    await teamMemberRoleRepo.assign({ memberId: member.id, teamId, role: 'team_member' });
+    return assembleMemberSummary(member, teamMemberRoleRepo, slackIdentityLinkRepo);
   }
 
-  /** Requirement 1.6: Remove member — disassociates without deleting response history, logs audit */
+  /** Requirements 1.6, 19.7: atomically protect the final manager, remove, and audit. */
   async function removeMember(teamId: string, memberId: string, userId: string): Promise<void> {
-    // 1. Verify member exists and belongs to this team
     const member = await teamMemberRepo.findById(memberId);
     if (!member || member.teamId !== teamId) {
-      throw new NotFoundError(`Team member not found in this team`);
+      throw new NotFoundError('Team member not found in this team');
     }
 
-    // 2. Remove member from team (only the member record, NOT their responses)
-    await teamMemberRepo.remove(memberId);
-
-    // 3. Log audit entry
+    await teamMemberRoleRepo.removeMemberWithRoleProtection(memberId, teamId);
     await auditLogRepo.create({
       teamId,
       changeType: 'member_removed',
@@ -128,6 +122,32 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
       newValue: JSON.stringify({ name: member.name, removedBy: userId }),
       userId,
     });
+  }
+
+  /** Requirements 19.5-19.7: replace a member role with final-manager protection. */
+  async function updateMemberRole(
+    teamId: string,
+    memberId: string,
+    role: TeamRole,
+    actorId: string,
+  ): Promise<MemberSummary> {
+    const member = await teamMemberRepo.findById(memberId);
+    if (!member || member.teamId !== teamId) {
+      throw new NotFoundError('Team member not found in this team');
+    }
+
+    const previous = await teamMemberRoleRepo.findByMemberAndTeam(memberId, teamId);
+    await teamMemberRoleRepo.replace({ memberId, teamId, role });
+    if (previous.length !== 1 || previous[0].role !== role) {
+      await auditLogRepo.create({
+        teamId,
+        changeType: 'role_replaced',
+        previousValue: JSON.stringify(previous.map((entry) => entry.role)),
+        newValue: JSON.stringify([role]),
+        userId: actorId,
+      });
+    }
+    return assembleMemberSummary(member, teamMemberRoleRepo, slackIdentityLinkRepo);
   }
 
   /** Requirement 1.8: Archive a team — sets archived flag, force-closes open session, logs audit */
@@ -179,9 +199,12 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
     });
   }
 
-  /** Requirement 1.7: Display list of current team members */
-  async function getMembers(teamId: string): Promise<TeamMember[]> {
-    return teamMemberRepo.findByTeamId(teamId);
+  /** Requirements 1.7, 2.7: return the stable member-summary API contract. */
+  async function getMembers(teamId: string): Promise<MemberSummary[]> {
+    const members = await teamMemberRepo.findByTeamId(teamId);
+    return Promise.all(members.map((member) =>
+      assembleMemberSummary(member, teamMemberRoleRepo, slackIdentityLinkRepo)
+    ));
   }
 
   /** List all teams */
@@ -212,5 +235,16 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
     return teamRepo.update(teamId, updateData);
   }
 
-  return { create, findById, update, addMember, removeMember, getMembers, listTeams, archive, unarchive };
+  return {
+    create,
+    findById,
+    update,
+    addMember,
+    removeMember,
+    updateMemberRole,
+    getMembers,
+    listTeams,
+    archive,
+    unarchive,
+  };
 }
