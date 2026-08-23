@@ -133,7 +133,7 @@ All tasks follow TDD (Red → Green → Refactor) and reference specific require
 
   - [x] 8.3 Write property test for session-link cookie scoping (Property 12)
     - **Property 12: Session-link cookie is scoped**
-    - Generate sessions with various close times; verify Max-Age ≤ time-to-close and ≤ 7 days
+    - Generate new/reused authentication with close/no-close and existing-expiry bounds; verify monotonic persistence, cookie agreement, non-negative lifetime, and the seven-day cap
     - **Validates: Requirements 3.4, 3.5**
 
 - [x] 9. Checkpoint — Auth flows complete
@@ -331,11 +331,11 @@ original checklist was marked done.
     - Add regression evidence for the agreed contract
     - _Requirements: 2.1, 2.2, 2.3, 2.7, 2.8_
 
-  - [ ] 23.4 Complete session-link cadence and authentication scoping with TDD
+  - [x] 23.4 Complete session-link cadence and authentication scoping with TDD
     - [x] Implement weighted micro-pulse question selection plus the `expandable` contract
     - [x] Cover weekly/micro-pulse selection and expansion with route/property/UI tests
-    - [ ] Cap newly-created and reused authentication to the earliest of session close, existing expiry, and seven days
-    - [ ] Cover reused near-close session authentication with route/property tests
+    - [x] Cap newly-created and reused authentication to the earliest of session close, existing expiry, and seven days
+    - [x] Cover reused near-close session authentication with route/property tests
     - _Requirements: 3.2, 3.4, 3.5; Properties 4 and 12_
 
   - [ ] 23.5 Complete remaining required team audit emissions with TDD

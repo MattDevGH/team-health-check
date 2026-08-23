@@ -139,6 +139,7 @@ export interface UserSessionRepository {
   create(data: { memberId: string; token: string; expiresAt: Date }): Promise<UserSession>;
   findByToken(token: string): Promise<UserSession | null>;
   findValidByMemberId(memberId: string): Promise<UserSession | null>;
+  shortenExpiry(token: string, expiresAt: Date): Promise<UserSession | null>;
   deleteByToken(token: string): Promise<void>;
 }
 

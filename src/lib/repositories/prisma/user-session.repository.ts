@@ -37,6 +37,14 @@ export class PrismaUserSessionRepository implements UserSessionRepository {
     return record ? this.mapToEntity(record) : null;
   }
 
+  async shortenExpiry(token: string, expiresAt: Date): Promise<UserSession | null> {
+    await this.prisma.userSession.updateMany({
+      where: { token, expiresAt: { gt: expiresAt } },
+      data: { expiresAt },
+    });
+    return this.findByToken(token);
+  }
+
   async deleteByToken(token: string): Promise<void> {
     await this.prisma.userSession.deleteMany({ where: { token } });
   }

@@ -197,3 +197,88 @@ describe('Property 4: Session-link response contains all required fields', () =>
     );
   });
 });
+
+
+describe('Property 12: Session-link cookie is scoped', () => {
+  beforeEach(() => {
+    resetRateLimitStore();
+  });
+
+  it('uses one non-negative persisted bound across close, existing expiry, and seven days', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.record({
+          closeOffsetSeconds: fc.option(
+            fc.integer({ min: -60 * 60, max: 10 * 24 * 60 * 60 }),
+            { nil: null },
+          ),
+          existingOffsetSeconds: fc.option(
+            fc.integer({ min: 5, max: 10 * 24 * 60 * 60 }),
+            { nil: null },
+          ),
+        }),
+        async ({ closeOffsetSeconds, existingOffsetSeconds }) => {
+          const suffix = crypto.randomUUID();
+          const teamId = `scope-team-${suffix}`;
+          const memberId = `scope-member-${suffix}`;
+          const token = `scope-token-${suffix}`;
+          const before = Date.now();
+          await repos.teamMember.create({ id: memberId, teamId, name: 'Scoped Member' });
+          const session = await repos.session.create({
+            teamId,
+            status: 'open',
+            ...(closeOffsetSeconds === null
+              ? {}
+              : { scheduledCloseAt: new Date(before + closeOffsetSeconds * 1000) }),
+          });
+          await repos.sessionLink.create({
+            token,
+            memberId,
+            sessionId: session.id,
+            expiresAt: new Date(before + 60 * 60 * 1000),
+          });
+          const originalExistingExpiry = existingOffsetSeconds === null
+            ? null
+            : new Date(before + existingOffsetSeconds * 1000);
+          const existing = originalExistingExpiry
+            ? await repos.userSession.create({
+              memberId,
+              token: `existing-${suffix}`,
+              expiresAt: originalExistingExpiry,
+            })
+            : null;
+
+          const response = await GET(makeRequest(token), makeContext(token));
+          const after = Date.now();
+          const setCookie = response.headers.get('Set-Cookie');
+          const cookieToken = setCookie?.match(/session=([^;]+)/)?.[1];
+          const maxAge = Number(setCookie?.match(/Max-Age=(\d+)/)?.[1]);
+          const persisted = await repos.userSession.findByToken(cookieToken!);
+          const applicableOffsets = [7 * 24 * 60 * 60];
+          if (closeOffsetSeconds !== null) applicableOffsets.push(closeOffsetSeconds);
+          if (existingOffsetSeconds !== null) applicableOffsets.push(existingOffsetSeconds);
+          const expectedMaxAge = Math.max(0, Math.min(...applicableOffsets));
+
+          expect(response.status).toBe(200);
+          expect(cookieToken).toBe(existing?.token ?? persisted?.token);
+          expect(maxAge).toBeGreaterThanOrEqual(0);
+          expect(maxAge).toBeLessThanOrEqual(expectedMaxAge);
+          const elapsedSeconds = Math.ceil((after - before) / 1000);
+          expect(maxAge).toBeGreaterThanOrEqual(
+            Math.max(0, expectedMaxAge - elapsedSeconds - 1),
+          );
+          expect(persisted).not.toBeNull();
+          expect(persisted!.expiresAt.getTime() - maxAge * 1000)
+            .toBeGreaterThanOrEqual(before);
+          expect(persisted!.expiresAt.getTime() - maxAge * 1000)
+            .toBeLessThanOrEqual(after + 999);
+          if (originalExistingExpiry) {
+            expect(persisted!.expiresAt.getTime())
+              .toBeLessThanOrEqual(originalExistingExpiry.getTime());
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+});

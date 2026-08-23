@@ -6,12 +6,10 @@
  * create/reuse UserSession, set cookie, return enriched response.
  */
 
-import crypto from 'crypto';
-
 import { withErrorHandling } from '@/lib/api-utils';
-import { NotFoundError } from '@/lib/errors';
+import { buildSetCookieHeader } from '@/lib/auth/session-cookie';
 import { container, repos } from '@/lib/container-production';
-import { buildSetCookieHeader, SESSION_MAX_AGE } from '@/lib/auth/session-cookie';
+import { NotFoundError } from '@/lib/errors';
 
 // Test seam: allows route tests to seed data via repos
 export { repos as _testRepos };
@@ -67,33 +65,11 @@ export const GET = withErrorHandling(async (request, context) => {
   const selectedIds = new Set(selection.questionIds);
   const selectedQuestions = formattedQuestions.filter(question => selectedIds.has(question.id));
 
-  // Create or reuse a UserSession for this member (Requirement 3.4)
-  const existingUserSession = await repos.userSession.findValidByMemberId(memberId);
-
-  let sessionToken: string;
-  let maxAge: number;
-
-  if (existingUserSession) {
-    sessionToken = existingUserSession.token;
-    maxAge = Math.floor((existingUserSession.expiresAt.getTime() - Date.now()) / 1000);
-  } else {
-    // Requirement 3.5: Scope session to health-check session close or 7 days, whichever is shorter
-    const sevenDaysMs = SESSION_MAX_AGE * 1000;
-    const timeUntilClose = scheduledCloseAt
-      ? scheduledCloseAt.getTime() - Date.now()
-      : sevenDaysMs;
-    const effectiveMaxMs = Math.min(timeUntilClose, sevenDaysMs);
-
-    const expiresAt = new Date(Date.now() + effectiveMaxMs);
-    sessionToken = crypto.randomUUID();
-    maxAge = Math.floor(effectiveMaxMs / 1000);
-
-    await repos.userSession.create({
-      memberId,
-      token: sessionToken,
-      expiresAt,
-    });
-  }
+  // Establish authentication with persistence and cookie on the same scoped bound.
+  const { sessionToken, expiresAt } = await container.auth.establishSessionLinkAuth(
+    memberId,
+    scheduledCloseAt,
+  );
 
   // Build enriched response
   const responseBody = {
@@ -109,6 +85,7 @@ export const GET = withErrorHandling(async (request, context) => {
   };
 
   const response = Response.json(responseBody);
+  const maxAge = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
   response.headers.set('Set-Cookie', buildSetCookieHeader(sessionToken, maxAge));
   return response;
 });

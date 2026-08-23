@@ -65,7 +65,7 @@ This spec completes work nominally covered by the original Team Health Check spe
 2. WHEN cadencePreference is `micro_pulse`, `questions` SHALL contain the weighted unanswered selection and MAY be empty when all questions are answered; `expandable` SHALL equal whether `questions` omits any entry from `allQuestions`. For every other cadence, `questions` SHALL equal `allQuestions` and `expandable` SHALL be false.
 3. IF the session is closed, THE response SHALL include a sessionStatus field set to "closed" so the UI can display an appropriate message without a separate API call.
 4. WHEN the Session_Link is validated successfully, THE endpoint SHALL create a UserSession for the associated member (or reuse an existing active session) and set the session cookie via `Set-Cookie` header, so that subsequent API calls (e.g., `POST /api/responses`) from the same browser are authenticated without requiring a separate magic-link login.
-5. THE session created by session-link validation SHALL have a max-age equal to the remaining time until the health check session closes (or 7 days, whichever is shorter), reflecting that session-link authentication is scoped to the active session.
+5. THE authentication established by session-link validation SHALL expire at the earliest of the health-check `scheduledCloseAt` when present, the existing UserSession expiry when reusing authentication, or 7 days from validation. Reuse SHALL persistently shorten a later expiry and SHALL NOT extend an earlier expiry. THE persisted expiry and cookie `Max-Age` SHALL use the same effective non-negative bound; an already-passed bound SHALL produce `Max-Age=0`.
 
 ### Requirement 4: API Response Contract Alignment — Trends
 

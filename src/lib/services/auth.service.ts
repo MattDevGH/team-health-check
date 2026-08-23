@@ -35,12 +35,21 @@ export interface AuthServiceDeps {
   emailService?: EmailService;
 }
 
+export interface SessionLinkAuthResult {
+  sessionToken: string;
+  expiresAt: Date;
+}
+
 export interface AuthService {
   generatePairingCode(slackUserId: string): Promise<string>;
   verifyPairingCode(memberId: string, code: string): Promise<{ slackUserId: string } | null>;
   requestMagicLink(email: string): Promise<void>;
   verifyMagicLink(token: string): Promise<MagicLinkVerifyResult>;
   invalidateSession(token: string): Promise<void>;
+  establishSessionLinkAuth(
+    memberId: string,
+    scheduledCloseAt: Date | null,
+  ): Promise<SessionLinkAuthResult>;
   validateSessionLink(token: string): Promise<{ memberId: string; sessionId: string } | null>;
   validateSessionLinkWithRateLimit(token: string, ip: string): Promise<{ memberId: string; sessionId: string } | null>;
 }
@@ -230,6 +239,46 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
   }
 
   /**
+   * Establish browser authentication from a session link using one effective
+   * bound for persistence and the cookie. Reuse may shorten, never extend.
+   */
+  async function establishSessionLinkAuth(
+    memberId: string,
+    scheduledCloseAt: Date | null,
+  ): Promise<SessionLinkAuthResult> {
+    if (!userSessionRepo) {
+      throw new AppError(
+        'User session repository is not configured',
+        'INTERNAL_ERROR',
+        500,
+      );
+    }
+
+    const now = Date.now();
+    const existing = await userSessionRepo.findValidByMemberId(memberId);
+    const deadlines = [now + SESSION_EXPIRY_MS];
+    if (scheduledCloseAt) deadlines.push(scheduledCloseAt.getTime());
+    if (existing) deadlines.push(existing.expiresAt.getTime());
+
+    const maxAge = Math.max(0, Math.floor((Math.min(...deadlines) - now) / 1000));
+    const expiresAt = new Date(now + maxAge * 1000);
+    if (!existing) {
+      const sessionToken = crypto.randomUUID();
+      await userSessionRepo.create({ memberId, token: sessionToken, expiresAt });
+      return { sessionToken, expiresAt };
+    }
+
+    const persisted = await userSessionRepo.shortenExpiry(existing.token, expiresAt);
+    if (!persisted) {
+      throw new AppError('User session disappeared during update', 'INTERNAL_ERROR', 500);
+    }
+    return {
+      sessionToken: persisted.token,
+      expiresAt: persisted.expiresAt,
+    };
+  }
+
+  /**
    * Validate a session link token.
    * Returns { memberId, sessionId } on success, null if token is invalid, expired,
    * or the session closed more than 7 days ago.
@@ -283,6 +332,7 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
     requestMagicLink,
     verifyMagicLink,
     invalidateSession,
+    establishSessionLinkAuth,
     validateSessionLink,
     validateSessionLinkWithRateLimit,
   };

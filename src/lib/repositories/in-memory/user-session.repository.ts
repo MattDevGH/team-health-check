@@ -23,9 +23,21 @@ export class InMemoryUserSessionRepository implements UserSessionRepository {
 
   async findValidByMemberId(memberId: string): Promise<UserSession | null> {
     const now = new Date();
-    return [...this.store.values()].find(
-      s => s.memberId === memberId && s.expiresAt > now
-    ) ?? null;
+    const active = [...this.store.values()].filter(
+      session => session.memberId === memberId && session.expiresAt > now,
+    );
+    active.sort((left, right) => right.expiresAt.getTime() - left.expiresAt.getTime());
+    return active[0] ?? null;
+  }
+
+  async shortenExpiry(token: string, expiresAt: Date): Promise<UserSession | null> {
+    const session = await this.findByToken(token);
+    if (!session) return null;
+
+    if (expiresAt < session.expiresAt) {
+      session.expiresAt = expiresAt;
+    }
+    return session;
   }
 
   async deleteByToken(token: string): Promise<void> {

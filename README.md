@@ -49,8 +49,7 @@ A 2026-08-23 closure audit corrected the earlier “all implemented” status. T
 remaining merge blockers are tracked as Tasks 23–26 in
 `.kiro/specs/integration-hardening/tasks.md`:
 
-1. **Auth/session and audit contracts:** reused-session close scoping and the
-   still-missing schedule-change and member-addition audit emissions.
+1. **Auth/session and audit contracts:** session-link cadence/authentication scoping is complete; schedule-change and member-addition audit emissions remain.
 2. **Slack production behavior:** secure pairing and real unlink, actionable
    command flow, cadence/delivery-window eligibility, closing reminders,
    persistent retry processing, and disposable-workspace acceptance.
@@ -283,6 +282,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 - **Protected session details** — session-detail GET permits ordinary members of the requested team and returns the same 404 for missing or cross-team sessions
 - **Protected participation** — participation GET derives identity only from the session cookie, binds the session to the URL team, and preserves privacy-aware counts without exposing response details
 - **Weighted micro-pulses** — session-link responses select weighted unanswered questions, bundle them as close approaches, and include `allQuestions` plus `expandable` for one-call expansion
+- **Scoped session-link authentication** — new or reused authentication persists and emits the same earliest close/existing/seven-day bound; reuse never extends expiry and elapsed bounds use `Max-Age=0`
 - **Team authorization** — `authorizeTeamMember` / `authorizeDeliveryManager` enforce access control
 - **Repository pattern** for testability — services depend on interfaces, not Prisma directly
 - **Factory injection** — services created via factory functions accepting dependencies
@@ -296,7 +296,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (1026 tests across 123 Vitest files)
+npm test            # unit + property tests (1042 tests across 125 Vitest files)
 npm run test:watch  # watch mode for TDD (unit only)
 npm run test:e2e    # Playwright browser tests
 npm run test:a11y   # Playwright axe tests

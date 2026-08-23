@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { resetRateLimitStore } from '@/lib/rate-limit';
 
 // We import after resetting rate limit store, so module-level state is clean
@@ -345,22 +345,124 @@ describe('GET /api/auth/session-link/[token]', () => {
       });
     });
 
-    it('reuses an existing valid UserSession instead of creating a new one', async () => {
-      const { memberId, token } = await seedValidScenario();
-
-      // Pre-create a valid UserSession for this member
+    it('persistently shortens a reused UserSession to the health-check close', async () => {
+      const requestStartedAt = Date.now();
+      const closesAt = new Date(requestStartedAt + 2 * 60 * 60 * 1000);
+      const { memberId, token } = await seedValidScenario({ closesAt });
       const existingSession = await repos.userSession.create({
         memberId,
-        token: 'existing-session-token-abc',
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+        token: 'existing-session-token-close',
+        expiresAt: new Date(requestStartedAt + 5 * 24 * 60 * 60 * 1000),
       });
 
-      const request = makeRequest(token);
-      const response = await GET(request, makeContext(token));
+      const response = await GET(makeRequest(token), makeContext(token));
 
       expect(response.status).toBe(200);
       const setCookie = response.headers.get('Set-Cookie');
       expect(setCookie).toContain(`session=${existingSession.token}`);
+      const maxAge = Number(setCookie?.match(/Max-Age=(\d+)/)?.[1]);
+      const persisted = await repos.userSession.findByToken(existingSession.token);
+      expect(maxAge).toBeGreaterThanOrEqual(2 * 60 * 60 - 1);
+      expect(maxAge).toBeLessThanOrEqual(2 * 60 * 60);
+      expect(persisted?.expiresAt.getTime()).toBeLessThanOrEqual(closesAt.getTime());
+      expect(persisted?.expiresAt.getTime()).toBeGreaterThanOrEqual(closesAt.getTime() - 1000);
+      expect(Math.abs(
+        persisted!.expiresAt.getTime() - requestStartedAt - maxAge * 1000,
+      )).toBeLessThanOrEqual(1000);
+    });
+
+    it('never extends an existing earlier UserSession expiry', async () => {
+      const requestStartedAt = Date.now();
+      const { memberId, token } = await seedValidScenario({
+        closesAt: new Date(requestStartedAt + 2 * 24 * 60 * 60 * 1000),
+      });
+      const originalExpiry = new Date(requestStartedAt + 60 * 60 * 1000);
+      const existingSession = await repos.userSession.create({
+        memberId,
+        token: 'existing-session-token-earlier',
+        expiresAt: originalExpiry,
+      });
+
+      const response = await GET(makeRequest(token), makeContext(token));
+
+      const setCookie = response.headers.get('Set-Cookie');
+      const maxAge = Number(setCookie?.match(/Max-Age=(\d+)/)?.[1]);
+      const persisted = await repos.userSession.findByToken(existingSession.token);
+      expect(setCookie).toContain(`session=${existingSession.token}`);
+      expect(maxAge).toBeGreaterThanOrEqual(60 * 60 - 1);
+      expect(maxAge).toBeLessThanOrEqual(60 * 60);
+      expect(persisted?.expiresAt.getTime()).toBeLessThanOrEqual(originalExpiry.getTime());
+      expect(persisted?.expiresAt.getTime()).toBeGreaterThanOrEqual(originalExpiry.getTime() - 1000);
+    });
+
+    it('caps new authentication to seven days when the session has no close', async () => {
+      const requestStartedAt = Date.now();
+      const memberId = `member-no-close-${seedCounter}`;
+      const token = `no-close-token-${crypto.randomUUID()}`;
+      const session = await repos.session.create({ teamId: 'team-no-close', status: 'open' });
+      await repos.teamMember.create({ id: memberId, teamId: session.teamId, name: 'No Close' });
+      await repos.sessionLink.create({
+        token,
+        memberId,
+        sessionId: session.id,
+        expiresAt: new Date(requestStartedAt + 60 * 60 * 1000),
+      });
+
+      const response = await GET(makeRequest(token), makeContext(token));
+
+      const setCookie = response.headers.get('Set-Cookie');
+      const maxAge = Number(setCookie?.match(/Max-Age=(\d+)/)?.[1]);
+      const sessionToken = setCookie?.match(/session=([^;]+)/)?.[1];
+      const persisted = await repos.userSession.findByToken(sessionToken!);
+      expect(maxAge).toBeGreaterThanOrEqual(7 * 24 * 60 * 60 - 1);
+      expect(maxAge).toBeLessThanOrEqual(7 * 24 * 60 * 60);
+      expect(Math.abs(
+        persisted!.expiresAt.getTime() - requestStartedAt - maxAge * 1000,
+      )).toBeLessThanOrEqual(1000);
+    });
+
+    it('uses Max-Age=0 and immediate persisted expiry when the close is past', async () => {
+      const requestStartedAt = Date.now();
+      const { token } = await seedValidScenario({
+        closesAt: new Date(requestStartedAt - 1000),
+      });
+
+      const response = await GET(makeRequest(token), makeContext(token));
+
+      const setCookie = response.headers.get('Set-Cookie');
+      const sessionToken = setCookie?.match(/session=([^;]+)/)?.[1];
+      const persisted = await repos.userSession.findByToken(sessionToken!);
+      expect(setCookie).toContain('Max-Age=0');
+      expect(setCookie).not.toMatch(/Max-Age=-/);
+      expect(persisted?.expiresAt.getTime()).toBeGreaterThanOrEqual(requestStartedAt);
+      expect(persisted?.expiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+    });
+
+    it('calculates cookie lifetime after delayed persistence', async () => {
+      vi.useFakeTimers();
+      const now = new Date('2026-08-22T12:00:00.000Z');
+      vi.setSystemTime(now);
+      const closesAt = new Date(now.getTime() + 60 * 60 * 1000);
+      const { token } = await seedValidScenario({ closesAt });
+      const originalCreate = repos.userSession.create.bind(repos.userSession);
+      vi.spyOn(repos.userSession, 'create').mockImplementationOnce(async data => {
+        vi.setSystemTime(new Date(now.getTime() + 2000));
+        return originalCreate(data);
+      });
+
+      try {
+        const response = await GET(makeRequest(token), makeContext(token));
+        const setCookie = response.headers.get('Set-Cookie');
+        const maxAge = Number(setCookie?.match(/Max-Age=(\d+)/)?.[1]);
+        const sessionToken = setCookie?.match(/session=([^;]+)/)?.[1];
+        const persisted = await repos.userSession.findByToken(sessionToken!);
+
+        expect(maxAge).toBe(60 * 60 - 2);
+        expect(persisted?.expiresAt).toEqual(closesAt);
+      } finally {
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+      }
     });
   });
 });

@@ -91,9 +91,12 @@ sequenceDiagram
 
     Browser->>SLRoute: GET /api/auth/session-link/[token]
     SLRoute->>AuthService: validateSessionLinkWithRateLimit(token, ip)
-    AuthService-->>SLRoute: { memberId, sessionId, ... }
-    SLRoute->>DB: Create/reuse UserSession for memberId
-    SLRoute-->>Browser: 200 { context } + Set-Cookie: session=xyz; HttpOnly; Max-Age=<session-scoped>
+    AuthService-->>SLRoute: { memberId, sessionId }
+    SLRoute->>AuthService: establishSessionLinkAuth(memberId, scheduledCloseAt)
+    AuthService->>DB: Find/create or monotonically shorten UserSession
+    DB-->>AuthService: persisted token + effective expiry
+    AuthService-->>SLRoute: { sessionToken, expiresAt }
+    SLRoute-->>Browser: 200 { context } + Set-Cookie using remaining non-negative lifetime
     Note over Browser: Subsequent POST /api/responses uses this cookie
 ```
 
@@ -148,15 +151,15 @@ graph LR
 | File | Changes |
 |------|---------|
 | `src/lib/prisma.ts` | Environment-aware: better-sqlite3 locally, @libsql/client + @prisma/adapter-libsql when TURSO_DATABASE_URL is set |
-| `src/lib/services/auth.service.ts` | Add `EmailService` dep, call it in `requestMagicLink`; create SlackIdentityLink in `verifyPairingCode`; invalidate persisted logout sessions |
-| `src/lib/repositories/in-memory/user-session.repository.ts` | Delete an exact session token idempotently for logout tests |
-| `src/lib/repositories/prisma/user-session.repository.ts` | Delete an exact session token idempotently with `deleteMany` |
+| `src/lib/services/auth.service.ts` | Add `EmailService` dep, call it in `requestMagicLink`; create SlackIdentityLink in `verifyPairingCode`; invalidate persisted logout sessions; establish session-link authentication at the earliest close/existing/seven-day expiry |
+| `src/lib/repositories/in-memory/user-session.repository.ts` | Delete exact tokens idempotently and select/monotonically shorten reusable authentication |
+| `src/lib/repositories/prisma/user-session.repository.ts` | Delete exact tokens idempotently and select/atomically shorten reusable authentication |
 | `src/lib/container.ts` | Add `EmailService` to auth deps; add `slackIdentityLink` to `Repositories` |
 | `src/lib/container-production.ts` | Wire `ResendEmailService` into auth; wire `slackIdentityLink` repo |
 | `src/lib/repositories/index.ts` | Add `slackIdentityLink` to `Repositories` interface and in-memory factory |
 | `src/lib/repositories/prisma/index.ts` | Add Prisma `slackIdentityLink` repo |
 | `src/app/api/auth/magic-link/verify/[token]/route.ts` | Set session cookie via Set-Cookie header on response |
-| `src/app/api/auth/session-link/[token]/route.ts` | Return enriched response; create UserSession and set cookie |
+| `src/app/api/auth/session-link/[token]/route.ts` | Return enriched response; delegate create/reuse/shortening to AuthService and set cookie from persisted expiry |
 | `src/app/api/teams/[teamId]/trends/route.ts` | Reshape response to match frontend contract (closedAt, averages, trendDistribution array) |
 | `src/app/api/responses/route.ts` | Use `withAuth` wrapper; read sessionId from body |
 | `src/app/api/me/route.ts` | Use `withAuth` wrapper |
@@ -662,7 +665,7 @@ Methods:
 
 ### Property 12: Session-link cookie is scoped
 
-*For any* session-link validation where the health check session has a defined close time, the Max-Age of the Set-Cookie header SHALL be less than or equal to the time remaining until session close (and at most 7 days).
+*For any* successful session-link validation, newly-created or reused authentication SHALL expire at the earliest applicable health-check close, existing UserSession expiry, or seven days from validation. A reused expiry SHALL only shorten in persistence, and the persisted expiry and cookie `Max-Age` SHALL represent the same non-negative bound; an elapsed bound SHALL produce `Max-Age=0`.
 
 **Validates: Requirements 3.4, 3.5**
 
@@ -694,7 +697,7 @@ Magic link and session-link failures MUST NOT reveal whether an email/token exis
 - **Email delivery trigger** (Property 7): Generate random emails/members, verify EmailService called correctly.
 - **SlackIdentityLink persistence** (Properties 8, 9, 10): Generate random pairing codes and members, verify DB state.
 - **Authorization** (Property 11): Generate random member/team combinations, verify access decisions.
-- **Session-link cookie scoping** (Property 12): Generate sessions with various close times, verify max-age bounds.
+- **Session-link cookie scoping** (Property 12): Generate new/reused authentication with close/no-close and existing-expiry bounds; verify monotonic persisted expiry, latest reusable-session selection, persistence/cookie agreement, the seven-day cap, and non-negative immediate expiry.
 
 **Library**: `fast-check` (already in project)
 **Minimum iterations**: 100 per property
