@@ -12,7 +12,7 @@ This spec completes work nominally covered by the original Team Health Check spe
 
 - **Session_Token**: A cryptographic token returned by magic link verification (or session-link validation) that authenticates the user for subsequent API requests. Stored as an httpOnly cookie and sent automatically by the browser.
 - **Auth_Helper**: A route-handler-level function (`withAuth` or `getAuthContext`) that extracts and validates the Session_Token from the request cookie, queries the UserSession table via Prisma, and returns the authenticated identity (memberId). Runs in Node.js API route runtime (not Edge middleware).
-- **Auth_Context**: The set of authenticated identity fields (memberId, userId) derived from a valid Session_Token, available to route handlers after validation by the Auth_Helper.
+- **Auth_Context**: The authenticated browser identity containing only `memberId`, derived from a valid Session_Token by the Auth_Helper. `Auth_Context.memberId` is authoritative; caller-controlled identity headers are never trusted or synthesized.
 - **API_Contract**: The agreed-upon shape of request and response payloads between the frontend and backend layers.
 - **Integration_Test**: A test that exercises a complete user flow through multiple layers (browser → API → service → database) without mocks.
 - **Slack_Identity_Link_Record**: A persistent database record mapping a Team_Member's system identity to their Slack user ID, stored via the SlackIdentityLink Prisma model.
@@ -44,13 +44,13 @@ This spec completes work nominally covered by the original Team Health Check spe
 
 #### Acceptance Criteria
 
-1. THE Auth_Helper SHALL be applied (via a `withAuth` wrapper or `getAuthContext` call) to all route handlers under `/api/me/*`, `/api/teams/*`, `/api/responses`, and `/api/scheduler/tick` (tick retains its existing CRON_SECRET auth for external callers).
+1. THE Auth_Helper SHALL be applied (via a `withAuth` wrapper or direct `getAuthContext` call) to protected browser route handlers under `/api/me/*`, `/api/teams/*`, and `/api/responses`.
 2. WHEN the Auth_Helper validates a Session_Token, IT SHALL look up the associated memberId from the UserSession table and attach it to the Auth_Context.
-3. THE Auth_Helper SHALL inject both `x-member-id` and `x-user-id` request headers (set to the same memberId value) into the request context, maintaining backward compatibility with team-scoped routes that currently read `x-user-id`.
-4. THE route handlers for `/api/me`, `/api/me/preferences`, `/api/me/availability`, `/api/me/streak`, `/api/me/slack-link`, and `/api/me/delete-data` SHALL read the memberId from the Auth_Context instead of the `x-member-id` header.
-5. THE route handler for `/api/responses` SHALL read the memberId from the Auth_Context instead of the `x-member-id` header, and SHALL read the sessionId from the request body instead of the `x-session-id` header.
+3. Auth_Context.memberId SHALL be the sole authoritative browser identity. THE Auth_Helper SHALL NOT trust, copy, or synthesize `x-member-id`, `x-user-id`, `x-team-id`, or `x-session-id` identity headers.
+4. ALL protected route handlers SHALL pass `Auth_Context.memberId` directly to authorization and service functions; caller-controlled identity headers SHALL NOT alter the authenticated member.
+5. THE `/api/responses` route SHALL read memberId from Auth_Context and sessionId from the validated request body.
 6. IF a route handler receives a request without a valid Auth_Context (no valid session cookie) and the route is not exempt, THEN THE Auth_Helper SHALL reject the request with HTTP 401.
-7. THE session-link routes (`/api/auth/session-link/[token]`) and magic-link routes (`/api/auth/magic-link/*`) SHALL remain exempt from cookie-based auth since they use token-based authentication.
+7. Intentional cookie-auth exemptions are limited to bootstrap or externally authenticated entry points: magic-link tokens, session-link tokens, genesis tokens, verified Slack signatures, and scheduler `CRON_SECRET`. Each exempt route SHALL validate its named credential and SHALL NOT treat caller-supplied identity headers as authentication.
 8. THE Auth_Helper SHALL run in Node.js runtime (inside API route handlers), NOT in Next.js Edge middleware, ensuring compatibility with Vercel serverless deployment and Prisma/Turso database access.
 
 ### Requirement 3: API Response Contract Alignment — Session Link

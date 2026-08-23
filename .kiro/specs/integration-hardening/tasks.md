@@ -325,7 +325,7 @@ original checklist was marked done.
     - Return consistent 401/403/404 responses without leaking cross-team resources
     - _Requirements: 2.1, 2.6, 9.1, 9.2, 9.3_
 
-  - [ ] 23.3 Reconcile auth requirements/design with the safer direct AuthContext contract
+  - [x] 23.3 Reconcile auth requirements/design with the safer direct AuthContext contract
     - Make direct AuthContext authoritative instead of injecting compatibility identity headers
     - Document intentional token-auth exemptions including magic links, session links, genesis, Slack signatures, and CRON_SECRET
     - Add regression evidence for the agreed contract

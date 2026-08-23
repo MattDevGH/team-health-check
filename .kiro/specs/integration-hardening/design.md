@@ -17,7 +17,7 @@ The changes are primarily wiring, reshaping, and hardening — not new business 
 | Route-handler auth helper (`withAuth`) over Edge middleware | Vercel middleware runs on Edge Runtime where Prisma/Turso cannot execute. Route handlers run in Node.js — Prisma works there. |
 | Cookie-based session over Authorization header | Browsers set cookies automatically; no client-side token management needed |
 | Session-link sets a session cookie | Keeps one auth mechanism for all browser flows; session-link users can POST to /api/responses without dual-auth |
-| Both `x-member-id` and `x-user-id` injected | Short-term backward compat with team routes using `x-user-id`; same value |
+| Direct `AuthContext.memberId` identity | Protected browser routes pass the persisted-session member ID directly to authorization/services; caller-controlled identity headers are neither trusted nor synthesized |
 | `SlackIdentityLinkRepository` interface | Replaces in-memory Map; consistent with existing repository pattern |
 | EmailService injected into AuthService | Factory pattern already used; just add the dependency |
 | NotificationService wired at scheduler route level | Consistent with existing pattern (scheduler is wired at route, not container) |
@@ -49,6 +49,20 @@ sequenceDiagram
     Auth-->>Route: null (no valid session)
     Route-->>Browser: 401 { error: 'UNAUTHORIZED' }
 ```
+
+#### Identity authority and intentional exemptions
+
+For protected browser requests, `AuthContext.memberId` is the only identity
+source. Route handlers pass it directly to team authorization and service
+factories. They never trust or synthesize `x-member-id`, `x-user-id`,
+`x-team-id`, or `x-session-id`; a caller cannot override cookie identity with a
+header.
+
+Cookie authentication is intentionally bypassed only where another credential
+bootstraps or authenticates the request: magic-link tokens, session-link tokens,
+genesis tokens, verified Slack signatures, and scheduler `CRON_SECRET`. These
+routes validate that credential explicitly and do not convert identity headers
+into authenticated context.
 
 ### Cookie Setting Flow
 
@@ -504,7 +518,7 @@ export function createProductionNotificationSink(deps: {
 
 ### Team Membership Authorization
 
-Authentication (is the user logged in?) is handled by `withAuth`. Authorization (does this user belong to this team?) is handled at the route handler level since it requires path parameter extraction:
+Authentication (is the user logged in?) is handled by `withAuth` or a direct `getAuthContext` call. Both provide `AuthContext.memberId` directly; no identity headers are injected. Authorization (does this member belong to this team?) is handled at the route-handler boundary because it requires path parameter extraction:
 
 ```typescript
 // src/lib/auth/authorize-team-member.ts

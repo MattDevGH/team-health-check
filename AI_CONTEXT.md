@@ -31,10 +31,10 @@ integration-hardening spec are now the authoritative merge plan.
 **Resume cue:** Browser acceptance through the first two health-check sessions
 is complete. Do not recreate those sessions or repeat those scenarios unless a
 regression requires it. Preserve the current worktree and persistent
-`prisma/dev.db`. Resume Task 23.3 by making direct AuthContext authoritative
-in requirements/design and adding its contract regression, then continue in the
-recorded commit order. Follow the remaining Tasks 23–26 afterward; do not begin
-the deferred lifecycle-management or dashboard-UX milestones first.
+`prisma/dev.db`. Resume Task 23.4 with weighted micro-pulse question selection,
+then continue in the recorded commit order. Follow the remaining Tasks 23–26
+afterward; do not begin the deferred lifecycle-management or dashboard-UX
+milestones first.
 
 ### Accepted live state
 
@@ -94,13 +94,11 @@ The original Tasks 1–21 were checked too early. Task 20.1 and the final
 checkpoint are reopened; Task 22 records the accepted regressions above. Complete
 these dependency-ordered waves before commit/merge or a new milestone:
 
-1. **Task 23 — Auth/session and audit closure:** amend requirements/design so
-   direct AuthContext—not injected identity headers—is authoritative; implement
-   micro-pulse selection; scope reused session-link auth to close/expiry; and
-   emit the still-missing schedule-change and member-addition audit records.
-   Task 23.2 route authorization is complete: persisted logout/cookie clearing,
-   authenticated member-scoped team collection GET/POST and exports, team-bound
-   session-detail reads, and cookie-only participation are implemented.
+1. **Task 23 — Auth/session and audit closure:** implement micro-pulse selection;
+   scope reused session-link auth to close/expiry; and emit the still-missing
+   schedule-change and member-addition audit records. Task 23.2 route
+   authorization and Task 23.3's direct-AuthContext contract reconciliation are
+   complete.
 2. **Task 24 — Slack production closure:** authenticated pairing UI and actual
    unlink; actionable `/healthcheck`; cadence/delivery-window eligibility;
    scheduler closing reminders; persistent retry queue/drain; then redacted
@@ -128,7 +126,7 @@ slice stops being reviewable):
 3. `fix: authorize team data exports` — export portion of Task 23.2 complete in this checkpoint.
 4. `fix: protect session detail reads` — session-detail GET portion of Task 23.2 complete in this checkpoint.
 5. `fix: replace participation header authentication` — participation and URL ownership portion of Task 23.2 complete in this checkpoint.
-6. `docs: make direct auth context authoritative` — requirements/design plus contract regression for Task 23.3.
+6. `docs: make direct auth context authoritative` — requirements/design plus contract regression for Task 23.3 complete in this checkpoint.
 7. `feat: select weighted micro-pulse questions` — first half of Task 23.4.
 8. `fix: scope reused session-link authentication` — second half of Task 23.4.
 9. `fix: audit schedule configuration changes` — first half of Task 23.5.
@@ -153,6 +151,12 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 
 ### Changes and validation already completed
 
+- Requirements and design now define `AuthContext.memberId` as the sole
+  authoritative protected-browser identity and prohibit trusting or synthesizing
+  identity headers. Magic-link tokens, session-link tokens, genesis tokens,
+  verified Slack signatures, and scheduler `CRON_SECRET` are the explicit
+  alternate-credential exemptions; an executable contract test scans normative
+  and synchronized docs plus all non-test production TypeScript sources.
 - Participation GET now authenticates exclusively from the persisted session
   cookie, ignores `x-user-id`, authorizes requested-team membership, and delegates
   privacy-aware counts to `ParticipationService`. Missing/cross-team sessions
@@ -193,12 +197,12 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 - Both live closes and scheduler ticks returned 200, all ten expected
   aggregates were verified, and the trends API correctly transitioned from the
   one-session threshold response to two-session data.
-- Latest validation: **122 test files / 1009 tests passed**,
+- Latest validation: **123 test files / 1013 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
   checkpoint preserves the accepted fixes; run `git status --short` before
-  starting the Task 23.3 direct-AuthContext contract reconciliation slice.
+  starting the Task 23.4 weighted micro-pulse question-selection slice.
 
 ---
 
@@ -327,8 +331,9 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1009 tests across 122 files**, including
-cookie-only, team/session-bound participation with privacy-safe payloads,
+The Vitest suite now contains **1013 tests across 123 files**, including
+an executable direct-AuthContext documentation/source contract, cookie-only,
+team/session-bound participation with privacy-safe payloads,
 cookie-authenticated, team-bound session-detail reads with non-leaking failures,
 requested-team-scoped CSV exports, persisted logout/session-cookie clearing,
 member-summary contracts, member
@@ -372,7 +377,7 @@ All stages must pass. Branch protection requires CI green before merge.
 
 ### Open spec: `.kiro/specs/integration-hardening/`
 - `requirements.md` — 13 requirements covering auth/cookie foundation, session-link enrichment, response submission, protected routes, notification wiring, Slack identity, Turso production DB, E2E tests, MSW alignment, and repo hygiene
-- `design.md` — Integration architecture, 12 correctness properties, auth helper design, cookie scoping, notification sink pattern; Task 23.3 must reconcile its identity-header wording with direct AuthContext
+- `design.md` — Integration architecture, 12 correctness properties, direct-AuthContext auth design, cookie scoping, notification sink pattern
 - `tasks.md` — Tasks 1–21 record the original pass, Task 22 records completed acceptance regressions, and open Tasks 23–26 define auth/session, Slack, automated evidence, and final merge closure
 - Do not mark this spec complete or create the lifecycle-management spec until Tasks 23–26 and the final PR gates pass
 
@@ -384,7 +389,8 @@ All stages must pass. Branch protection requires CI green before merge.
 - **Persisted logout**: `POST /api/auth/logout` deletes only the presented UserSession token and returns an idempotent 204 with the environment-aware clear-cookie header
 - **Authenticated team collection**: `/api/teams` GET is member-scoped; POST uses only cookie AuthContext for creator/member/role/audit identity and atomically returns 409 for concurrent or sequential second-team attempts without partial persistence
 - **New-user genesis claim ownership**: Magic-link verification reads and validates unused/unexpired `PendingGenesis` records without mutation; genesis execution performs the only CAS claim, persists validated team name/description, and establishes the browser session
-- **`getAuthContext`**: Factory function (`createGetAuthContext`) extracts + validates session cookie against UserSessionRepository
+- **`getAuthContext`**: Factory function (`createGetAuthContext`) extracts + validates the session cookie against UserSessionRepository; its `AuthContext.memberId` is authoritative and identity headers are never trusted or synthesized
+- **Intentional alternate-credential routes**: Magic-link tokens, session-link tokens, genesis tokens, verified Slack signatures, and scheduler `CRON_SECRET` entry points validate their named credential rather than browser cookie auth
 - **`withAuth`**: Factory-created HOF wrapper that enforces auth on route handlers (401 if invalid)
 - **`authorizeTeamMember`**: Factory function verifying member belongs to requested team (403 if not)
 - **`authorizeDeliveryManager`**: Extends team membership check with delivery_manager role requirement
