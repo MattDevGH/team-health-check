@@ -32,9 +32,10 @@ integration-hardening spec are now the authoritative merge plan.
 is complete. Do not recreate those sessions or repeat those scenarios unless a
 regression requires it. Preserve the current worktree and persistent
 `prisma/dev.db`. Task 23 auth/session/audit closure is complete, including
-atomic actor-bound schedule and team-member-addition audits. Run the Task 23
-final reconciliation before starting Task 24.1 secure authenticated Slack pairing
-and truthful unlink behavior.
+atomic actor-bound schedule and team-member-addition audits. Task 23 is fully
+reconciled, and Task 24.1 (secure authenticated Slack pairing and truthful
+unlink behavior) is complete. Resume with Task 24.2 (`/healthcheck` command
+eligibility).
 
 ### Accepted live state
 
@@ -130,13 +131,18 @@ slice stops being reviewable):
 8. `fix: scope reused session-link authentication` — second half of Task 23.4 complete in this checkpoint.
 9. `fix: audit schedule configuration changes` — first half of Task 23.5 complete in this checkpoint.
 10. `fix: audit team member additions` — second half of Task 23.5 complete in this checkpoint.
+11. `fix: secure slack account linking and unlinking` — Task 24.1 complete in this checkpoint.
 
 Each slice includes its red/green tests, required README and AI_CONTEXT updates,
-and targeted validation. Do not wait for all of Task 23 to commit or leave a
+and targeted validation. Do not wait for all of Task 23/24 to commit or leave a
 green slice uncommitted while beginning the next one.
 
 Current known blockers are implementation gaps, not merely missing manual proof:
-pairing accepts caller memberId and unlink does not delete; scheduler omits closing reminders and uses a request-local retry queue; required Playwright tests can skip through a nonexistent token endpoint and use
+`/healthcheck` ignores cadence/reminders/availability/delivery-window eligibility
+and returns no actionable link; scheduler never dispatches closing reminders;
+the interaction queue has no Prisma implementation and is instantiated fresh
+per scheduler tick, so it is never actually drained; required Playwright tests
+can skip through a nonexistent token endpoint and use
 unseeded/non-isolated data; the response MSW body remains stale; Turso selection
 lacks repository execution evidence.
 
@@ -218,12 +224,13 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 - Both live closes and scheduler ticks returned 200, all ten expected
   aggregates were verified, and the trends API correctly transitioned from the
   one-session threshold response to two-session data.
-- Latest validation: **128 test files / 1054 tests passed**,
+- Latest validation: **128 test files / 1062 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
-  checkpoint preserves the accepted fixes; run the Task 23 final reconciliation
-  before starting Task 24.1.
+  checkpoint preserves the accepted fixes; Task 23 is fully reconciled and
+  Task 24.1 (secure Slack account linking/unlinking) is complete. Resume with
+  Task 24.2 (`/healthcheck` command eligibility).
 
 ---
 
@@ -352,9 +359,11 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1054 tests across 128 files**, including
-actor-bound `member_added` route/service/property coverage with exact stable
-summary serialization and member/default-role/audit rollback parity,
+The Vitest suite now contains **1062 tests across 128 files**, including
+cookie-authenticated Slack pairing/unlink/persisted-status coverage across
+routes and the `/me` page pairing-code UI, actor-bound `member_added`
+route/service/property coverage with exact stable summary serialization and
+member/default-role/audit rollback parity,
 schedule-change audit route/service/Property 24 coverage, atomic failure rollback,
 and Prisma/fake canonical timezone persistence,
 session-link Property 12 coverage for persisted monotonic close/existing/seven-day expiry and non-negative cookies,
@@ -422,7 +431,7 @@ All stages must pass. Branch protection requires CI green before merge.
 - **`authorizeDeliveryManager`**: Extends team membership check with delivery_manager role requirement
 - **Protected routes**: `/api/me/*`, `/api/teams` GET/POST, team exports, session details, participation, responses, and core team settings/trends/member/session routes use cookie AuthContext with requested-resource ownership checks; Task 23.2 route authorization is complete
 - **Member management**: GET/POST/PATCH return a stable member-summary DTO; Delivery Manager additions serialize that exact DTO into an actor-bound `member_added` audit and atomically persist member/default-role/audit; role replacement and removal retain final-manager protection
-- **Slack identity**: Prisma-backed SlackIdentityLink lookup persists mappings, but authenticated pairing UI and truthful deletion/unlink remain Task 24.1 blockers
+- **Slack identity**: Pairing derives memberId from AuthContext (never the request body) and `createContainer` wires `slackIdentityLinkRepo` into `AuthService`, so a verified code persists/upserts the link. `DELETE /api/me/slack-link` deletes the record before reporting success, and `GET /api/me` returns the persisted `slackLink`, so status survives reload/restart. The `/me` page's `SlackSection` has a pairing-code input for the unlinked state. Task 24.1 is complete; `/healthcheck` eligibility (24.2), closing reminders (24.3), and the persistent retry queue (24.4) remain
 - **Notification wiring**: Newly-opened prompts reach NotificationService and the production Slack sink; cadence/window eligibility, closing reminders, persistent retry storage, and later-tick draining remain Task 24 blockers
 - **Turso**: Environment-aware Prisma client selection exists (better-sqlite3 locally, @libsql/client in production); executable repository behavior through local libSQL remains Task 25.5
 

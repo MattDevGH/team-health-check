@@ -550,7 +550,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
 
   - [x] 20.5 Implement Slack pairing route
     - Create `src/app/api/auth/slack-pairing/route.ts` (POST)
-    - Accept pairing code + memberId, call AuthService.verifyPairingCode
+    - Accept pairing code, authenticate via session cookie, call AuthService.verifyPairingCode(auth.memberId, code) — superseded by integration-hardening Task 24.1, which removed the caller-supplied memberId
     - _Requirements: 2.4, 2.5_
 
   - [x] 20.6 Implement schedule and trends routes

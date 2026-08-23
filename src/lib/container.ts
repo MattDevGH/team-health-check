@@ -109,6 +109,7 @@ export function createContainer(repos: Repositories, options?: ContainerOptions)
     pendingGenesisRepo: repos.pendingGenesis,
     sessionLinkRepo: repos.sessionLink,
     sessionRepo: repos.session,
+    slackIdentityLinkRepo: repos.slackIdentityLink,
     emailService: options?.emailService,
   });
 

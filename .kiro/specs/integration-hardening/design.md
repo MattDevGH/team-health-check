@@ -112,6 +112,23 @@ canonical Team timezone, and the audit append use one repository aggregate
 operation: Prisma commits all three in one transaction, while the fake mirrors
 Team timezone and does not mutate schedule state when the required audit fails.
 
+### Slack Account Linking and Unlinking Flow
+
+`POST /api/auth/slack-pairing` authenticates via the session cookie and calls
+`AuthService.verifyPairingCode(auth.memberId, code)`; a caller-supplied body
+`memberId` is parsed but never used, matching the direct-`AuthContext` contract.
+`createContainer` now wires `slackIdentityLinkRepo` into `AuthService`, so a
+verified code persists (upserts) the `SlackIdentityLink` in the same call that
+returns `{ linked, slackUserId }` to the browser. `DELETE /api/me/slack-link`
+authenticates the same way and calls
+`repos.slackIdentityLink.delete(auth.memberId)` before returning success, so the
+record is gone before the UI reports it unlinked. `GET /api/me` attaches the
+member's current `slackLink` (or `null`) by querying the same repository, so
+linked/unlinked status is derived from persisted state and survives reload or a
+server restart rather than only from client-side state. The `/me` page's
+`SlackSection` renders a pairing-code input when unlinked and calls the pairing
+endpoint directly, so a successful link updates the UI without a page reload.
+
 ### Team-Member Addition Audit Flow
 
 The authenticated Delivery Manager identity is passed directly from the route to

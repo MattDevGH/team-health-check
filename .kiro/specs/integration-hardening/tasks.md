@@ -345,10 +345,10 @@ original checklist was marked done.
     - _Requirements: Original 18.1, 18.2, 18.3_
 
 - [ ] 24. Close Slack account and production notification behavior
-  - [ ] 24.1 Implement secure, truthful account linking and unlinking with TDD
-    - Authenticate pairing and derive memberId from AuthContext instead of accepting it from the body
-    - Add the web pairing-code input flow and persist status across reload/restart
-    - Make unlink delete the SlackIdentityLink before the UI reports success
+  - [x] 24.1 Implement secure, truthful account linking and unlinking with TDD
+    - [x] Authenticate pairing and derive memberId from AuthContext instead of accepting it from the body
+    - [x] Add the web pairing-code input flow and persist status across reload/restart
+    - [x] Make unlink delete the SlackIdentityLink before the UI reports success
     - _Requirements: 2.1, 7.1, 7.2, 9.3_
 
   - [ ] 24.2 Align Slack command/prompt eligibility with the documented contract

@@ -94,6 +94,36 @@ describe('GET /api/me', () => {
     expect(body.name).toBe('Alice');
     expect(body.email).toBe('alice@example.com');
   });
+
+  it('returns the persisted Slack link so status survives reload', async () => {
+    const member = await meRepos.teamMember.create({
+      teamId: 'team-1',
+      name: 'Dana',
+      email: 'dana@example.com',
+    });
+    await meRepos.slackIdentityLink.create({ memberId: member.id, slackUserId: 'U-PERSISTED' });
+    const token = await createSession(meRepos, member.id);
+
+    const req = makeAuthRequest('GET', { cookie: token });
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.slackLink).toEqual({ slackUserId: 'U-PERSISTED' });
+  });
+
+  it('returns a null Slack link when no identity is linked', async () => {
+    const member = await meRepos.teamMember.create({
+      teamId: 'team-1',
+      name: 'Erin',
+      email: 'erin@example.com',
+    });
+    const token = await createSession(meRepos, member.id);
+
+    const req = makeAuthRequest('GET', { cookie: token });
+    const res = await GET(req);
+    const body = await res.json();
+    expect(body.slackLink).toBeNull();
+  });
 });
 
 // ─── PATCH /api/me/preferences ─────────────────────────────────────────────────
@@ -350,6 +380,37 @@ describe('DELETE /api/me/slack-link', () => {
   it('returns success with valid session cookie', async () => {
     const token = await createSession(slackLinkRepos, 'member-1');
     const req = makeAuthRequest('DELETE', { cookie: token });
+    const res = await DeleteSlackLink(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+  });
+
+  it('deletes the SlackIdentityLink record for the authenticated member', async () => {
+    await slackLinkRepos.slackIdentityLink.create({ memberId: 'member-2', slackUserId: 'U-LINKED' });
+    const token = await createSession(slackLinkRepos, 'member-2');
+
+    const req = makeAuthRequest('DELETE', { cookie: token });
+    const res = await DeleteSlackLink(req);
+    expect(res.status).toBe(200);
+
+    expect(await slackLinkRepos.slackIdentityLink.findByMemberId('member-2')).toBeNull();
+  });
+
+  it('does not delete another member\'s SlackIdentityLink record', async () => {
+    await slackLinkRepos.slackIdentityLink.create({ memberId: 'member-3', slackUserId: 'U-OTHER' });
+    const token = await createSession(slackLinkRepos, 'member-4');
+
+    const req = makeAuthRequest('DELETE', { cookie: token });
+    await DeleteSlackLink(req);
+
+    expect(await slackLinkRepos.slackIdentityLink.findByMemberId('member-3')).toMatchObject({ slackUserId: 'U-OTHER' });
+  });
+
+  it('remains idempotent when no SlackIdentityLink record exists', async () => {
+    const token = await createSession(slackLinkRepos, 'member-5');
+    const req = makeAuthRequest('DELETE', { cookie: token });
+
     const res = await DeleteSlackLink(req);
     expect(res.status).toBe(200);
     const body = await res.json();

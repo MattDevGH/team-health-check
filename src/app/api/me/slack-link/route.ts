@@ -1,8 +1,8 @@
 /**
  * DELETE /api/me/slack-link — Unlink Slack identity
  *
- * Requirements: 2.6, 2.1, 2.4
- * Thin route handler: placeholder for Slack identity unlinking.
+ * Requirements: 2.6, 2.1, 2.4, 9.3
+ * Thin route handler: authenticate, delete the SlackIdentityLink record.
  * Uses getAuthContext for cookie-based authentication (no x-member-id header).
  */
 
@@ -27,7 +27,6 @@ export const DELETE = withErrorHandling(async (request: Request) => {
     );
   }
 
-  // Placeholder: Slack identity unlinking is not fully implemented yet.
-  // When implemented, this will remove the SlackIdentityLink record for the member.
+  await repos.slackIdentityLink.delete(auth.memberId);
   return Response.json({ success: true, message: 'Slack identity unlinked' });
 });

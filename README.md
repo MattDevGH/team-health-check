@@ -50,9 +50,9 @@ remaining merge blockers are tracked as Tasks 23–26 in
 `.kiro/specs/integration-hardening/tasks.md`:
 
 1. **Auth/session and audit contracts:** Task 23 is complete: browser identity is AuthContext-bound, team resources are ownership-protected, weighted session-link cadence and expiry scoping are enforced, and schedule/member-addition audits commit atomically.
-2. **Slack production behavior:** secure pairing and real unlink, actionable
-   command flow, cadence/delivery-window eligibility, closing reminders,
-   persistent retry processing, and disposable-workspace acceptance.
+2. **Slack production behavior:** secure pairing and real unlink are complete;
+   remaining work is the `/healthcheck` command eligibility contract, closing
+   reminders, persistent retry processing, and disposable-workspace acceptance.
 3. **Automated evidence:** isolated/seeded E2E data, secure test-email capture,
    non-skipping browser-first Playwright flows, broader axe coverage, corrected
    MSW identity contracts, executable local libSQL repository evidence, and CI
@@ -280,6 +280,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 - **Authenticated team collection** — `/api/teams` GET returns only the cookie member's team; POST derives creator/member/role/audit identity from AuthContext and atomically rejects concurrent or sequential attempts to create a second team
 - **Audited schedule configuration** — Delivery Manager changes emit stable complete `schedule_change` snapshots with the authenticated actor; normalized no-ops skip persistence/audit, while schedule, canonical team timezone, and audit append commit atomically
 - **Audited member addition** — Delivery Manager additions return the same stable summary serialized into `member_added`; member, default role, and actor-bound audit commit atomically
+- **Secure Slack linking** — pairing derives memberId from the session cookie (never the request body); a persisted, upserted `SlackIdentityLink` survives restarts and is returned by `GET /api/me`; unlink deletes the record before the UI reports success
 - **Authorized team exports** — `/api/teams/[teamId]/export` authenticates from the session cookie and returns aggregate CSV data only when the member belongs to the requested team
 - **Protected session details** — session-detail GET permits ordinary members of the requested team and returns the same 404 for missing or cross-team sessions
 - **Protected participation** — participation GET derives identity only from the session cookie, binds the session to the URL team, and preserves privacy-aware counts without exposing response details
@@ -298,7 +299,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (1054 tests across 128 Vitest files)
+npm test            # unit + property tests (1062 tests across 128 Vitest files)
 npm run test:watch  # watch mode for TDD (unit only)
 npm run test:e2e    # Playwright browser tests
 npm run test:a11y   # Playwright axe tests

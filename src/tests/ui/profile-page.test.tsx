@@ -284,6 +284,91 @@ describe('Profile Page', () => {
     });
   });
 
+  describe('Requirements 2.2, 2.3, 2.4, 7.1, 7.2: Slack pairing-code input', () => {
+    it('shows a pairing-code input and link button when no Slack is linked', async () => {
+      mockProfileApi({ ...MOCK_PROFILE, slackLink: null as unknown as typeof MOCK_PROFILE.slackLink });
+      render(<ProfilePage />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/pairing code/i)).toBeInTheDocument();
+      });
+      expect(screen.getByRole('button', { name: /link slack/i })).toBeInTheDocument();
+    });
+
+    it('submits the entered code to POST /api/auth/slack-pairing', async () => {
+      let capturedBody: Record<string, unknown> | null = null;
+      server.use(
+        http.post('/api/auth/slack-pairing', async ({ request }) => {
+          capturedBody = await request.json() as Record<string, unknown>;
+          return HttpResponse.json({ linked: true, slackUserId: 'U123' });
+        }),
+      );
+      mockProfileApi({ ...MOCK_PROFILE, slackLink: null as unknown as typeof MOCK_PROFILE.slackLink });
+      const user = userEvent.setup();
+      render(<ProfilePage />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/pairing code/i)).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByLabelText(/pairing code/i), 'ABC123');
+      await user.click(screen.getByRole('button', { name: /link slack/i }));
+
+      await waitFor(() => {
+        expect(capturedBody).toEqual({ code: 'ABC123' });
+      });
+    });
+
+    it('shows linked status after a successful pairing without requiring reload', async () => {
+      server.use(
+        http.post('/api/auth/slack-pairing', () => {
+          return HttpResponse.json({ linked: true, slackUserId: 'U123' });
+        }),
+      );
+      mockProfileApi({ ...MOCK_PROFILE, slackLink: null as unknown as typeof MOCK_PROFILE.slackLink });
+      const user = userEvent.setup();
+      render(<ProfilePage />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/pairing code/i)).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByLabelText(/pairing code/i), 'ABC123');
+      await user.click(screen.getByRole('button', { name: /link slack/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/slack linked/i)).toBeInTheDocument();
+      });
+      expect(screen.queryByLabelText(/pairing code/i)).not.toBeInTheDocument();
+    });
+
+    it('shows an error message for an invalid or expired code', async () => {
+      server.use(
+        http.post('/api/auth/slack-pairing', () => {
+          return HttpResponse.json(
+            { error: { code: 'NOT_FOUND', message: 'Invalid, expired, or already used pairing code' } },
+            { status: 404 },
+          );
+        }),
+      );
+      mockProfileApi({ ...MOCK_PROFILE, slackLink: null as unknown as typeof MOCK_PROFILE.slackLink });
+      const user = userEvent.setup();
+      render(<ProfilePage />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/pairing code/i)).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByLabelText(/pairing code/i), 'WRONG1');
+      await user.click(screen.getByRole('button', { name: /link slack/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/invalid.*expired/i)).toBeInTheDocument();
+      });
+      expect(screen.getByLabelText(/pairing code/i)).toBeInTheDocument();
+    });
+  });
+
   describe('Requirement NFR 4.3: Delete my data', () => {
     beforeEach(() => mockProfileApi());
 

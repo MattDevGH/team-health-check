@@ -33,5 +33,8 @@ export const GET = withErrorHandling(async (request: Request) => {
     throw new NotFoundError('Member not found');
   }
 
-  return Response.json(member);
+  const slackIdentityLink = await repos.slackIdentityLink.findByMemberId(auth.memberId);
+  const slackLink = slackIdentityLink ? { slackUserId: slackIdentityLink.slackUserId } : null;
+
+  return Response.json({ ...member, slackLink });
 });
