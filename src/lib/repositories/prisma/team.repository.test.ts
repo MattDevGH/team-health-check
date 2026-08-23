@@ -1,6 +1,9 @@
 import type { PrismaClient } from '@/generated/prisma';
 import { ConflictError } from '@/lib/errors';
-import type { CreateTeamWithCreatorData } from '@/lib/repositories/types';
+import type {
+  AddTeamMemberWithAuditData,
+  CreateTeamWithCreatorData,
+} from '@/lib/repositories/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { PrismaTeamRepository } from './team.repository';
@@ -87,5 +90,56 @@ describe('PrismaTeamRepository.createWithCreator', () => {
         message: 'Team member already belongs to a team',
       }),
     );
+  });
+});
+
+
+describe('PrismaTeamRepository.addMemberWithAudit', () => {
+  it('creates the member, default role, and exact audit in one transaction', async () => {
+    const memberRecord = {
+      id: 'member-2',
+      teamId: 'team-1',
+      name: 'Added Member',
+      email: null,
+      cadencePreference: 'weekly',
+      remindersEnabled: true,
+      currentStreak: 0,
+      bestStreak: 0,
+      lastStreakSessionClose: null,
+      createdAt: new Date(),
+    };
+    const transactionClient = {
+      teamMember: { create: vi.fn().mockResolvedValue(memberRecord) },
+      teamMemberRole: { create: vi.fn().mockResolvedValue({}) },
+      auditLogEntry: { create: vi.fn().mockResolvedValue({}) },
+    };
+    const transaction = vi.fn(
+      (operation: (client: typeof transactionClient) => Promise<unknown>) => (
+        operation(transactionClient)
+      ),
+    );
+    const repository = new PrismaTeamRepository({
+      $transaction: transaction,
+    } as unknown as PrismaClient);
+    const aggregate: AddTeamMemberWithAuditData = {
+      member: { id: 'member-2', teamId: 'team-1', name: 'Added Member' },
+      role: 'team_member',
+      audit: {
+        changeType: 'member_added',
+        previousValue: '',
+        newValue: '{"id":"member-2"}',
+        userId: 'manager-1',
+      },
+    };
+
+    await repository.addMemberWithAudit(aggregate);
+
+    expect(transaction).toHaveBeenCalledOnce();
+    expect(transactionClient.teamMemberRole.create).toHaveBeenCalledWith({
+      data: { memberId: 'member-2', teamId: 'team-1', role: 'team_member' },
+    });
+    expect(transactionClient.auditLogEntry.create).toHaveBeenCalledWith({
+      data: { teamId: 'team-1', ...aggregate.audit },
+    });
   });
 });

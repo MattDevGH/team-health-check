@@ -59,7 +59,7 @@ describe('Team Archive Properties', () => {
 
             // Add N members
             for (let i = 0; i < memberCount; i++) {
-              await teamService.addMember(team.id, `Member ${i}`, undefined);
+              await teamService.addMember(team.id, `Member ${i}`, undefined, 'property-actor');
             }
 
             // Optionally open a session
@@ -103,7 +103,7 @@ describe('Team Archive Properties', () => {
           const team = await teamService.create('Unarchive Test', undefined, creatorId);
 
           for (let i = 0; i < memberCount; i++) {
-            await teamService.addMember(team.id, `Member ${i}`, undefined);
+            await teamService.addMember(team.id, `Member ${i}`, undefined, 'property-actor');
           }
 
           // Archive then unarchive
@@ -151,7 +151,7 @@ describe('Team Archive Properties', () => {
 
             // Add members
             for (const name of uniqueNames) {
-              await teamService.addMember(team.id, name, undefined);
+              await teamService.addMember(team.id, name, undefined, 'property-actor');
             }
 
             // Open and close a session to create historical data
@@ -206,7 +206,7 @@ describe('Team Archive Properties', () => {
             const team = await teamService.create('Restore Team', undefined, creatorId);
 
             for (let i = 0; i < memberCount; i++) {
-              await teamService.addMember(team.id, `Member ${i}`, undefined);
+              await teamService.addMember(team.id, `Member ${i}`, undefined, 'property-actor');
             }
 
             // Optionally open a session before archive

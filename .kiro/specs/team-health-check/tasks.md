@@ -106,8 +106,8 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
     - _Validates: Requirements 1.1, 1.3_
 
   - [x] 4.3 Implement add team member (TeamService.addMember)
-    - Implement `addMember(teamId, name, email)` — validates name, validates email format if provided, checks uniqueness, creates member
-    - Write failing test: valid member added; duplicate (name+email) rejected with ConflictError; invalid email rejected
+    - Implement `addMember(teamId, name, email, actorId)` — validates name/email and uniqueness, then atomically creates the member, default role, and exact actor-bound `member_added` audit
+    - Write failing tests: valid member added; duplicate (name+email) rejected with ConflictError; invalid email rejected; audit failure rolls back the aggregate
     - _Requirements: 1.3, 1.4, 1.5_
 
   - [x] 4.4 Write property test for team member uniqueness

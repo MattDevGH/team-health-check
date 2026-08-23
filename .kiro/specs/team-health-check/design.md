@@ -165,7 +165,7 @@ interface TeamService {
   create(name: string, description?: string, creatorId: string): Promise<Team>;
   archive(teamId: string, userId: string): Promise<void>;
   unarchive(teamId: string, userId: string): Promise<void>;
-  addMember(teamId: string, name: string, email?: string): Promise<TeamMember>;
+  addMember(teamId: string, name: string, email: string | undefined, actorId: string): Promise<MemberSummary>;
   removeMember(teamId: string, memberId: string, userId: string): Promise<void>;
   getMembers(teamId: string): Promise<TeamMember[]>;
   assignRole(teamId: string, memberId: string, role: Role, actorId: string): Promise<void>;

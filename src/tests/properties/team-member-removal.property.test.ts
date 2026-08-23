@@ -31,7 +31,7 @@ describe('Property 5: Member removal preserves historical responses', () => {
 
           // Create a team and add a member
           const team = await teamService.create('Test Team', undefined, 'creator-1');
-          const member = await teamService.addMember(team.id, 'Test Member', 'test@example.com');
+          const member = await teamService.addMember(team.id, 'Test Member', 'test@example.com', 'creator-1');
 
           // Create M sessions and submit N responses per session
           const sessionIds: string[] = [];

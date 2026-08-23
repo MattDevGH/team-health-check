@@ -338,9 +338,9 @@ original checklist was marked done.
     - [x] Cover reused near-close session authentication with route/property tests
     - _Requirements: 3.2, 3.4, 3.5; Properties 4 and 12_
 
-  - [ ] 23.5 Complete remaining required team audit emissions with TDD
+  - [x] 23.5 Complete remaining required team audit emissions with TDD
     - [x] Audit schedule configuration changes with previous/new values and the authenticated actor
-    - [ ] Audit team-member additions with the added summary and the authenticated actor
+    - [x] Audit team-member additions with the added summary and the authenticated actor
     - Keep these as separate green vertical-slice commits and cover route-to-service actor wiring
     - _Requirements: Original 18.1, 18.2, 18.3_
 

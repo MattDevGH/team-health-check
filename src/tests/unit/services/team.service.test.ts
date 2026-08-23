@@ -121,7 +121,7 @@ describe('TeamService.addMember', () => {
   });
 
   it('adds a valid member with name only', async () => {
-    const member = await teamService.addMember(teamId, 'Alice');
+    const member = await teamService.addMember(teamId, 'Alice', undefined, 'creator-1');
 
     expect(member).toBeDefined();
     expect(member.name).toBe('Alice');
@@ -130,49 +130,49 @@ describe('TeamService.addMember', () => {
   });
 
   it('adds a valid member with name and email', async () => {
-    const member = await teamService.addMember(teamId, 'Bob', 'bob@example.com');
+    const member = await teamService.addMember(teamId, 'Bob', 'bob@example.com', 'creator-1');
 
     expect(member.name).toBe('Bob');
     expect(member.email).toBe('bob@example.com');
   });
 
   it('trims leading/trailing whitespace from name', async () => {
-    const member = await teamService.addMember(teamId, '  Charlie  ');
+    const member = await teamService.addMember(teamId, '  Charlie  ', undefined, 'creator-1');
 
     expect(member.name).toBe('Charlie');
   });
 
   it('rejects duplicate member (same name and email) with ConflictError', async () => {
-    await teamService.addMember(teamId, 'Diana', 'diana@example.com');
+    await teamService.addMember(teamId, 'Diana', 'diana@example.com', 'creator-1');
 
     await expect(
-      teamService.addMember(teamId, 'Diana', 'diana@example.com')
+      teamService.addMember(teamId, 'Diana', 'diana@example.com', 'creator-1')
     ).rejects.toThrow(ConflictError);
   });
 
   it('rejects duplicate member (same name, no email) with ConflictError', async () => {
-    await teamService.addMember(teamId, 'Eve');
+    await teamService.addMember(teamId, 'Eve', undefined, 'creator-1');
 
     await expect(
-      teamService.addMember(teamId, 'Eve')
+      teamService.addMember(teamId, 'Eve', undefined, 'creator-1')
     ).rejects.toThrow(ConflictError);
   });
 
   it('rejects invalid email format with ValidationError', async () => {
     await expect(
-      teamService.addMember(teamId, 'Frank', 'not-an-email')
+      teamService.addMember(teamId, 'Frank', 'not-an-email', 'creator-1')
     ).rejects.toThrow(ValidationError);
   });
 
   it('rejects empty name with ValidationError', async () => {
     await expect(
-      teamService.addMember(teamId, '')
+      teamService.addMember(teamId, '', undefined, 'creator-1')
     ).rejects.toThrow(ValidationError);
   });
 
   it('rejects whitespace-only name with ValidationError', async () => {
     await expect(
-      teamService.addMember(teamId, '   ')
+      teamService.addMember(teamId, '   ', undefined, 'creator-1')
     ).rejects.toThrow(ValidationError);
   });
 });
@@ -196,7 +196,7 @@ describe('TeamService.removeMember', () => {
   });
 
   it('removes member from team roster', async () => {
-    const member = await teamService.addMember(teamId, 'Alice', 'alice@example.com');
+    const member = await teamService.addMember(teamId, 'Alice', 'alice@example.com', 'creator-1');
 
     await teamService.removeMember(teamId, member.id, 'creator-1');
 
@@ -206,7 +206,7 @@ describe('TeamService.removeMember', () => {
   });
 
   it('preserves response history after member removal', async () => {
-    const member = await teamService.addMember(teamId, 'Bob', 'bob@example.com');
+    const member = await teamService.addMember(teamId, 'Bob', 'bob@example.com', 'creator-1');
 
     // Create a session and record a response for Bob
     const session = await repos.session.create({ teamId, status: 'open' });
@@ -233,7 +233,7 @@ describe('TeamService.removeMember', () => {
   });
 
   it('logs audit entry for member removal', async () => {
-    const member = await teamService.addMember(teamId, 'Charlie', 'charlie@example.com');
+    const member = await teamService.addMember(teamId, 'Charlie', 'charlie@example.com', 'creator-1');
 
     await teamService.removeMember(teamId, member.id, 'creator-1');
 
@@ -354,7 +354,7 @@ describe('TeamService.unarchive', () => {
 
   it('preserves historical data (members remain accessible)', async () => {
     // Add a member before archiving
-    await teamService.addMember(teamId, 'Alice', 'alice@example.com');
+    await teamService.addMember(teamId, 'Alice', 'alice@example.com', 'creator-1');
     await teamService.unarchive(teamId, 'dm-1');
 
     const members = await repos.teamMember.findByTeamId(teamId);
@@ -390,8 +390,8 @@ describe('TeamService.getMembers', () => {
   });
 
   it('returns members for a team with added members', async () => {
-    await teamService.addMember(teamId, 'Alice', 'alice@example.com');
-    await teamService.addMember(teamId, 'Bob', 'bob@example.com');
+    await teamService.addMember(teamId, 'Alice', 'alice@example.com', 'creator-1');
+    await teamService.addMember(teamId, 'Bob', 'bob@example.com', 'creator-1');
 
     const members = await teamService.getMembers(teamId);
 

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConflictError, NotFoundError } from '@/lib/errors';
 import { createInMemoryRepositories, type Repositories } from '@/lib/repositories';
@@ -42,7 +42,12 @@ describe('TeamService member management', () => {
   });
 
   it('adds a member with exactly one team_member role and a renderable DTO', async () => {
-    const member = await service.addMember(teamId, 'New member', 'new@example.com');
+    const member = await service.addMember(
+      teamId,
+      'New member',
+      'new@example.com',
+      'creator',
+    );
 
     expect(member).toMatchObject({
       teamId,
@@ -54,10 +59,42 @@ describe('TeamService member management', () => {
     expect(await repos.teamMemberRole.findByMemberAndTeam(member.id, teamId)).toHaveLength(1);
   });
 
-  it('does not duplicate roles when an add retry conflicts', async () => {
-    const member = await service.addMember(teamId, 'Retry member', 'retry@example.com');
+  it('audits the exact returned member summary with the authenticated actor', async () => {
+    const member = await service.addMember(
+      teamId,
+      'Audited member',
+      undefined,
+      'manager-1',
+    );
 
-    await expect(service.addMember(teamId, 'Retry member', 'retry@example.com')).rejects.toThrow(ConflictError);
+    await expect(repos.auditLog.findByTeamId(teamId)).resolves.toContainEqual(
+      expect.objectContaining({
+        changeType: 'member_added',
+        previousValue: '',
+        newValue: JSON.stringify(member),
+        userId: 'manager-1',
+      }),
+    );
+  });
+
+  it('leaves no member or role when the required audit append fails', async () => {
+    vi.spyOn(repos.auditLog, 'create').mockRejectedValueOnce(
+      new Error('audit unavailable'),
+    );
+
+    await expect(
+      service.addMember(teamId, 'Atomic member', undefined, 'manager-1'),
+    ).rejects.toThrow('audit unavailable');
+    expect(await repos.teamMember.findByTeamId(teamId)).toHaveLength(1);
+    expect(
+      await repos.teamMemberRole.countByTeamAndRole(teamId, 'team_member'),
+    ).toBe(0);
+  });
+
+  it('does not duplicate roles when an add retry conflicts', async () => {
+    const member = await service.addMember(teamId, 'Retry member', 'retry@example.com', 'creator');
+
+    await expect(service.addMember(teamId, 'Retry member', 'retry@example.com', 'creator')).rejects.toThrow(ConflictError);
     expect(await repos.teamMemberRole.findByMemberAndTeam(member.id, teamId)).toHaveLength(1);
   });
 
@@ -86,7 +123,7 @@ describe('TeamService member management', () => {
   });
 
   it('removes a non-final member and retains audit behavior', async () => {
-    const member = await service.addMember(teamId, 'Remove me');
+    const member = await service.addMember(teamId, 'Remove me', undefined, 'creator');
 
     await service.removeMember(teamId, member.id, 'creator');
 

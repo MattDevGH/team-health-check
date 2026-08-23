@@ -112,6 +112,17 @@ canonical Team timezone, and the audit append use one repository aggregate
 operation: Prisma commits all three in one transaction, while the fake mirrors
 Team timezone and does not mutate schedule state when the required audit fails.
 
+### Team-Member Addition Audit Flow
+
+The authenticated Delivery Manager identity is passed directly from the route to
+`TeamService.addMember(teamId, name, email, actorId)`. The service generates the
+member ID and one canonical stable `MemberSummary`, then uses that exact summary
+for both the response and the `member_added` audit `newValue`; `previousValue` is
+an empty string. Member creation, the default `team_member` role, and the audit
+append use one `TeamRepository.addMemberWithAudit` aggregate operation. Prisma
+commits all three writes in one transaction, while the in-memory fake rolls back
+the member and role when audit persistence fails.
+
 ### Logout and Session Invalidation Flow
 
 ```mermaid

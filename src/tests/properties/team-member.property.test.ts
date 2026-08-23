@@ -60,13 +60,13 @@ describe('Team Member Properties', () => {
             const team = await teamService.create('Test Team', undefined, 'creator-1');
 
             // First addition should succeed
-            const member = await teamService.addMember(team.id, name, email);
+            const member = await teamService.addMember(team.id, name, email, 'property-actor');
             expect(member).toBeDefined();
             expect(member.name).toBe(name.trim());
 
             // Second addition with same (name, email) should throw ConflictError
             await expect(
-              teamService.addMember(team.id, name, email)
+              teamService.addMember(team.id, name, email, 'property-actor')
             ).rejects.toThrow(ConflictError);
           }
         )
@@ -92,11 +92,11 @@ describe('Team Member Properties', () => {
             const team = await teamService.create('Test Team', undefined, 'creator-1');
 
             // Add member successfully
-            await teamService.addMember(team.id, name, email);
+            await teamService.addMember(team.id, name, email, 'property-actor');
 
             // Attempt duplicate (expected to fail)
             try {
-              await teamService.addMember(team.id, name, email);
+              await teamService.addMember(team.id, name, email, 'property-actor');
             } catch {
               // expected
             }

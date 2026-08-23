@@ -1,6 +1,10 @@
-import { ConflictError, NotFoundError } from '../../errors';
+import { AppError, ConflictError, NotFoundError } from '../../errors';
 import type { Team } from '../entities';
-import type { CreateTeamWithCreatorData, TeamRepository } from '../types';
+import type {
+  AddTeamMemberWithAuditData,
+  CreateTeamWithCreatorData,
+  TeamRepository,
+} from '../types';
 import type { InMemoryAuditLogRepository } from './audit-log.repository';
 import type { InMemoryTeamMemberRepository } from './team-member.repository';
 import type { InMemoryTeamMemberRoleRepository } from './team-member-role.repository';
@@ -52,6 +56,51 @@ export class InMemoryTeamRepository implements TeamRepository {
 
     this.creatorClaims.add(data.creator.id);
     return this.persistClaimedAggregate(data, deps);
+  }
+
+  async addMemberWithAudit(data: AddTeamMemberWithAuditData): Promise<void> {
+    const deps = this.creationDeps;
+    if (!deps) {
+      throw new AppError(
+        'Atomic member addition is not configured',
+        'INTERNAL_ERROR',
+        500,
+      );
+    }
+    if (!this.store.has(data.member.teamId)) {
+      throw new NotFoundError('Team not found');
+    }
+
+    let memberCreated = false;
+    let roleCreated = false;
+    let auditId: string | undefined;
+    try {
+      const member = await deps.teamMember.create(data.member);
+      memberCreated = true;
+      await deps.teamMemberRole.assign({
+        memberId: member.id,
+        teamId: member.teamId,
+        role: data.role,
+      });
+      roleCreated = true;
+      const audit = await deps.auditLog.create({
+        teamId: member.teamId,
+        ...data.audit,
+      });
+      auditId = audit.id;
+      return;
+    } catch (error: unknown) {
+      if (auditId) deps.auditLog.remove(auditId);
+      if (roleCreated) {
+        await deps.teamMemberRole.remove(
+          data.member.id,
+          data.member.teamId,
+          data.role,
+        );
+      }
+      if (memberCreated) await deps.teamMember.remove(data.member.id);
+      throw error;
+    }
   }
 
   async findById(id: string): Promise<Team | null> {

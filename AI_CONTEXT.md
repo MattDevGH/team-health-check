@@ -31,10 +31,10 @@ integration-hardening spec are now the authoritative merge plan.
 **Resume cue:** Browser acceptance through the first two health-check sessions
 is complete. Do not recreate those sessions or repeat those scenarios unless a
 regression requires it. Preserve the current worktree and persistent
-`prisma/dev.db`. Session-link cadence/authentication scoping and schedule-change
-audit emission are complete; resume Task 23.5 with member-addition audit emission.
-Follow the remaining Tasks 24–26 afterward; do not begin the deferred
-lifecycle-management or dashboard-UX milestones first.
+`prisma/dev.db`. Task 23 auth/session/audit closure is complete, including
+atomic actor-bound schedule and team-member-addition audits. Run the Task 23
+final reconciliation before starting Task 24.1 secure authenticated Slack pairing
+and truthful unlink behavior.
 
 ### Accepted live state
 
@@ -94,10 +94,10 @@ The original Tasks 1–21 were checked too early. Task 20.1 and the final
 checkpoint are reopened; Task 22 records the accepted regressions above. Complete
 these dependency-ordered waves before commit/merge or a new milestone:
 
-1. **Task 23 — Auth/session and audit closure:** session-link cadence,
-authentication scoping, and schedule-change audits are complete; emit the
-still-missing member-addition audit records. Task 23.2 route authorization and
-Task 23.3's direct-AuthContext contract reconciliation are also complete.
+1. **Task 23 — Auth/session and audit closure:** complete. Route authorization,
+direct AuthContext, weighted/scoped session-link behavior, and actor-bound atomic
+schedule/member-addition audits now have executable coverage. Run the Task 23
+final reconciliation, then continue with Task 24.
 2. **Task 24 — Slack production closure:** authenticated pairing UI and actual
    unlink; actionable `/healthcheck`; cadence/delivery-window eligibility;
    scheduler closing reminders; persistent retry queue/drain; then redacted
@@ -129,15 +129,14 @@ slice stops being reviewable):
 7. `feat: select weighted micro-pulse questions` — first half of Task 23.4 complete in this checkpoint.
 8. `fix: scope reused session-link authentication` — second half of Task 23.4 complete in this checkpoint.
 9. `fix: audit schedule configuration changes` — first half of Task 23.5 complete in this checkpoint.
-10. `fix: audit team member additions` — second half of Task 23.5.
+10. `fix: audit team member additions` — second half of Task 23.5 complete in this checkpoint.
 
 Each slice includes its red/green tests, required README and AI_CONTEXT updates,
 and targeted validation. Do not wait for all of Task 23 to commit or leave a
 green slice uncommitted while beginning the next one.
 
 Current known blockers are implementation gaps, not merely missing manual proof:
-member additions still omit required audit entries; pairing accepts caller
-memberId and unlink does not delete; scheduler omits closing reminders and uses a request-local retry queue; required Playwright tests can skip through a nonexistent token endpoint and use
+pairing accepts caller memberId and unlink does not delete; scheduler omits closing reminders and uses a request-local retry queue; required Playwright tests can skip through a nonexistent token endpoint and use
 unseeded/non-isolated data; the response MSW body remains stale; Turso selection
 lacks repository execution evidence.
 
@@ -148,6 +147,12 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 
 ### Changes and validation already completed
 
+- Team-member addition now passes the authenticated Delivery Manager actor into
+  `TeamService`, builds one stable summary for both the response and exact
+  `member_added` audit payload, and atomically persists the member, default role,
+  and audit. Prisma uses a transaction; the in-memory fake proves audit failure
+  rolls the aggregate back. Property coverage checks arbitrary names, emails,
+  and actors.
 - Schedule configuration now passes the authenticated Delivery Manager actor into
   `ScheduleService`, emits one `schedule_change` audit with stable complete
   normalized snapshots, uses `"null"` for first configuration, and skips both
@@ -213,12 +218,12 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 - Both live closes and scheduler ticks returned 200, all ten expected
   aggregates were verified, and the trends API correctly transitioned from the
   one-session threshold response to two-session data.
-- Latest validation: **127 test files / 1050 tests passed**,
+- Latest validation: **128 test files / 1054 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
-  checkpoint preserves the accepted fixes; run `git status --short` before
-  starting the team-member-addition audit slice.
+  checkpoint preserves the accepted fixes; run the Task 23 final reconciliation
+  before starting Task 24.1.
 
 ---
 
@@ -347,7 +352,9 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1050 tests across 127 files**, including
+The Vitest suite now contains **1054 tests across 128 files**, including
+actor-bound `member_added` route/service/property coverage with exact stable
+summary serialization and member/default-role/audit rollback parity,
 schedule-change audit route/service/Property 24 coverage, atomic failure rollback,
 and Prisma/fake canonical timezone persistence,
 session-link Property 12 coverage for persisted monotonic close/existing/seven-day expiry and non-negative cookies,
@@ -414,7 +421,7 @@ All stages must pass. Branch protection requires CI green before merge.
 - **`authorizeTeamMember`**: Factory function verifying member belongs to requested team (403 if not)
 - **`authorizeDeliveryManager`**: Extends team membership check with delivery_manager role requirement
 - **Protected routes**: `/api/me/*`, `/api/teams` GET/POST, team exports, session details, participation, responses, and core team settings/trends/member/session routes use cookie AuthContext with requested-resource ownership checks; Task 23.2 route authorization is complete
-- **Member management**: GET/POST/PATCH return a stable member-summary DTO; delivery managers can add, replace roles, and remove members with final-manager protection
+- **Member management**: GET/POST/PATCH return a stable member-summary DTO; Delivery Manager additions serialize that exact DTO into an actor-bound `member_added` audit and atomically persist member/default-role/audit; role replacement and removal retain final-manager protection
 - **Slack identity**: Prisma-backed SlackIdentityLink lookup persists mappings, but authenticated pairing UI and truthful deletion/unlink remain Task 24.1 blockers
 - **Notification wiring**: Newly-opened prompts reach NotificationService and the production Slack sink; cadence/window eligibility, closing reminders, persistent retry storage, and later-tick draining remain Task 24 blockers
 - **Turso**: Environment-aware Prisma client selection exists (better-sqlite3 locally, @libsql/client in production); executable repository behavior through local libSQL remains Task 25.5
@@ -431,7 +438,7 @@ All stages must pass. Branch protection requires CI green before merge.
 
 ### Integration-hardening merge blockers
 
-- Task 23: auth/session contract closure
+- Task 23: complete; run final reconciliation before Task 24
 - Task 24: Slack production behavior and real-workspace acceptance
 - Task 25: deterministic non-skipping E2E/MSW/libSQL evidence
 - Task 26: documentation, full gates, commit/push/PR/merge

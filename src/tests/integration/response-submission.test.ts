@@ -37,7 +37,7 @@ describe('Response submission flow - integration', () => {
       const team = await container.team.create('Engineering Squad', 'Frontend team', 'creator-1');
 
       // 2. Add a member
-      const member = await container.team.addMember(team.id, 'Alice Smith', 'alice@example.com');
+      const member = await container.team.addMember(team.id, 'Alice Smith', 'alice@example.com', 'creator-1');
 
       // 3. Open a session (generates session links automatically)
       const session = await container.session.open(team.id, 'creator-1');
@@ -74,7 +74,7 @@ describe('Response submission flow - integration', () => {
     it('rolling average is calculated correctly after sufficient submissions', async () => {
       // Setup: Create team and member
       const team = await container.team.create('Data Team', undefined, 'creator-2');
-      const member = await container.team.addMember(team.id, 'Bob', 'bob@example.com');
+      const member = await container.team.addMember(team.id, 'Bob', 'bob@example.com', 'creator-2');
 
       // Submit 5+ responses across multiple sessions for rolling average to work
       const questionId = QUESTION_IDS[0];
@@ -100,7 +100,7 @@ describe('Response submission flow - integration', () => {
 
     it('rolling average returns null when fewer than 5 responses exist', async () => {
       const team = await container.team.create('Small Team', undefined, 'creator-3');
-      const member = await container.team.addMember(team.id, 'Carol', 'carol@example.com');
+      const member = await container.team.addMember(team.id, 'Carol', 'carol@example.com', 'creator-3');
       const questionId = QUESTION_IDS[1];
 
       // Only 3 responses — below the threshold
@@ -121,7 +121,7 @@ describe('Response submission flow - integration', () => {
     it('re-submission (upsert) updates existing response rather than creating a duplicate', async () => {
       // Setup
       const team = await container.team.create('Upsert Team', undefined, 'creator-4');
-      const member = await container.team.addMember(team.id, 'Dave', 'dave@example.com');
+      const member = await container.team.addMember(team.id, 'Dave', 'dave@example.com', 'creator-4');
       const session = await container.session.open(team.id, 'creator-4');
       const questionId = QUESTION_IDS[0];
 
@@ -164,7 +164,7 @@ describe('Response submission flow - integration', () => {
     it('full flow: create team → add member → link Slack → open session → submit via service → verify', async () => {
       // 1. Create a team and add a member
       const team = await container.team.create('Slack Team', 'Uses Slack', 'creator-5');
-      const member = await container.team.addMember(team.id, 'Eve', 'eve@example.com');
+      const member = await container.team.addMember(team.id, 'Eve', 'eve@example.com', 'creator-5');
 
       // 2. Link Slack identity via pairing code flow
       const slackUserId = 'U_EVE_SLACK_123';
@@ -209,7 +209,7 @@ describe('Response submission flow - integration', () => {
     it('Slack submission updates existing response (upsert behaviour)', async () => {
       // Setup team + member + session
       const team = await container.team.create('Slack Upsert Team', undefined, 'creator-6');
-      const member = await container.team.addMember(team.id, 'Frank', 'frank@example.com');
+      const member = await container.team.addMember(team.id, 'Frank', 'frank@example.com', 'creator-6');
       const session = await container.session.open(team.id, 'creator-6');
       const questionId = QUESTION_IDS[3]; // "Learning and Improving"
 
@@ -243,7 +243,7 @@ describe('Response submission flow - integration', () => {
     it('multiple questions submitted via Slack in sequence are all persisted', async () => {
       // Setup
       const team = await container.team.create('Multi-Q Slack Team', undefined, 'creator-7');
-      const member = await container.team.addMember(team.id, 'Grace', 'grace@example.com');
+      const member = await container.team.addMember(team.id, 'Grace', 'grace@example.com', 'creator-7');
       const session = await container.session.open(team.id, 'creator-7');
 
       // Simulate Slack interactions for all 5 questions (one by one, as buttons are tapped)
@@ -270,7 +270,7 @@ describe('Response submission flow - integration', () => {
 
     it('Slack submission rejected for closed session', async () => {
       const team = await container.team.create('Closed Session Team', undefined, 'creator-8');
-      const member = await container.team.addMember(team.id, 'Hank', 'hank@example.com');
+      const member = await container.team.addMember(team.id, 'Hank', 'hank@example.com', 'creator-8');
       const session = await container.session.open(team.id, 'creator-8');
 
       // Close the session

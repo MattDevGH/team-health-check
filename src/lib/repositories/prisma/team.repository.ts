@@ -1,7 +1,11 @@
 import type { PrismaClient, Team as PrismaTeam } from '@/generated/prisma';
 import { ConflictError, NotFoundError } from '../../errors';
 import type { Team } from '../entities';
-import type { CreateTeamWithCreatorData, TeamRepository } from '../types';
+import type {
+  AddTeamMemberWithAuditData,
+  CreateTeamWithCreatorData,
+  TeamRepository,
+} from '../types';
 
 /**
  * Prisma-backed implementation of TeamRepository.
@@ -59,6 +63,36 @@ export class PrismaTeamRepository implements TeamRepository {
         return team;
       });
       return this.mapToEntity(record);
+    } catch (error: unknown) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictError('Team member already belongs to a team');
+      }
+      throw error;
+    }
+  }
+
+  async addMemberWithAudit(data: AddTeamMemberWithAuditData): Promise<void> {
+    try {
+      await this.prisma.$transaction(async (transaction) => {
+        await transaction.teamMember.create({
+          data: {
+            id: data.member.id,
+            teamId: data.member.teamId,
+            name: data.member.name,
+            email: data.member.email ?? null,
+          },
+        });
+        await transaction.teamMemberRole.create({
+          data: {
+            memberId: data.member.id,
+            teamId: data.member.teamId,
+            role: data.role,
+          },
+        });
+        await transaction.auditLogEntry.create({
+          data: { teamId: data.member.teamId, ...data.audit },
+        });
+      });
     } catch (error: unknown) {
       if (this.isUniqueConstraintError(error)) {
         throw new ConflictError('Team member already belongs to a team');

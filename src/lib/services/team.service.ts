@@ -9,7 +9,7 @@ import type { MemberSummary, TeamRole } from '@/lib/contracts/member-summary';
 import type { TeamRepository, TeamMemberRepository, TeamMemberRoleRepository, SlackIdentityLinkRepository, AuditLogRepository, SessionRepository } from '@/lib/repositories/types';
 import type { Team } from '@/lib/repositories/entities';
 
-import { assembleMemberSummary } from './member-summary';
+import { assembleMemberSummary, buildMemberSummary } from './member-summary';
 
 export interface TeamServiceDeps {
   teamRepo: TeamRepository;
@@ -28,7 +28,12 @@ export interface TeamService {
     data: Partial<Pick<Team, 'name' | 'description' | 'slackDeliveryStart' | 'slackDeliveryEnd'>>,
     actorId: string,
   ): Promise<Team>;
-  addMember(teamId: string, name: string, email?: string): Promise<MemberSummary>;
+  addMember(
+    teamId: string,
+    name: string,
+    email: string | undefined,
+    actorId: string,
+  ): Promise<MemberSummary>;
   removeMember(teamId: string, memberId: string, userId: string): Promise<void>;
   updateMemberRole(teamId: string, memberId: string, role: TeamRole, actorId: string): Promise<MemberSummary>;
   getMembers(teamId: string): Promise<MemberSummary[]>;
@@ -72,7 +77,12 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
     });
   }
 
-  async function addMember(teamId: string, name: string, email?: string): Promise<MemberSummary> {
+  async function addMember(
+    teamId: string,
+    name: string,
+    email: string | undefined,
+    actorId: string,
+  ): Promise<MemberSummary> {
     const parsed = addMemberSchema.safeParse({ name, email });
     if (!parsed.success) {
       throw new ValidationError(parsed.error.issues.map((issue) => ({
@@ -89,13 +99,29 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
       );
     }
 
-    const member = await teamMemberRepo.create({
+    const member = {
+      id: crypto.randomUUID(),
       teamId,
       name: parsed.data.name,
-      email: parsed.data.email,
+      email: parsed.data.email ?? null,
+    };
+    const summary = buildMemberSummary(member, ['team_member'], null);
+    await teamRepo.addMemberWithAudit({
+      member: {
+        id: member.id,
+        teamId,
+        name: member.name,
+        email: parsed.data.email,
+      },
+      role: 'team_member',
+      audit: {
+        changeType: 'member_added',
+        previousValue: '',
+        newValue: JSON.stringify(summary),
+        userId: actorId,
+      },
     });
-    await teamMemberRoleRepo.assign({ memberId: member.id, teamId, role: 'team_member' });
-    return assembleMemberSummary(member, teamMemberRoleRepo, slackIdentityLinkRepo);
+    return summary;
   }
 
   /** Requirements 1.6, 19.7: atomically protect the final manager, remove, and audit. */

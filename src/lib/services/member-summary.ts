@@ -1,6 +1,30 @@
-import { isTeamRole, type MemberSummary } from '@/lib/contracts/member-summary';
-import type { SlackIdentityLinkRepository, TeamMemberRoleRepository } from '@/lib/repositories/types';
+import {
+  isTeamRole,
+  type MemberSummary,
+  type TeamRole,
+} from '@/lib/contracts/member-summary';
 import type { TeamMember } from '@/lib/repositories/entities';
+import type {
+  SlackIdentityLinkRepository,
+  TeamMemberRoleRepository,
+} from '@/lib/repositories/types';
+
+type MemberIdentity = Pick<TeamMember, 'id' | 'teamId' | 'name' | 'email'>;
+
+export function buildMemberSummary(
+  member: MemberIdentity,
+  roles: TeamRole[],
+  slackUserId: string | null,
+): MemberSummary {
+  return {
+    id: member.id,
+    teamId: member.teamId,
+    name: member.name,
+    email: member.email,
+    roles: roles.map(role => ({ role })),
+    slackLink: slackUserId ? { slackUserId } : null,
+  };
+}
 
 export async function assembleMemberSummary(
   member: TeamMember,
@@ -11,12 +35,6 @@ export async function assembleMemberSummary(
     roleRepo.findByMemberAndTeam(member.id, member.teamId),
     slackRepo?.findByMemberId(member.id) ?? Promise.resolve(null),
   ]);
-  return {
-    id: member.id,
-    teamId: member.teamId,
-    name: member.name,
-    email: member.email,
-    roles: storedRoles.flatMap(({ role }) => isTeamRole(role) ? [{ role }] : []),
-    slackLink: slackLink ? { slackUserId: slackLink.slackUserId } : null,
-  };
+  const roles = storedRoles.flatMap(({ role }) => isTeamRole(role) ? [role] : []);
+  return buildMemberSummary(member, roles, slackLink?.slackUserId ?? null);
 }

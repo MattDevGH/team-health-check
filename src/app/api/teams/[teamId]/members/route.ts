@@ -74,7 +74,8 @@ export const POST = withErrorHandling(async (request: Request, context) => {
   const member = await container.team.addMember(
     teamId,
     parsed.data.name,
-    parsed.data.email
+    parsed.data.email,
+    auth.memberId,
   );
 
   return Response.json(member, { status: 201 });

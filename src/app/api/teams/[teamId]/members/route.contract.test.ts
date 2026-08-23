@@ -40,6 +40,7 @@ describe('member collection response contract', () => {
     const manager = await repos.teamMember.create({ teamId: team.id, name: 'Manager' });
     await repos.teamMemberRole.assign({ memberId: manager.id, teamId: team.id, role: 'delivery_manager' });
     const { request, context } = await authenticatedRequest('POST', team.id, manager.id, { name: 'Added' });
+    request.headers.set('x-user-id', 'spoofed-actor');
 
     const response = await POST(request, context);
     const member = await response.json();
@@ -47,6 +48,14 @@ describe('member collection response contract', () => {
     expect(response.status).toBe(201);
     expect(member).toMatchObject({ teamId: team.id, name: 'Added', roles: [{ role: 'team_member' }], slackLink: null });
     expect(await repos.teamMemberRole.findByMemberAndTeam(member.id, team.id)).toHaveLength(1);
+    await expect(repos.auditLog.findByTeamId(team.id)).resolves.toEqual([
+      expect.objectContaining({
+        changeType: 'member_added',
+        previousValue: '',
+        newValue: JSON.stringify(member),
+        userId: manager.id,
+      }),
+    ]);
   });
 });
 
