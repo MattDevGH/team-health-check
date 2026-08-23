@@ -58,6 +58,15 @@ export const GET = withErrorHandling(async (request, context) => {
     trendIndicator: r.trendIndicator,
   }));
 
+  const selection = await container.questionSelection.selectForSessionLink(
+    memberId,
+    sessionId,
+    cadencePreference,
+    scheduledCloseAt,
+  );
+  const selectedIds = new Set(selection.questionIds);
+  const selectedQuestions = formattedQuestions.filter(question => selectedIds.has(question.id));
+
   // Create or reuse a UserSession for this member (Requirement 3.4)
   const existingUserSession = await repos.userSession.findValidByMemberId(memberId);
 
@@ -93,7 +102,9 @@ export const GET = withErrorHandling(async (request, context) => {
     memberName,
     cadencePreference,
     sessionStatus,
-    questions: formattedQuestions,
+    questions: selectedQuestions,
+    allQuestions: formattedQuestions,
+    expandable: selection.expandable,
     responses: formattedResponses,
   };
 

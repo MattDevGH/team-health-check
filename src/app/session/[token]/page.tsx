@@ -34,6 +34,8 @@ interface SessionContext {
   cadencePreference: string;
   sessionStatus: 'open' | 'closed';
   questions: QuestionData[];
+  allQuestions: QuestionData[];
+  expandable: boolean;
   responses: ResponseData[];
 }
 
@@ -187,7 +189,7 @@ export default function SessionLinkPage({ params }: PageProps) {
 
           <div className="space-y-3">
             {results.map((result) => {
-              const question = context.questions.find(
+              const question = context.allQuestions.find(
                 (q) => q.id === result.questionId
               );
               return (
@@ -228,11 +230,14 @@ export default function SessionLinkPage({ params }: PageProps) {
   );
 
   // Map to FeedbackForm Question shape
-  const allFormQuestions: Question[] = sortedQuestions.map((q) => ({
+  const selectedFormQuestions: Question[] = sortedQuestions.map((q) => ({
     id: q.id,
     title: q.title,
     description: q.description,
   }));
+  const allFormQuestions: Question[] = [...context.allQuestions]
+    .sort((a, b) => a.displayOrder - b.displayOrder)
+    .map((q) => ({ id: q.id, title: q.title, description: q.description }));
 
   // Map existing responses to FeedbackForm initialResponses
   const initialResponses: ResponseInput[] = context.responses.map((r) => ({
@@ -255,14 +260,16 @@ export default function SessionLinkPage({ params }: PageProps) {
 
         {isMicroPulse ? (
           <MicroPulseView
-            questions={allFormQuestions}
+            questions={selectedFormQuestions}
+            allQuestions={allFormQuestions}
+            expandable={context.expandable}
             initialResponses={initialResponses}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
           />
         ) : (
           <FeedbackForm
-            questions={allFormQuestions}
+            questions={selectedFormQuestions}
             initialResponses={initialResponses}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
@@ -273,48 +280,48 @@ export default function SessionLinkPage({ params }: PageProps) {
   );
 }
 
+interface MicroPulseViewProps extends FeedbackFormProps {
+  allQuestions: Question[];
+  expandable: boolean;
+}
+
 function MicroPulseView({
   questions,
+  allQuestions,
+  expandable,
   initialResponses,
   onSubmit,
   isSubmitting,
-}: FeedbackFormProps) {
+}: MicroPulseViewProps) {
   const [showAll, setShowAll] = useState(false);
-
-  // Find first unanswered question
-  const firstUnanswered = questions.find(
-    (q) => !initialResponses?.some((r) => r.questionId === q.id && r.score !== null)
-  );
-  const displayQuestion = firstUnanswered ?? questions[0];
-
-  if (showAll) {
-    return (
-      <FeedbackForm
-        questions={questions}
-        initialResponses={initialResponses}
-        onSubmit={onSubmit}
-        isSubmitting={isSubmitting}
-      />
-    );
-  }
+  const visibleQuestions = showAll ? allQuestions : questions;
 
   return (
     <div>
-      <FeedbackForm
-        questions={[displayQuestion]}
-        initialResponses={initialResponses}
-        onSubmit={onSubmit}
-        isSubmitting={isSubmitting}
-      />
-      <div className="mt-4 text-center">
-        <button
-          type="button"
-          onClick={() => setShowAll(true)}
-          className="text-blue-600 text-sm hover:underline"
-        >
-          View all questions
-        </button>
-      </div>
+      {visibleQuestions.length > 0 ? (
+        <FeedbackForm
+          questions={visibleQuestions}
+          responseQuestions={allQuestions}
+          initialResponses={initialResponses}
+          onSubmit={onSubmit}
+          isSubmitting={isSubmitting}
+        />
+      ) : (
+        <p className="text-center text-gray-600">
+          You have answered all micro-pulse questions for this session.
+        </p>
+      )}
+      {!showAll && expandable ? (
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className="text-blue-600 text-sm hover:underline"
+          >
+            View all questions
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

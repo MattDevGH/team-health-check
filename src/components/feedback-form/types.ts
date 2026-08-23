@@ -20,6 +20,8 @@ export interface ResponseInput {
 export interface FeedbackFormProps {
   /** The list of questions to display */
   questions: Question[];
+  /** Optional complete question set used to preserve state across partial views */
+  responseQuestions?: Question[];
   /** Optional pre-populated responses (for editing existing submissions) */
   initialResponses?: ResponseInput[];
   /** Called when user submits the form with valid responses */

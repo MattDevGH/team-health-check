@@ -7,7 +7,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import SessionLinkPage from '@/app/session/[token]/page';
@@ -22,9 +23,18 @@ const QUESTIONS = [
 
 function mockValidToken(options: {
   cadencePreference?: string;
+  questions?: typeof QUESTIONS;
+  allQuestions?: typeof QUESTIONS;
+  expandable?: boolean;
   responses?: Array<{ questionId: string; score: number; trendIndicator?: string | null }>;
 } = {}) {
-  const { cadencePreference = 'weekly', responses = [] } = options;
+  const {
+    cadencePreference = 'weekly',
+    questions = QUESTIONS,
+    allQuestions = QUESTIONS,
+    expandable = false,
+    responses = [],
+  } = options;
 
   server.use(
     http.get('/api/auth/session-link/:token', () => {
@@ -33,7 +43,10 @@ function mockValidToken(options: {
         sessionId: 'session-1',
         memberName: 'Alice',
         cadencePreference,
-        questions: QUESTIONS,
+        sessionStatus: 'open',
+        questions,
+        allQuestions,
+        expandable,
         responses,
       });
     }),
@@ -123,30 +136,99 @@ describe('Session Link Landing Page', () => {
   });
 
   describe('Micro-pulse mode (Requirement 4.1)', () => {
-    beforeEach(() => {
-      mockValidToken({ cadencePreference: 'micro_pulse' });
-    });
-
-    it('renders only a single question initially', async () => {
-      render(<SessionLinkPage params={Promise.resolve({ token: 'valid-token' })} />);
-
-      await waitFor(() => {
-        // Should show the first unanswered question
-        expect(screen.getByText('Delivering Value')).toBeInTheDocument();
+    it('renders the API-selected question set rather than choosing locally', async () => {
+      mockValidToken({
+        cadencePreference: 'micro_pulse',
+        questions: [QUESTIONS[2]],
+        allQuestions: QUESTIONS,
+        expandable: true,
       });
 
-      // Other questions should not be visible initially
+      render(<SessionLinkPage params={Promise.resolve({ token: 'valid-token' })} />);
+
+      expect(await screen.findByText('Ease of Delivery')).toBeInTheDocument();
+      expect(screen.queryByText('Delivering Value')).not.toBeInTheDocument();
       expect(screen.queryByText('Team Collaboration')).not.toBeInTheDocument();
     });
 
-    it('shows an expand option to view all questions', async () => {
-      render(<SessionLinkPage params={Promise.resolve({ token: 'valid-token' })} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Delivering Value')).toBeInTheDocument();
+    it('expands to the API-provided full question set without another request', async () => {
+      const user = userEvent.setup();
+      mockValidToken({
+        cadencePreference: 'micro_pulse',
+        questions: [QUESTIONS[2]],
+        allQuestions: QUESTIONS,
+        expandable: true,
       });
 
+      render(<SessionLinkPage params={Promise.resolve({ token: 'valid-token' })} />);
+      await user.click(await screen.findByRole('button', { name: /view all questions/i }));
+
+      expect(screen.getByText('Delivering Value')).toBeInTheDocument();
+      expect(screen.getByText('Team Collaboration')).toBeInTheDocument();
+      expect(screen.getByText('Psychological Safety')).toBeInTheDocument();
+    });
+
+    it('preserves selected input and submits newly expanded questions', async () => {
+      const user = userEvent.setup();
+      let submittedBody: { responses?: Array<{ questionId: string; score: number }> } | undefined;
+      mockValidToken({
+        cadencePreference: 'micro_pulse',
+        questions: [QUESTIONS[2]],
+        allQuestions: [QUESTIONS[0], QUESTIONS[2]],
+        expandable: true,
+        responses: [{ questionId: QUESTIONS[0].id, score: 4 }],
+      });
+      server.use(
+        http.post('/api/responses', async ({ request }) => {
+          submittedBody = await request.json() as typeof submittedBody;
+          return HttpResponse.json({ responses: [] });
+        }),
+      );
+
+      render(<SessionLinkPage params={Promise.resolve({ token: 'valid-token' })} />);
+      const selectedGroup = await screen.findByRole('radiogroup', { name: 'Ease of Delivery score' });
+      await user.click(within(selectedGroup).getByRole('radio', { name: '3' }));
+      await user.click(screen.getByRole('button', { name: /view all questions/i }));
+
+      const expandedGroup = screen.getByRole('radiogroup', { name: 'Delivering Value score' });
+      expect(within(expandedGroup).getByRole('radio', { name: '4' })).toBeChecked();
+      expect(within(screen.getByRole('radiogroup', { name: 'Ease of Delivery score' }))
+        .getByRole('radio', { name: '3' })).toBeChecked();
+
+      await user.click(screen.getByRole('button', { name: /submit/i }));
+      await waitFor(() => expect(submittedBody).toBeDefined());
+      expect(submittedBody?.responses).toEqual([
+        { questionId: QUESTIONS[0].id, score: 4 },
+        { questionId: QUESTIONS[2].id, score: 3 },
+      ]);
+    });
+
+    it('shows a completed state when the API selects no unanswered questions', async () => {
+      mockValidToken({
+        cadencePreference: 'micro_pulse',
+        questions: [],
+        allQuestions: QUESTIONS,
+        expandable: true,
+      });
+
+      render(<SessionLinkPage params={Promise.resolve({ token: 'valid-token' })} />);
+
+      expect(await screen.findByText(/all micro-pulse questions/i)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /view all questions/i })).toBeInTheDocument();
+    });
+
+    it('omits the expand option when the API reports no remaining questions', async () => {
+      mockValidToken({
+        cadencePreference: 'micro_pulse',
+        questions: QUESTIONS,
+        allQuestions: QUESTIONS,
+        expandable: false,
+      });
+
+      render(<SessionLinkPage params={Promise.resolve({ token: 'valid-token' })} />);
+
+      expect(await screen.findByText('Delivering Value')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /view all questions/i })).not.toBeInTheDocument();
     });
   });
 

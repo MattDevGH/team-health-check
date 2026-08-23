@@ -46,6 +46,8 @@ export const handlers = [
         cadencePreference: 'weekly',
         sessionStatus: 'open' as const,
         questions: DEFAULT_QUESTIONS,
+        allQuestions: DEFAULT_QUESTIONS,
+        expandable: false,
         responses: [], // NOT `existingResponses`
       },
       {

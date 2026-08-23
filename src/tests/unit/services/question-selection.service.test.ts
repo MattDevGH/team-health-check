@@ -176,3 +176,55 @@ describe('QuestionSelectionService.selectForMember', () => {
     expect(neverAnsweredCount).toBeGreaterThan(recentlyAnsweredCount);
   });
 });
+
+describe('QuestionSelectionService.selectForSessionLink', () => {
+  const now = new Date('2026-08-23T12:00:00.000Z');
+  let repos: Repositories;
+  let service: ReturnType<typeof createQuestionSelectionService>;
+  let memberId: string;
+  let sessionId: string;
+
+  beforeEach(async () => {
+    repos = createInMemoryRepositories();
+    service = createQuestionSelectionService({
+      questionRepo: repos.question,
+      responseRepo: repos.response,
+      sessionRepo: repos.session,
+      now: () => now,
+    });
+    const team = await repos.team.create({ name: 'Selection Policy Team' });
+    const member = await repos.teamMember.create({ teamId: team.id, name: 'Alice' });
+    const session = await repos.session.create({ teamId: team.id, status: 'open' });
+    memberId = member.id;
+    sessionId = session.id;
+  });
+
+  it('returns the complete set for non-micro-pulse cadence', async () => {
+    const result = await service.selectForSessionLink(memberId, sessionId, 'weekly', null);
+
+    expect(result.questionIds).toHaveLength(5);
+    expect(result.questionIds).toEqual(result.allQuestionIds);
+    expect(result.expandable).toBe(false);
+  });
+
+  it.each([
+    ['exactly closed', 0, 5],
+    ['past close', -1, 5],
+    ['two days remaining', 48, 3],
+    ['no scheduled close', null, 1],
+  ])('applies a safe bundle for %s', async (_label, hours, expectedCount) => {
+    const scheduledCloseAt = hours === null
+      ? null
+      : new Date(now.getTime() + hours * 60 * 60 * 1000);
+
+    const result = await service.selectForSessionLink(
+      memberId,
+      sessionId,
+      'micro_pulse',
+      scheduledCloseAt,
+    );
+
+    expect(result.questionIds).toHaveLength(expectedCount);
+    expect(result.expandable).toBe(expectedCount < result.allQuestionIds.length);
+  });
+});

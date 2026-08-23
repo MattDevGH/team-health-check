@@ -614,7 +614,7 @@ Methods:
 
 ### Property 4: Session-link response contains all required fields
 
-*For any* valid session link token pointing to an existing member and session with at least one question defined, the response SHALL contain memberId, sessionId, memberName, cadencePreference, sessionStatus, a non-empty questions array, and a responses array (possibly empty). The response SHALL also include a Set-Cookie header.
+*For any* valid session link token pointing to an existing member and session with at least one question defined, the response SHALL contain memberId, sessionId, memberName, cadencePreference, sessionStatus, `questions`, `allQuestions`, `expandable`, and a responses array (possibly empty), plus a Set-Cookie header. For micro-pulse cadence, `questions` SHALL be the weighted unanswered subset (possibly empty) and `expandable` SHALL equal whether that subset omits any `allQuestions` entry. For every other cadence, `questions` SHALL equal `allQuestions` and `expandable` SHALL be false.
 
 **Validates: Requirements 3.1, 3.4**
 

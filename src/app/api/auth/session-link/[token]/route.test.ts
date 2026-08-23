@@ -252,6 +252,73 @@ describe('GET /api/auth/session-link/[token]', () => {
       expect(body.sessionStatus).toBe('closed');
     });
 
+    it('returns weighted unanswered questions and one-call expansion data for micro-pulse members', async () => {
+      const { memberId, sessionId, token } = await seedValidScenario({
+        cadencePreference: 'micro_pulse',
+        closesAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      });
+      await repos.response.upsert({
+        memberId,
+        sessionId,
+        questionId: 'q-delivering-value',
+        score: 4,
+      });
+
+      const response = await GET(makeRequest(token), makeContext(token));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.allQuestions).toHaveLength(5);
+      expect(body.questions).toHaveLength(2);
+      expect(body.questions.map((question: { id: string }) => question.id))
+        .not.toContain('q-delivering-value');
+      expect(body.expandable).toBe(true);
+    });
+
+    it('returns an empty selection with expansion data when every question is answered', async () => {
+      const { memberId, sessionId, token } = await seedValidScenario({
+        cadencePreference: 'micro_pulse',
+      });
+      for (const question of await repos.question.findAll()) {
+        await repos.response.upsert({
+          memberId,
+          sessionId,
+          questionId: question.id,
+          score: 4,
+        });
+      }
+
+      const response = await GET(makeRequest(token), makeContext(token));
+      const body = await response.json();
+
+      expect(body.questions).toEqual([]);
+      expect(body.allQuestions).toHaveLength(5);
+      expect(body.expandable).toBe(true);
+    });
+
+    it('bundles every unanswered micro-pulse question when one day remains', async () => {
+      const { token } = await seedValidScenario({
+        cadencePreference: 'micro_pulse',
+        closesAt: new Date(Date.now() + 12 * 60 * 60 * 1000),
+      });
+
+      const response = await GET(makeRequest(token), makeContext(token));
+      const body = await response.json();
+
+      expect(body.questions).toEqual(body.allQuestions);
+      expect(body.expandable).toBe(false);
+    });
+
+    it('returns all questions without expansion for weekly members', async () => {
+      const { token } = await seedValidScenario({ cadencePreference: 'weekly' });
+
+      const response = await GET(makeRequest(token), makeContext(token));
+      const body = await response.json();
+
+      expect(body.questions).toEqual(body.allQuestions);
+      expect(body.expandable).toBe(false);
+    });
+
     it('includes existing responses for the member in that session', async () => {
       const { memberId, sessionId, token } = await seedValidScenario();
 

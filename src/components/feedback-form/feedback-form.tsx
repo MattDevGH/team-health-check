@@ -18,12 +18,13 @@ import type {
  */
 export function FeedbackForm({
   questions,
+  responseQuestions = questions,
   initialResponses,
   onSubmit,
   isSubmitting = false,
 }: FeedbackFormProps) {
   const [responses, setResponses] = useState<ResponseInput[]>(() =>
-    questions.map((q) => {
+    responseQuestions.map((q) => {
       const existing = initialResponses?.find((r) => r.questionId === q.id);
       return {
         questionId: q.id,
@@ -58,12 +59,12 @@ export function FeedbackForm({
 
   const validate = (): boolean => {
     const newErrors: ValidationError[] = [];
-    for (const r of responses) {
-      if (r.score === null) {
-        const question = questions.find((q) => q.id === r.questionId);
+    for (const question of questions) {
+      const response = responses.find(item => item.questionId === question.id);
+      if (!response || response.score === null) {
         newErrors.push({
-          questionId: r.questionId,
-          message: `Please select a score for ${question?.title ?? 'this question'}`,
+          questionId: question.id,
+          message: `Please select a score for ${question.title}`,
         });
       }
     }
@@ -78,7 +79,8 @@ export function FeedbackForm({
     if (!validate()) return;
 
     try {
-      await onSubmit(responses);
+      const visibleQuestionIds = new Set(questions.map(question => question.id));
+      await onSubmit(responses.filter(response => visibleQuestionIds.has(response.questionId)));
     } catch {
       setSubmitError('Submission failed. Please retry.');
     }

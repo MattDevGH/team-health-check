@@ -31,10 +31,10 @@ integration-hardening spec are now the authoritative merge plan.
 **Resume cue:** Browser acceptance through the first two health-check sessions
 is complete. Do not recreate those sessions or repeat those scenarios unless a
 regression requires it. Preserve the current worktree and persistent
-`prisma/dev.db`. Resume Task 23.4 with weighted micro-pulse question selection,
-then continue in the recorded commit order. Follow the remaining Tasks 23–26
-afterward; do not begin the deferred lifecycle-management or dashboard-UX
-milestones first.
+`prisma/dev.db`. Resume Task 23.4 by scoping reused session-link authentication
+to close/expiry, then continue in the recorded commit order. Follow the remaining
+Tasks 23–26 afterward; do not begin the deferred lifecycle-management or
+dashboard-UX milestones first.
 
 ### Accepted live state
 
@@ -94,11 +94,10 @@ The original Tasks 1–21 were checked too early. Task 20.1 and the final
 checkpoint are reopened; Task 22 records the accepted regressions above. Complete
 these dependency-ordered waves before commit/merge or a new milestone:
 
-1. **Task 23 — Auth/session and audit closure:** implement micro-pulse selection;
-   scope reused session-link auth to close/expiry; and emit the still-missing
-   schedule-change and member-addition audit records. Task 23.2 route
-   authorization and Task 23.3's direct-AuthContext contract reconciliation are
-   complete.
+1. **Task 23 — Auth/session and audit closure:** scope reused session-link auth
+   to close/expiry and emit the still-missing schedule-change and member-addition
+   audit records. Task 23.2 route authorization, Task 23.3's direct-AuthContext
+   contract reconciliation, and weighted micro-pulse selection are complete.
 2. **Task 24 — Slack production closure:** authenticated pairing UI and actual
    unlink; actionable `/healthcheck`; cadence/delivery-window eligibility;
    scheduler closing reminders; persistent retry queue/drain; then redacted
@@ -127,7 +126,7 @@ slice stops being reviewable):
 4. `fix: protect session detail reads` — session-detail GET portion of Task 23.2 complete in this checkpoint.
 5. `fix: replace participation header authentication` — participation and URL ownership portion of Task 23.2 complete in this checkpoint.
 6. `docs: make direct auth context authoritative` — requirements/design plus contract regression for Task 23.3 complete in this checkpoint.
-7. `feat: select weighted micro-pulse questions` — first half of Task 23.4.
+7. `feat: select weighted micro-pulse questions` — first half of Task 23.4 complete in this checkpoint.
 8. `fix: scope reused session-link authentication` — second half of Task 23.4.
 9. `fix: audit schedule configuration changes` — first half of Task 23.5.
 10. `fix: audit team member additions` — second half of Task 23.5.
@@ -137,8 +136,8 @@ and targeted validation. Do not wait for all of Task 23 to commit or leave a
 green slice uncommitted while beginning the next one.
 
 Current known blockers are implementation gaps, not merely missing manual proof:
-micro-pulse and reused-close scoping are incomplete; schedule changes and member
-additions still omit required audit entries; pairing accepts caller memberId and unlink does not
+reused-close scoping is incomplete; schedule changes and member additions still
+omit required audit entries; pairing accepts caller memberId and unlink does not
 delete; scheduler omits closing reminders and uses a request-local retry queue;
 required Playwright tests can skip through a nonexistent token endpoint and use
 unseeded/non-isolated data; the response MSW body remains stale; Turso selection
@@ -151,6 +150,12 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 
 ### Changes and validation already completed
 
+- Session-link responses now use `QuestionSelectionService` for micro-pulse
+  members; the service owns cadence, injected-clock remaining-day, weighting,
+  and bundling policy. The API returns `allQuestions` and `expandable`; the UI
+  preserves complete response state while rendering the selected subset, can
+  submit newly expanded questions without another fetch, and handles an
+  all-answered selection. Weekly behavior remains the full question set.
 - Requirements and design now define `AuthContext.memberId` as the sole
   authoritative protected-browser identity and prohibit trusting or synthesizing
   identity headers. Magic-link tokens, session-link tokens, genesis tokens,
@@ -197,12 +202,12 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 - Both live closes and scheduler ticks returned 200, all ten expected
   aggregates were verified, and the trends API correctly transitioned from the
   one-session threshold response to two-session data.
-- Latest validation: **123 test files / 1013 tests passed**,
+- Latest validation: **123 test files / 1026 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
   checkpoint preserves the accepted fixes; run `git status --short` before
-  starting the Task 23.4 weighted micro-pulse question-selection slice.
+  starting the reused session-link authentication scoping slice.
 
 ---
 
@@ -331,8 +336,8 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1013 tests across 123 files**, including
-an executable direct-AuthContext documentation/source contract, cookie-only,
+The Vitest suite now contains **1026 tests across 123 files**, including
+weighted micro-pulse API/property/UI expansion coverage, an executable direct-AuthContext documentation/source contract, cookie-only,
 team/session-bound participation with privacy-safe payloads,
 cookie-authenticated, team-bound session-detail reads with non-leaking failures,
 requested-team-scoped CSV exports, persisted logout/session-cookie clearing,

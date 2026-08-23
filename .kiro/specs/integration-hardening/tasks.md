@@ -332,9 +332,10 @@ original checklist was marked done.
     - _Requirements: 2.1, 2.2, 2.3, 2.7, 2.8_
 
   - [ ] 23.4 Complete session-link cadence and authentication scoping with TDD
-    - Implement weighted micro-pulse question selection plus the `expandable` contract
-    - Cap newly-created and reused authentication to the earliest of session close, existing expiry, and seven days
-    - Cover weekly/micro-pulse responses and reused near-close sessions with route/property/UI tests
+    - [x] Implement weighted micro-pulse question selection plus the `expandable` contract
+    - [x] Cover weekly/micro-pulse selection and expansion with route/property/UI tests
+    - [ ] Cap newly-created and reused authentication to the earliest of session close, existing expiry, and seven days
+    - [ ] Cover reused near-close session authentication with route/property tests
     - _Requirements: 3.2, 3.4, 3.5; Properties 4 and 12_
 
   - [ ] 23.5 Complete remaining required team audit emissions with TDD

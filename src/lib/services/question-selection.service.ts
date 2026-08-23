@@ -14,6 +14,13 @@ export interface QuestionSelectionServiceDeps {
   questionRepo: QuestionRepository;
   responseRepo: ResponseRepository;
   sessionRepo: SessionRepository;
+  now?: () => Date;
+}
+
+export interface SessionLinkQuestionSelection {
+  questionIds: string[];
+  allQuestionIds: string[];
+  expandable: boolean;
 }
 
 export interface QuestionSelectionService {
@@ -22,6 +29,12 @@ export interface QuestionSelectionService {
     sessionId: string,
     remainingDays: number
   ): Promise<string[]>;
+  selectForSessionLink(
+    memberId: string,
+    sessionId: string,
+    cadencePreference: string,
+    scheduledCloseAt: Date | null,
+  ): Promise<SessionLinkQuestionSelection>;
 }
 
 /**
@@ -33,6 +46,7 @@ export function createQuestionSelectionService(
   deps: QuestionSelectionServiceDeps
 ): QuestionSelectionService {
   const { questionRepo, responseRepo, sessionRepo } = deps;
+  const now = deps.now ?? (() => new Date());
 
   async function selectForMember(
     memberId: string,
@@ -124,7 +138,31 @@ export function createQuestionSelectionService(
     return unansweredIds.map(id => lastAnsweredGap.get(id) ?? 1);
   }
 
-  return { selectForMember };
+  async function selectForSessionLink(
+    memberId: string,
+    sessionId: string,
+    cadencePreference: string,
+    scheduledCloseAt: Date | null,
+  ): Promise<SessionLinkQuestionSelection> {
+    const allQuestionIds = (await questionRepo.findAll()).map(question => question.id);
+    if (cadencePreference !== 'micro_pulse') {
+      return { questionIds: allQuestionIds, allQuestionIds, expandable: false };
+    }
+
+    const dayMs = 24 * 60 * 60 * 1000;
+    const remainingDays = scheduledCloseAt
+      ? Math.max(1, Math.ceil((scheduledCloseAt.getTime() - now().getTime()) / dayMs))
+      : Math.max(1, allQuestionIds.length);
+    const questionIds = await selectForMember(memberId, sessionId, remainingDays);
+
+    return {
+      questionIds,
+      allQuestionIds,
+      expandable: questionIds.length < allQuestionIds.length,
+    };
+  }
+
+  return { selectForMember, selectForSessionLink };
 }
 
 /**

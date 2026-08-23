@@ -7,8 +7,9 @@
  *
  * For any valid session link token pointing to an existing member and session with at least
  * one question defined, the response SHALL contain memberId, sessionId, memberName,
- * cadencePreference, sessionStatus, a non-empty questions array, and a responses array
- * (possibly empty). The response SHALL also include a Set-Cookie header.
+ * cadencePreference, sessionStatus, cadence-selected questions, the complete allQuestions
+ * expansion payload, expandable, and a responses array (possibly empty). The response
+ * SHALL also include a Set-Cookie header.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import fc from 'fast-check';
@@ -109,6 +110,21 @@ describe('Property 4: Session-link response contains all required fields', () =>
           expect(body.cadencePreference).toBe(cadencePreference);
           expect(body.sessionStatus).toBe('open');
 
+          expect(Array.isArray(body.allQuestions)).toBe(true);
+          expect(body.allQuestions).toHaveLength(5);
+
+          // Micro-pulse receives a weighted subset plus one-call expansion data;
+          // other cadences receive the full set.
+          if (cadencePreference === 'micro_pulse') {
+            expect(body.questions).toHaveLength(2);
+            expect(body.expandable).toBe(true);
+            const allIds = body.allQuestions.map((question: { id: string }) => question.id);
+            for (const question of body.questions) expect(allIds).toContain(question.id);
+          } else {
+            expect(body.questions).toEqual(body.allQuestions);
+            expect(body.expandable).toBe(false);
+          }
+
           // Questions must be a non-empty array (InMemoryQuestionRepository always has 5)
           expect(Array.isArray(body.questions)).toBe(true);
           expect(body.questions.length).toBeGreaterThan(0);
@@ -130,6 +146,54 @@ describe('Property 4: Session-link response contains all required fields', () =>
         }
       ),
       { numRuns: 100 }
+    );
+  });
+
+  it('micro-pulse subset size and expandability match arbitrary answered and timing states', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 0, max: 5 }),
+        fc.integer({ min: 1, max: 5 }),
+        async (answeredCount, remainingDays) => {
+          const suffix = crypto.randomUUID();
+          const teamId = `property-team-${suffix}`;
+          const memberId = `property-member-${suffix}`;
+          const token = `property-token-${suffix}`;
+          await repos.teamMember.create({ id: memberId, teamId, name: 'Property Member' });
+          await repos.teamMember.update(memberId, { cadencePreference: 'micro_pulse' });
+          const session = await repos.session.create({
+            teamId,
+            status: 'open',
+            scheduledCloseAt: new Date(Date.now() + remainingDays * 24 * 60 * 60 * 1000),
+          });
+          await repos.sessionLink.create({
+            token,
+            memberId,
+            sessionId: session.id,
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          });
+          const allQuestionIds = (await repos.question.findAll()).map(question => question.id);
+          const answeredIds = allQuestionIds.slice(0, answeredCount);
+          for (const questionId of answeredIds) {
+            await repos.response.upsert({ memberId, sessionId: session.id, questionId, score: 3 });
+          }
+
+          const response = await GET(makeRequest(token), makeContext(token));
+          const body = await response.json();
+          const unansweredCount = allQuestionIds.length - answeredCount;
+          const expectedCount = unansweredCount === 0
+            ? 0
+            : Math.min(Math.ceil(unansweredCount / remainingDays), unansweredCount);
+          const selectedIds = body.questions.map((question: { id: string }) => question.id);
+
+          expect(body.allQuestions.map((question: { id: string }) => question.id))
+            .toEqual(allQuestionIds);
+          expect(selectedIds).toHaveLength(expectedCount);
+          expect(selectedIds.every((id: string) => !answeredIds.includes(id))).toBe(true);
+          expect(body.expandable).toBe(expectedCount < allQuestionIds.length);
+        },
+      ),
+      { numRuns: 50 },
     );
   });
 });

@@ -16,10 +16,16 @@ const MOCK_CONTEXT = {
   sessionId: 'session-1',
   memberName: 'Alice',
   cadencePreference: 'weekly',
+  sessionStatus: 'open' as const,
   questions: [
     { id: 'q-delivering-value', title: 'Delivering Value', description: 'Value desc', displayOrder: 1 },
     { id: 'q-team-collaboration', title: 'Team Collaboration', description: 'Collab desc', displayOrder: 2 },
   ],
+  allQuestions: [
+    { id: 'q-delivering-value', title: 'Delivering Value', description: 'Value desc', displayOrder: 1 },
+    { id: 'q-team-collaboration', title: 'Team Collaboration', description: 'Collab desc', displayOrder: 2 },
+  ],
+  expandable: false,
   responses: [],
 };
 
