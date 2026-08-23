@@ -9,15 +9,16 @@
 import { NextRequest } from 'next/server';
 
 import { withErrorHandling } from '@/lib/api-utils';
-import { createAuthorizeDeliveryManager } from '@/lib/auth/authorize-team-member';
+import { createAuthorizeDeliveryManager, createAuthorizeTeamMember } from '@/lib/auth/authorize-team-member';
 import { createGetAuthContext } from '@/lib/auth/with-auth';
 import { container, repos } from '@/lib/container-production';
-import { NotFoundError } from '@/lib/errors';
+import { createSessionDetailRouteHandler } from './route-handlers';
 
 // Test seam: allows route tests to seed data via repos
 export { repos as _testRepos };
 
 const getAuthContext = createGetAuthContext({ userSessionRepo: repos.userSession });
+const authorizeTeamMember = createAuthorizeTeamMember({ teamMemberRepo: repos.teamMember });
 const authorizeDeliveryManager = createAuthorizeDeliveryManager({
   teamMemberRepo: repos.teamMember,
   teamMemberRoleRepo: repos.teamMemberRole,
@@ -26,15 +27,10 @@ const authorizeDeliveryManager = createAuthorizeDeliveryManager({
 /**
  * GET — Retrieve details for a specific session.
  */
-export const GET = withErrorHandling(async (_request, context) => {
-  const { sessionId } = await context!.params;
-
-  const session = await repos.session.findById(sessionId);
-  if (!session) {
-    throw new NotFoundError('Session not found');
-  }
-
-  return Response.json(session);
+export const GET = createSessionDetailRouteHandler({
+  getAuthContext,
+  authorizeTeamMember,
+  getSession: container.session.get,
 });
 
 /**

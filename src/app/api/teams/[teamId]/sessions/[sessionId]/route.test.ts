@@ -3,10 +3,15 @@
  * Requirements: 3.5, 3.9, 19.2
  */
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-import { GET, PATCH, _testRepos as repos } from './route';
+import { createAuthorizeTeamMember } from '@/lib/auth/authorize-team-member';
+import { createGetAuthContext } from '@/lib/auth/with-auth';
+import { createContainer, type Container } from '@/lib/container';
+import { createInMemoryRepositories, type Repositories } from '@/lib/repositories';
+import { PATCH, _testRepos as repos } from './route';
+import { createSessionDetailRouteHandler } from './route-handlers';
 
 function patchRequest(teamId: string, sessionId: string, token?: string): NextRequest {
   const headers = new Headers();
@@ -39,23 +44,103 @@ async function createDeliveryManager(teamId: string, email: string) {
 }
 
 describe('GET /api/teams/[teamId]/sessions/[sessionId]', () => {
-  it('returns 404 when session does not exist', async () => {
-    const team = await repos.team.create({ name: 'Get Session Team' });
-    const response = await GET(
-      new Request(`http://localhost/api/teams/${team.id}/sessions/non-existent`),
-      routeContext(team.id, 'non-existent'),
-    );
+  let detailRepos: Repositories;
+  let detailContainer: Container;
+  let GET: ReturnType<typeof createSessionDetailRouteHandler>;
+  let authorizeTeamMember: ReturnType<typeof createAuthorizeTeamMember>;
+  let getSession: Container['session']['get'];
 
-    expect(response.status).toBe(404);
-    expect((await response.json()).error.code).toBe('NOT_FOUND');
+  beforeEach(() => {
+    detailRepos = createInMemoryRepositories();
+    detailContainer = createContainer(detailRepos);
+    authorizeTeamMember = vi.fn(
+      createAuthorizeTeamMember({ teamMemberRepo: detailRepos.teamMember }),
+    );
+    getSession = vi.fn((teamId, sessionId) => detailContainer.session.get(teamId, sessionId));
+    GET = createSessionDetailRouteHandler({
+      getAuthContext: createGetAuthContext({ userSessionRepo: detailRepos.userSession }),
+      authorizeTeamMember,
+      getSession,
+    });
   });
 
-  it('returns session details when session exists', async () => {
-    const team = await repos.team.create({ name: 'Get Detail Team' });
-    const session = await repos.session.create({ teamId: team.id, status: 'open' });
+  async function createDetailSession(
+    memberId: string,
+    expiresAt = new Date(Date.now() + 60_000),
+  ): Promise<string> {
+    const token = `detail-${memberId}-${Date.now()}-${Math.random()}`;
+    await detailRepos.userSession.create({ memberId, token, expiresAt });
+    return token;
+  }
+
+  it.each([
+    ['missing', undefined],
+    ['unknown', 'unknown-detail-token'],
+    ['expired', 'expired-detail-token'],
+  ])('returns generic 401 for a %s cookie', async (kind, suppliedToken) => {
+    const team = await detailRepos.team.create({ name: `Detail ${kind} Team` });
+    const member = await detailRepos.teamMember.create({ teamId: team.id, name: 'Member' });
+    const token = kind === 'expired'
+      ? await createDetailSession(member.id, new Date(Date.now() - 1_000))
+      : suppliedToken;
+
+    const paramsAccess = vi.fn();
+    const context = {
+      get params() {
+        paramsAccess();
+        return Promise.resolve({ teamId: team.id, sessionId: 'missing' });
+      },
+    };
+    const response = await GET(
+      new NextRequest(`http://localhost/api/teams/${team.id}/sessions/missing`, {
+        headers: token ? { cookie: `session=${token}` } : undefined,
+      }),
+      context,
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+    });
+    expect(paramsAccess).not.toHaveBeenCalled();
+    expect(authorizeTeamMember).not.toHaveBeenCalled();
+    expect(getSession).not.toHaveBeenCalled();
+  });
+
+  it.each(['foreign', 'nonexistent'])
+    ('returns the same 403 for a %s requested team', async (kind) => {
+      const memberTeam = await detailRepos.team.create({ name: 'Member Detail Team' });
+      const member = await detailRepos.teamMember.create({ teamId: memberTeam.id, name: 'Outsider' });
+      const token = await createDetailSession(member.id);
+      const requestedTeamId = kind === 'foreign'
+        ? (await detailRepos.team.create({ name: 'Requested Detail Team' })).id
+        : 'nonexistent-team';
+
+      const response = await GET(
+        new NextRequest(`http://localhost/api/teams/${requestedTeamId}/sessions/missing`, {
+          headers: { cookie: `session=${token}` },
+        }),
+        routeContext(requestedTeamId, 'missing'),
+      );
+
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toEqual({
+        error: { code: 'FORBIDDEN', message: 'You do not have access to this team' },
+      });
+      expect(authorizeTeamMember).toHaveBeenCalledWith(member.id, requestedTeamId);
+      expect(getSession).not.toHaveBeenCalled();
+    });
+
+  it('returns session details to an ordinary member of the requested team', async () => {
+    const team = await detailRepos.team.create({ name: 'Get Detail Team' });
+    const member = await detailRepos.teamMember.create({ teamId: team.id, name: 'Member' });
+    const token = await createDetailSession(member.id);
+    const session = await detailRepos.session.create({ teamId: team.id, status: 'open' });
 
     const response = await GET(
-      new Request(`http://localhost/api/teams/${team.id}/sessions/${session.id}`),
+      new NextRequest(`http://localhost/api/teams/${team.id}/sessions/${session.id}`, {
+        headers: { cookie: `session=${token}` },
+      }),
       routeContext(team.id, session.id),
     );
 
@@ -65,7 +150,32 @@ describe('GET /api/teams/[teamId]/sessions/[sessionId]', () => {
       teamId: team.id,
       status: 'open',
     });
+    expect(authorizeTeamMember).toHaveBeenCalledWith(member.id, team.id);
+    expect(getSession).toHaveBeenCalledWith(team.id, session.id);
   });
+
+  it.each(['missing', 'foreign'])
+    ('returns the same 404 for a %s session', async (kind) => {
+      const team = await detailRepos.team.create({ name: 'Authorized Detail Team' });
+      const member = await detailRepos.teamMember.create({ teamId: team.id, name: 'Member' });
+      const token = await createDetailSession(member.id);
+      const sessionId = kind === 'foreign'
+        ? (await detailRepos.session.create({ teamId: 'other-team', status: 'open' })).id
+        : 'missing-session';
+
+      const response = await GET(
+        new NextRequest(`http://localhost/api/teams/${team.id}/sessions/${sessionId}`, {
+          headers: { cookie: `session=${token}` },
+        }),
+        routeContext(team.id, sessionId),
+      );
+
+      expect(response.status).toBe(404);
+      await expect(response.json()).resolves.toEqual({
+        error: { code: 'NOT_FOUND', message: 'Session not found' },
+      });
+      expect(getSession).toHaveBeenCalledWith(team.id, sessionId);
+    });
 });
 
 describe('PATCH /api/teams/[teamId]/sessions/[sessionId]', () => {

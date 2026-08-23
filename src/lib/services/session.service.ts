@@ -24,6 +24,7 @@ export interface SessionServiceDeps {
 
 export interface SessionService {
   open(teamId: string, userId: string): Promise<HealthCheckSession>;
+  get(expectedTeamId: string, sessionId: string): Promise<HealthCheckSession>;
   close(expectedTeamId: string, sessionId: string, userId?: string): Promise<void>;
   generateSessionLinks(sessionId: string): Promise<void>;
   materializeAggregates(sessionId: string): Promise<void>;
@@ -78,6 +79,17 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     // Generate session links for all team members
     await generateSessionLinks(session.id);
 
+    return session;
+  }
+
+  async function get(
+    expectedTeamId: string,
+    sessionId: string,
+  ): Promise<HealthCheckSession> {
+    const session = await sessionRepo.findById(sessionId);
+    if (!session || session.teamId !== expectedTeamId) {
+      throw new NotFoundError('Session not found');
+    }
     return session;
   }
 
@@ -150,5 +162,5 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     }
   }
 
-  return { open, close, generateSessionLinks, materializeAggregates };
+  return { open, get, close, generateSessionLinks, materializeAggregates };
 }

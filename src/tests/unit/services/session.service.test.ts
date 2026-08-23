@@ -141,6 +141,42 @@ describe('SessionService.close', () => {
 });
 
 
+describe('SessionService.get', () => {
+  let repos: Repositories;
+  let sessionService: SessionService;
+
+  beforeEach(() => {
+    repos = createInMemoryRepositories();
+    sessionService = createSessionService({
+      sessionRepo: repos.session,
+      sessionLinkRepo: repos.sessionLink,
+      teamMemberRepo: repos.teamMember,
+      responseRepo: repos.response,
+      sessionAggregateRepo: repos.sessionAggregate,
+    });
+  });
+
+  it('returns a session belonging to the expected team', async () => {
+    const session = await repos.session.create({ teamId: 'team-1', status: 'open' });
+
+    await expect(sessionService.get('team-1', session.id)).resolves.toEqual(session);
+  });
+
+  it.each(['missing', 'foreign'])
+    ('returns the same NotFoundError for a %s session', async (kind) => {
+      const sessionId = kind === 'foreign'
+        ? (await repos.session.create({ teamId: 'team-2', status: 'open' })).id
+        : 'missing-session';
+
+      await expect(sessionService.get('team-1', sessionId)).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        statusCode: 404,
+        message: 'Session not found',
+      });
+    });
+});
+
+
 describe('SessionService.generateSessionLinks', () => {
   let repos: Repositories;
   let sessionService: SessionService;
