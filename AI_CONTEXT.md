@@ -31,8 +31,8 @@ integration-hardening spec are now the authoritative merge plan.
 **Resume cue:** Browser acceptance through the first two health-check sessions
 is complete. Do not recreate those sessions or repeat those scenarios unless a
 regression requires it. Preserve the current worktree and persistent
-`prisma/dev.db`. Session-link cadence/authentication scoping is complete; resume
-Task 23.5 with schedule-change audit emission, then member-addition audit emission.
+`prisma/dev.db`. Session-link cadence/authentication scoping and schedule-change
+audit emission are complete; resume Task 23.5 with member-addition audit emission.
 Follow the remaining Tasks 24–26 afterward; do not begin the deferred
 lifecycle-management or dashboard-UX milestones first.
 
@@ -94,10 +94,10 @@ The original Tasks 1–21 were checked too early. Task 20.1 and the final
 checkpoint are reopened; Task 22 records the accepted regressions above. Complete
 these dependency-ordered waves before commit/merge or a new milestone:
 
-1. **Task 23 — Auth/session and audit closure:** session-link cadence and
-authentication scoping are complete; emit the still-missing schedule-change and
-member-addition audit records. Task 23.2 route authorization and Task 23.3's
-direct-AuthContext contract reconciliation are also complete.
+1. **Task 23 — Auth/session and audit closure:** session-link cadence,
+authentication scoping, and schedule-change audits are complete; emit the
+still-missing member-addition audit records. Task 23.2 route authorization and
+Task 23.3's direct-AuthContext contract reconciliation are also complete.
 2. **Task 24 — Slack production closure:** authenticated pairing UI and actual
    unlink; actionable `/healthcheck`; cadence/delivery-window eligibility;
    scheduler closing reminders; persistent retry queue/drain; then redacted
@@ -128,7 +128,7 @@ slice stops being reviewable):
 6. `docs: make direct auth context authoritative` — requirements/design plus contract regression for Task 23.3 complete in this checkpoint.
 7. `feat: select weighted micro-pulse questions` — first half of Task 23.4 complete in this checkpoint.
 8. `fix: scope reused session-link authentication` — second half of Task 23.4 complete in this checkpoint.
-9. `fix: audit schedule configuration changes` — first half of Task 23.5.
+9. `fix: audit schedule configuration changes` — first half of Task 23.5 complete in this checkpoint.
 10. `fix: audit team member additions` — second half of Task 23.5.
 
 Each slice includes its red/green tests, required README and AI_CONTEXT updates,
@@ -136,9 +136,8 @@ and targeted validation. Do not wait for all of Task 23 to commit or leave a
 green slice uncommitted while beginning the next one.
 
 Current known blockers are implementation gaps, not merely missing manual proof:
-schedule changes and member additions still omit required audit entries; pairing
-accepts caller memberId and unlink does not delete; scheduler omits closing
-reminders and uses a request-local retry queue; required Playwright tests can skip through a nonexistent token endpoint and use
+member additions still omit required audit entries; pairing accepts caller
+memberId and unlink does not delete; scheduler omits closing reminders and uses a request-local retry queue; required Playwright tests can skip through a nonexistent token endpoint and use
 unseeded/non-isolated data; the response MSW body remains stale; Turso selection
 lacks repository execution evidence.
 
@@ -149,6 +148,13 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 
 ### Changes and validation already completed
 
+- Schedule configuration now passes the authenticated Delivery Manager actor into
+  `ScheduleService`, emits one `schedule_change` audit with stable complete
+  normalized snapshots, uses `"null"` for first configuration, and skips both
+  persistence and audit for normalized no-ops. Schedule, canonical Team timezone,
+  and the audit append now commit through one repository aggregate operation;
+  the fake mirrors timezone state and proves audit failure leaves schedule state
+  unchanged. Property 24 exercises arbitrary schedules and actors.
 - Session-link authentication now uses one service-owned expiry bound for both
   persistence and cookie emission: the earliest of health-check close, an
   existing UserSession expiry, or seven days. Reused sessions are atomically
@@ -207,12 +213,12 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 - Both live closes and scheduler ticks returned 200, all ten expected
   aggregates were verified, and the trends API correctly transitioned from the
   one-session threshold response to two-session data.
-- Latest validation: **125 test files / 1042 tests passed**,
+- Latest validation: **127 test files / 1050 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
   checkpoint preserves the accepted fixes; run `git status --short` before
-  starting the schedule-configuration audit slice.
+  starting the team-member-addition audit slice.
 
 ---
 
@@ -341,7 +347,9 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1042 tests across 125 files**, including
+The Vitest suite now contains **1050 tests across 127 files**, including
+schedule-change audit route/service/Property 24 coverage, atomic failure rollback,
+and Prisma/fake canonical timezone persistence,
 session-link Property 12 coverage for persisted monotonic close/existing/seven-day expiry and non-negative cookies,
 weighted micro-pulse API/property/UI expansion coverage, an executable direct-AuthContext documentation/source contract, cookie-only,
 team/session-bound participation with privacy-safe payloads,

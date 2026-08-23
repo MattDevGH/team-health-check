@@ -19,15 +19,21 @@ export class PrismaTeamScheduleRepository implements TeamScheduleRepository {
     closeTime: string;
     timezone: string;
   }): Promise<TeamSchedule> {
-    const record = await this.prisma.teamSchedule.create({
-      data: {
-        teamId: data.teamId,
-        cadence: data.cadence,
-        openDay: data.openDay,
-        openTime: data.openTime,
-        closeDay: data.closeDay,
-        closeTime: data.closeTime,
-      },
+    const record = await this.prisma.$transaction(async (transaction) => {
+      await transaction.team.update({
+        where: { id: data.teamId },
+        data: { timezone: data.timezone },
+      });
+      return transaction.teamSchedule.create({
+        data: {
+          teamId: data.teamId,
+          cadence: data.cadence,
+          openDay: data.openDay,
+          openTime: data.openTime,
+          closeDay: data.closeDay,
+          closeTime: data.closeTime,
+        },
+      });
     });
     return this.mapToEntity(record, data.timezone);
   }
@@ -54,17 +60,70 @@ export class PrismaTeamScheduleRepository implements TeamScheduleRepository {
       throw new NotFoundError(`Schedule not found for team: ${teamId}`);
     }
 
-    const { timezone: _timezone, ...dbFields } = data;
-    const record = await this.prisma.teamSchedule.update({
-      where: { teamId },
-      data: dbFields,
+    const { timezone, ...dbFields } = data;
+    const record = await this.prisma.$transaction(async (transaction) => {
+      if (timezone !== undefined) {
+        await transaction.team.update({
+          where: { id: teamId },
+          data: { timezone },
+        });
+      }
+      return transaction.teamSchedule.update({
+        where: { teamId },
+        data: dbFields,
+      });
     });
 
+    if (timezone !== undefined) {
+      return this.mapToEntity(record, timezone);
+    }
     const team = await this.prisma.team.findUnique({
       where: { id: teamId },
       select: { timezone: true },
     });
-    return this.mapToEntity(record, _timezone ?? team?.timezone ?? 'Europe/London');
+    return this.mapToEntity(record, team?.timezone ?? 'Europe/London');
+  }
+
+  async saveWithAudit(
+    data: {
+      teamId: string;
+      cadence: string;
+      openDay: number;
+      openTime: string;
+      closeDay: number;
+      closeTime: string;
+      timezone: string;
+    },
+    audit: {
+      changeType: string;
+      previousValue: string;
+      newValue: string;
+      userId: string;
+    },
+  ): Promise<TeamSchedule> {
+    const scheduleData = {
+      cadence: data.cadence,
+      openDay: data.openDay,
+      openTime: data.openTime,
+      closeDay: data.closeDay,
+      closeTime: data.closeTime,
+    };
+    const record = await this.prisma.$transaction(async (transaction) => {
+      await transaction.team.update({
+        where: { id: data.teamId },
+        data: { timezone: data.timezone },
+      });
+      const schedule = await transaction.teamSchedule.upsert({
+        where: { teamId: data.teamId },
+        create: { teamId: data.teamId, ...scheduleData },
+        update: scheduleData,
+      });
+      await transaction.auditLogEntry.create({
+        data: { teamId: data.teamId, ...audit },
+      });
+      return schedule;
+    });
+    return this.mapToEntity(record, data.timezone);
   }
 
   private mapToEntity(record: PrismaTeamScheduleRecord, timezone: string): TeamSchedule {

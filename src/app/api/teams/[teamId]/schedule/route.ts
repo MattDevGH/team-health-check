@@ -56,6 +56,6 @@ export const PUT = withErrorHandling(async (request, context) => {
     );
   }
 
-  const result = await container.schedule.configure(teamId, parsed.data);
+  const result = await container.schedule.configure(teamId, parsed.data, auth.memberId);
   return Response.json(result);
 });

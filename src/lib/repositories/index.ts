@@ -84,7 +84,13 @@ export function createInMemoryRepositories(): Repositories {
   const pairingCode = new InMemoryPairingCodeRepository();
   const userSession = new InMemoryUserSessionRepository();
   const pendingGenesis = new InMemoryPendingGenesisRepository();
-  const teamSchedule = new InMemoryTeamScheduleRepository();
+  const teamSchedule = new InMemoryTeamScheduleRepository({
+    auditLogRepo: auditLog,
+    updateTeamTimezone: async (teamId, timezone) => {
+      const existing = await team.findById(teamId);
+      if (existing) await team.update(teamId, { timezone });
+    },
+  });
   const slackIdentityLink = new InMemorySlackIdentityLinkRepository();
 
   return {

@@ -17,7 +17,10 @@ const validSchedule = {
   timezone: 'Europe/London',
 };
 
-async function createSession(teamId: string, role: 'delivery_manager' | 'team_member') {
+async function createSessionContext(
+  teamId: string,
+  role: 'delivery_manager' | 'team_member',
+) {
   const member = await repos.teamMember.create({
     teamId,
     name: `${role}-${crypto.randomUUID()}`,
@@ -30,7 +33,11 @@ async function createSession(teamId: string, role: 'delivery_manager' | 'team_me
     token,
     expiresAt: new Date(Date.now() + 60_000),
   });
-  return token;
+  return { token, memberId: member.id };
+}
+
+async function createSession(teamId: string, role: 'delivery_manager' | 'team_member') {
+  return (await createSessionContext(teamId, role)).token;
 }
 
 function request(
@@ -129,6 +136,9 @@ describe('PUT /api/teams/[teamId]/schedule', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ schedule });
     await expect(repos.teamSchedule.findByTeamId(team.id)).resolves.toMatchObject(schedule);
+    await expect(repos.team.findById(team.id)).resolves.toMatchObject({
+      timezone: 'America/New_York',
+    });
   });
 
   it('includes a warning when session duration is less than 24 hours', async () => {
@@ -145,5 +155,22 @@ describe('PUT /api/teams/[teamId]/schedule', () => {
     await expect(response.json()).resolves.toMatchObject({
       warning: expect.stringContaining('less than 24 hours'),
     });
+  });
+
+  it('audits the schedule change with the authenticated actor', async () => {
+    const team = await repos.team.create({ name: 'Audited Schedule Team' });
+    const auth = await createSessionContext(team.id, 'delivery_manager');
+    const scheduleRequest = request(team.id, 'PUT', auth.token);
+    scheduleRequest.headers.set('x-user-id', 'spoofed-actor');
+
+    const response = await PUT(scheduleRequest, context(team.id));
+
+    expect(response.status).toBe(200);
+    await expect(repos.auditLog.findByTeamId(team.id)).resolves.toEqual([
+      expect.objectContaining({
+        changeType: 'schedule_change',
+        userId: auth.memberId,
+      }),
+    ]);
   });
 });

@@ -100,6 +100,18 @@ sequenceDiagram
     Note over Browser: Subsequent POST /api/responses uses this cookie
 ```
 
+### Schedule Configuration Audit Flow
+
+The authenticated Delivery Manager identity is passed directly from the route to
+`ScheduleService.configure(teamId, schedule, actorId)`. The service normalizes a
+fixed six-field snapshot (`cadence`, open/close day and time, `timezone`), skips
+persistence and audit for an equal snapshot, and otherwise appends one
+`schedule_change` entry. First configuration uses `previousValue: "null"`;
+updates serialize complete stable before/after snapshots. Schedule state, the
+canonical Team timezone, and the audit append use one repository aggregate
+operation: Prisma commits all three in one transaction, while the fake mirrors
+Team timezone and does not mutate schedule state when the required audit fails.
+
 ### Logout and Session Invalidation Flow
 
 ```mermaid

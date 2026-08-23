@@ -217,7 +217,7 @@ This plan implements the Team Health Check feature as a Next.js 15 App Router ap
 
   - [x] 7.7 Implement schedule configuration
     - Create `src/lib/services/schedule.service.ts` with `createScheduleService` factory
-    - Implement `configure(teamId, schedule)` — stores schedule, calculates next session window using timezone-aware logic
+    - Implement `configure(teamId, schedule, actorId)` — normalize and store changed schedules, emit `schedule_change` with stable complete before/after snapshots and the authenticated actor, and skip normalized no-ops
     - Validate that schedule includes timezone (default Europe/London)
     - Warn if session duration < 24 hours (closing reminder suppressed)
     - Write failing tests: schedule saved; next window calculated correctly for timezone; DST transition handled

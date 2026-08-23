@@ -155,6 +155,10 @@ export interface TeamScheduleRepository {
   create(data: { teamId: string; cadence: string; openDay: number; openTime: string; closeDay: number; closeTime: string; timezone: string }): Promise<TeamSchedule>;
   findByTeamId(teamId: string): Promise<TeamSchedule | null>;
   update(teamId: string, data: Partial<Pick<TeamSchedule, 'cadence' | 'openDay' | 'openTime' | 'closeDay' | 'closeTime' | 'timezone'>>): Promise<TeamSchedule>;
+  saveWithAudit(
+    data: { teamId: string; cadence: string; openDay: number; openTime: string; closeDay: number; closeTime: string; timezone: string },
+    audit: { changeType: string; previousValue: string; newValue: string; userId: string },
+  ): Promise<TeamSchedule>;
 }
 
 /** Requirements 7.1, 7.2, 7.3: Slack identity link persistence */
