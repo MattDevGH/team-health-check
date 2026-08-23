@@ -378,4 +378,23 @@ describe('InMemoryUserSessionRepository', () => {
   it('returns null for non-existent token', async () => {
     expect(await repo.findByToken('missing')).toBeNull();
   });
+
+  it('deletes only the matching token and ignores repeated deletion', async () => {
+    await repo.create({
+      memberId: 'm1',
+      token: 'delete-me',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await repo.create({
+      memberId: 'm1',
+      token: 'keep-me',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    await repo.deleteByToken('delete-me');
+    await repo.deleteByToken('delete-me');
+
+    expect(await repo.findByToken('delete-me')).toBeNull();
+    expect(await repo.findByToken('keep-me')).not.toBeNull();
+  });
 });

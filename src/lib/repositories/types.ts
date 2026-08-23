@@ -126,6 +126,7 @@ export interface UserSessionRepository {
   create(data: { memberId: string; token: string; expiresAt: Date }): Promise<UserSession>;
   findByToken(token: string): Promise<UserSession | null>;
   findValidByMemberId(memberId: string): Promise<UserSession | null>;
+  deleteByToken(token: string): Promise<void>;
 }
 
 /** Requirement 7.9: Pending genesis for new team creation */

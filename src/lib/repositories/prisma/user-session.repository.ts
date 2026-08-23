@@ -37,6 +37,10 @@ export class PrismaUserSessionRepository implements UserSessionRepository {
     return record ? this.mapToEntity(record) : null;
   }
 
+  async deleteByToken(token: string): Promise<void> {
+    await this.prisma.userSession.deleteMany({ where: { token } });
+  }
+
   private mapToEntity(record: PrismaUserSession): UserSession {
     return {
       id: record.id,

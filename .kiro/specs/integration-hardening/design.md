@@ -83,6 +83,23 @@ sequenceDiagram
     Note over Browser: Subsequent POST /api/responses uses this cookie
 ```
 
+### Logout and Session Invalidation Flow
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant LogoutRoute as POST /api/auth/logout
+    participant AuthService
+    participant DB
+
+    Browser->>LogoutRoute: Cookie: session=xyz
+    LogoutRoute->>AuthService: invalidateSession('xyz')
+    AuthService->>DB: DELETE UserSession WHERE token='xyz'
+    DB-->>AuthService: deleted or no-op
+    LogoutRoute-->>Browser: 204 + Set-Cookie: session=; Max-Age=0; HttpOnly; SameSite=Lax
+    Note over Browser,LogoutRoute: Missing, unknown, and expired tokens are idempotent
+```
+
 ### Notification Wiring
 
 ```mermaid
@@ -104,7 +121,8 @@ graph LR
 | `src/lib/auth/with-auth.ts` | Route-handler auth helper: validates cookie, queries UserSession, returns memberId |
 | `src/lib/auth/session-cookie.ts` | Cookie helper: build Set-Cookie header, clear cookie |
 | `src/lib/auth/authorize-team-member.ts` | Team membership + role authorization checks |
-| `src/lib/repositories/types.ts` (extend) | Add `SlackIdentityLinkRepository` interface |
+| `src/app/api/auth/logout/route.ts` | Idempotently revoke the presented UserSession and clear the session cookie |
+| `src/lib/repositories/types.ts` (extend) | Add `SlackIdentityLinkRepository` and token-based UserSession invalidation |
 | `src/lib/repositories/in-memory/slack-identity-link.repository.ts` | In-memory fake for testing |
 | `src/lib/repositories/prisma/slack-identity-link.repository.ts` | Prisma implementation |
 | `src/lib/slack/production-notification-sink.ts` | NotificationSink that calls Slack API |
@@ -116,7 +134,9 @@ graph LR
 | File | Changes |
 |------|---------|
 | `src/lib/prisma.ts` | Environment-aware: better-sqlite3 locally, @libsql/client + @prisma/adapter-libsql when TURSO_DATABASE_URL is set |
-| `src/lib/services/auth.service.ts` | Add `EmailService` dep, call it in `requestMagicLink`; create SlackIdentityLink in `verifyPairingCode` |
+| `src/lib/services/auth.service.ts` | Add `EmailService` dep, call it in `requestMagicLink`; create SlackIdentityLink in `verifyPairingCode`; invalidate persisted logout sessions |
+| `src/lib/repositories/in-memory/user-session.repository.ts` | Delete an exact session token idempotently for logout tests |
+| `src/lib/repositories/prisma/user-session.repository.ts` | Delete an exact session token idempotently with `deleteMany` |
 | `src/lib/container.ts` | Add `EmailService` to auth deps; add `slackIdentityLink` to `Repositories` |
 | `src/lib/container-production.ts` | Wire `ResendEmailService` into auth; wire `slackIdentityLink` repo |
 | `src/lib/repositories/index.ts` | Add `slackIdentityLink` to `Repositories` interface and in-memory factory |

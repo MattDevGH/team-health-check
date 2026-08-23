@@ -5,7 +5,7 @@
 
 import crypto from 'crypto';
 
-import { NotFoundError, RateLimitError } from '@/lib/errors';
+import { AppError, NotFoundError, RateLimitError } from '@/lib/errors';
 import { checkRateLimit, isRateLimited, recordRateLimitHit } from '@/lib/rate-limit';
 import type {
   MagicLinkRepository,
@@ -40,6 +40,7 @@ export interface AuthService {
   verifyPairingCode(memberId: string, code: string): Promise<{ slackUserId: string } | null>;
   requestMagicLink(email: string): Promise<void>;
   verifyMagicLink(token: string): Promise<MagicLinkVerifyResult>;
+  invalidateSession(token: string): Promise<void>;
   validateSessionLink(token: string): Promise<{ memberId: string; sessionId: string } | null>;
   validateSessionLinkWithRateLimit(token: string, ip: string): Promise<{ memberId: string; sessionId: string } | null>;
 }
@@ -215,6 +216,19 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
     };
   }
 
+  /** Integration Requirement 1.6: revoke the exact presented browser session. */
+  async function invalidateSession(token: string): Promise<void> {
+    if (!userSessionRepo) {
+      throw new AppError(
+        'User session repository is not configured',
+        'INTERNAL_ERROR',
+        500,
+      );
+    }
+
+    await userSessionRepo.deleteByToken(token);
+  }
+
   /**
    * Validate a session link token.
    * Returns { memberId, sessionId } on success, null if token is invalid, expired,
@@ -268,6 +282,7 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
     verifyPairingCode,
     requestMagicLink,
     verifyMagicLink,
+    invalidateSession,
     validateSessionLink,
     validateSessionLinkWithRateLimit,
   };

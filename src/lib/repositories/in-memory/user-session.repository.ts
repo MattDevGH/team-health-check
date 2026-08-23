@@ -27,4 +27,11 @@ export class InMemoryUserSessionRepository implements UserSessionRepository {
       s => s.memberId === memberId && s.expiresAt > now
     ) ?? null;
   }
+
+  async deleteByToken(token: string): Promise<void> {
+    const entry = [...this.store.entries()].find(([, session]) => session.token === token);
+    if (entry) {
+      this.store.delete(entry[0]);
+    }
+  }
 }

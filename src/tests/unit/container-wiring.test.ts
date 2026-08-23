@@ -40,6 +40,7 @@ describe('Production container wiring', () => {
     it('exports auth service', () => {
       expect(container.auth).toBeDefined();
       expect(typeof container.auth.validateSessionLink).toBe('function');
+      expect(typeof container.auth.invalidateSession).toBe('function');
     });
 
     it('exports role service', () => {

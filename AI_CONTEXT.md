@@ -31,9 +31,10 @@ integration-hardening spec are now the authoritative merge plan.
 **Resume cue:** Browser acceptance through the first two health-check sessions
 is complete. Do not recreate those sessions or repeat those scenarios unless a
 regression requires it. Preserve the current worktree and persistent
-`prisma/dev.db`. Resume the integration-hardening closure plan at Task 23.1
-(logout/session invalidation), following Tasks 23–26 in order; do not begin the
-deferred lifecycle-management or dashboard-UX milestones first.
+`prisma/dev.db`. Resume the integration-hardening closure plan at Task 23.2,
+starting with the `/api/teams` GET/POST authentication slice, then follow the
+remaining Tasks 23–26 in order; do not begin the deferred lifecycle-management
+or dashboard-UX milestones first.
 
 ### Accepted live state
 
@@ -93,12 +94,12 @@ The original Tasks 1–21 were checked too early. Task 20.1 and the final
 checkpoint are reopened; Task 22 records the accepted regressions above. Complete
 these dependency-ordered waves before commit/merge or a new milestone:
 
-1. **Task 23 — Auth/session and audit closure:** persisted logout and cookie
-   clearing; protect remaining team/export/session-detail/participation routes
-   with ownership checks; amend requirements/design so direct AuthContext—not
-   injected identity headers—is authoritative; implement micro-pulse selection;
-   scope reused session-link auth to close/expiry; and emit the still-missing
-   schedule-change and member-addition audit records.
+1. **Task 23 — Auth/session and audit closure:** protect remaining
+   team/export/session-detail/participation routes with ownership checks; amend
+   requirements/design so direct AuthContext—not injected identity headers—is
+   authoritative; implement micro-pulse selection; scope reused session-link
+   auth to close/expiry; and emit the still-missing schedule-change and
+   member-addition audit records. Persisted logout/cookie clearing is complete.
 2. **Task 24 — Slack production closure:** authenticated pairing UI and actual
    unlink; actionable `/healthcheck`; cadence/delivery-window eligibility;
    scheduler closing reminders; persistent retry queue/drain; then redacted
@@ -121,7 +122,7 @@ it, commit each green testable behavior before starting the next. Task 23 is
 expected to land as these independent conventional commits (split further if a
 slice stops being reviewable):
 
-1. `fix: invalidate authenticated sessions on logout` — Task 23.1.
+1. `fix: invalidate authenticated sessions on logout` — Task 23.1 complete in this checkpoint.
 2. `fix: authenticate team collection routes` — `/api/teams` GET/POST portion of Task 23.2.
 3. `fix: authorize team data exports` — export portion of Task 23.2.
 4. `fix: protect session detail reads` — session-detail GET portion of Task 23.2.
@@ -137,13 +138,13 @@ and targeted validation. Do not wait for all of Task 23 to commit or leave a
 green slice uncommitted while beginning the next one.
 
 Current known blockers are implementation gaps, not merely missing manual proof:
-logout has no endpoint; several team routes remain unauthenticated or trust
-`x-user-id`; micro-pulse and reused-close scoping are incomplete; schedule
-changes and member additions still omit required audit entries; pairing accepts
-caller memberId and unlink does not delete; scheduler omits closing reminders
-and uses a request-local retry queue; required Playwright tests can skip through
-a nonexistent token endpoint and use unseeded/non-isolated data; the response
-MSW body remains stale; Turso selection lacks repository execution evidence.
+several team routes remain unauthenticated or trust `x-user-id`; micro-pulse and
+reused-close scoping are incomplete; schedule changes and member additions still
+omit required audit entries; pairing accepts caller memberId and unlink does not
+delete; scheduler omits closing reminders and uses a request-local retry queue;
+required Playwright tests can skip through a nonexistent token endpoint and use
+unseeded/non-isolated data; the response MSW body remains stale; Turso selection
+lacks repository execution evidence.
 
 Explicitly deferred non-blockers: session lifecycle management UI; dashboard
 chart/Latest Session/question-disclosure UX; `app_mention`/`message.im` behavior
@@ -152,6 +153,9 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 
 ### Changes and validation already completed
 
+- `POST /api/auth/logout` idempotently revokes the exact presented UserSession
+  token and returns 204 with a matching httpOnly `Max-Age=0` clear-cookie header;
+  missing, unknown, and expired tokens do not leak validity or block clearing.
 - Team settings acceptance fixes: null time inputs, Slack delivery persistence +
   success feedback, complete-pair validation, authenticated before/after audit;
   privacy persistence/audit + success feedback; cookie-auth schedule persistence
@@ -167,12 +171,12 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 - Both live closes and scheduler ticks returned 200, all ten expected
   aggregates were verified, and the trends API correctly transitioned from the
   one-session threshold response to two-session data.
-- Latest validation: **117 test files / 976 tests passed**,
+- Latest validation: **120 test files / 985 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
   checkpoint preserves the accepted fixes; run `git status --short` before
-  starting Task 23.1.
+  starting Task 23.2.
 
 ---
 
@@ -301,11 +305,11 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **976 tests across 117 files**, including
-member-summary contract, member mutation authorization/final-manager, optional
-trend toggles, authenticated complete-pair delivery-window audit/validation,
-cookie-auth session close/team binding, and closed-link initial-render
-regressions.
+The Vitest suite now contains **985 tests across 120 files**, including
+persisted logout/session-cookie clearing, member-summary contracts, member
+mutation authorization/final-manager protection, optional trend toggles,
+authenticated complete-pair delivery-window audit/validation, cookie-auth
+session close/team binding, and closed-link initial-render regressions.
 
 ---
 
@@ -352,6 +356,7 @@ All stages must pass. Branch protection requires CI green before merge.
 ## Auth Architecture (Post-Integration-Hardening)
 
 - **Cookie-based sessions**: Magic link verification, genesis completion, and session-link validation set the `session` httpOnly cookie
+- **Persisted logout**: `POST /api/auth/logout` deletes only the presented UserSession token and returns an idempotent 204 with the environment-aware clear-cookie header
 - **New-user genesis claim ownership**: Magic-link verification reads and validates unused/unexpired `PendingGenesis` records without mutation; genesis execution performs the only CAS claim, persists validated team name/description, and establishes the browser session
 - **`getAuthContext`**: Factory function (`createGetAuthContext`) extracts + validates session cookie against UserSessionRepository
 - **`withAuth`**: Factory-created HOF wrapper that enforces auth on route handlers (401 if invalid)
