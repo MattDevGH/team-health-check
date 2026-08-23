@@ -20,6 +20,7 @@ import { createPrivacyService } from './services/privacy.service';
 import { createAvailabilityService } from './services/availability.service';
 import { createStreakService } from './services/streak.service';
 import { createQuestionSelectionService } from './services/question-selection.service';
+import { createParticipationService } from './services/participation.service';
 import type { Repositories } from './repositories';
 import type { TeamService } from './services/team.service';
 import type { SessionService } from './services/session.service';
@@ -32,6 +33,7 @@ import type { PrivacyService } from './services/privacy.service';
 import type { AvailabilityService } from './services/availability.service';
 import type { StreakService } from './services/streak.service';
 import type { QuestionSelectionService } from './services/question-selection.service';
+import type { ParticipationService } from './services/participation.service';
 import type { EmailService } from './services/email.service';
 
 /** Optional service overrides for production wiring */
@@ -55,6 +57,7 @@ export interface Container {
   availability: AvailabilityService;
   streak: StreakService;
   questionSelection: QuestionSelectionService;
+  participation: ParticipationService;
 }
 
 /**
@@ -149,6 +152,14 @@ export function createContainer(repos: Repositories, options?: ContainerOptions)
     sessionRepo: repos.session,
   });
 
+  const participation = createParticipationService({
+    teamRepo: repos.team,
+    teamMemberRepo: repos.teamMember,
+    teamMemberRoleRepo: repos.teamMemberRole,
+    sessionRepo: repos.session,
+    responseRepo: repos.response,
+  });
+
   return {
     team,
     session,
@@ -164,5 +175,6 @@ export function createContainer(repos: Repositories, options?: ContainerOptions)
     availability,
     streak,
     questionSelection,
+    participation,
   };
 }

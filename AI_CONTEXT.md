@@ -31,10 +31,10 @@ integration-hardening spec are now the authoritative merge plan.
 **Resume cue:** Browser acceptance through the first two health-check sessions
 is complete. Do not recreate those sessions or repeat those scenarios unless a
 regression requires it. Preserve the current worktree and persistent
-`prisma/dev.db`. Resume Task 23.2 with participation GET authorization, then
-continue in the recorded commit order. Follow the remaining Tasks 23–26
-afterward; do not begin the deferred lifecycle-management or dashboard-UX
-milestones first.
+`prisma/dev.db`. Resume Task 23.3 by making direct AuthContext authoritative
+in requirements/design and adding its contract regression, then continue in the
+recorded commit order. Follow the remaining Tasks 23–26 afterward; do not begin
+the deferred lifecycle-management or dashboard-UX milestones first.
 
 ### Accepted live state
 
@@ -94,13 +94,13 @@ The original Tasks 1–21 were checked too early. Task 20.1 and the final
 checkpoint are reopened; Task 22 records the accepted regressions above. Complete
 these dependency-ordered waves before commit/merge or a new milestone:
 
-1. **Task 23 — Auth/session and audit closure:** authorize the remaining
-   participation route; amend requirements/design so direct AuthContext—not
-   injected identity headers—is authoritative; implement micro-pulse selection;
-   scope reused session-link auth to close/expiry; and emit the still-missing
-   schedule-change and member-addition audit records. Persisted logout/cookie
-   clearing, authenticated member-scoped team collection GET/POST and exports,
-   and team-bound session-detail reads are complete.
+1. **Task 23 — Auth/session and audit closure:** amend requirements/design so
+   direct AuthContext—not injected identity headers—is authoritative; implement
+   micro-pulse selection; scope reused session-link auth to close/expiry; and
+   emit the still-missing schedule-change and member-addition audit records.
+   Task 23.2 route authorization is complete: persisted logout/cookie clearing,
+   authenticated member-scoped team collection GET/POST and exports, team-bound
+   session-detail reads, and cookie-only participation are implemented.
 2. **Task 24 — Slack production closure:** authenticated pairing UI and actual
    unlink; actionable `/healthcheck`; cadence/delivery-window eligibility;
    scheduler closing reminders; persistent retry queue/drain; then redacted
@@ -127,7 +127,7 @@ slice stops being reviewable):
 2. `fix: authenticate team collection routes` — `/api/teams` GET/POST portion of Task 23.2 complete in this checkpoint.
 3. `fix: authorize team data exports` — export portion of Task 23.2 complete in this checkpoint.
 4. `fix: protect session detail reads` — session-detail GET portion of Task 23.2 complete in this checkpoint.
-5. `fix: replace participation header authentication` — participation and URL ownership portion of Task 23.2.
+5. `fix: replace participation header authentication` — participation and URL ownership portion of Task 23.2 complete in this checkpoint.
 6. `docs: make direct auth context authoritative` — requirements/design plus contract regression for Task 23.3.
 7. `feat: select weighted micro-pulse questions` — first half of Task 23.4.
 8. `fix: scope reused session-link authentication` — second half of Task 23.4.
@@ -139,10 +139,8 @@ and targeted validation. Do not wait for all of Task 23 to commit or leave a
 green slice uncommitted while beginning the next one.
 
 Current known blockers are implementation gaps, not merely missing manual proof:
-participation still trusts `x-user-id` and needs consistent URL ownership
-protection; micro-pulse and reused-close scoping are incomplete; schedule changes
-and member additions still omit required audit entries; pairing accepts caller
-memberId and unlink does not
+micro-pulse and reused-close scoping are incomplete; schedule changes and member
+additions still omit required audit entries; pairing accepts caller memberId and unlink does not
 delete; scheduler omits closing reminders and uses a request-local retry queue;
 required Playwright tests can skip through a nonexistent token endpoint and use
 unseeded/non-isolated data; the response MSW body remains stale; Turso selection
@@ -155,6 +153,11 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 
 ### Changes and validation already completed
 
+- Participation GET now authenticates exclusively from the persisted session
+  cookie, ignores `x-user-id`, authorizes requested-team membership, and delegates
+  privacy-aware counts to `ParticipationService`. Missing/cross-team sessions
+  share the same 404; foreign/nonexistent URL teams share the same 403; no score
+  or trend detail is returned.
 - Session-detail GET authenticates from the persisted session cookie, authorizes
   ordinary membership in the requested URL team, and resolves sessions through
   `SessionService.get(teamId, sessionId)`, which returns the same 404 for missing
@@ -190,12 +193,12 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 - Both live closes and scheduler ticks returned 200, all ten expected
   aggregates were verified, and the trends API correctly transitioned from the
   one-session threshold response to two-session data.
-- Latest validation: **121 test files / 1006 tests passed**,
+- Latest validation: **122 test files / 1009 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
   checkpoint preserves the accepted fixes; run `git status --short` before
-  starting the Task 23.2 participation authentication and URL-binding slice.
+  starting the Task 23.3 direct-AuthContext contract reconciliation slice.
 
 ---
 
@@ -324,7 +327,8 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1006 tests across 121 files**, including
+The Vitest suite now contains **1009 tests across 122 files**, including
+cookie-only, team/session-bound participation with privacy-safe payloads,
 cookie-authenticated, team-bound session-detail reads with non-leaking failures,
 requested-team-scoped CSV exports, persisted logout/session-cookie clearing,
 member-summary contracts, member
@@ -384,7 +388,7 @@ All stages must pass. Branch protection requires CI green before merge.
 - **`withAuth`**: Factory-created HOF wrapper that enforces auth on route handlers (401 if invalid)
 - **`authorizeTeamMember`**: Factory function verifying member belongs to requested team (403 if not)
 - **`authorizeDeliveryManager`**: Extends team membership check with delivery_manager role requirement
-- **Protected routes**: `/api/me/*`, `/api/teams` GET/POST, team exports, session details, responses, and core team settings/trends/member/session routes use cookie auth; Task 23.2 still covers participation GET and its URL ownership checks
+- **Protected routes**: `/api/me/*`, `/api/teams` GET/POST, team exports, session details, participation, responses, and core team settings/trends/member/session routes use cookie AuthContext with requested-resource ownership checks; Task 23.2 route authorization is complete
 - **Member management**: GET/POST/PATCH return a stable member-summary DTO; delivery managers can add, replace roles, and remove members with final-manager protection
 - **Slack identity**: Prisma-backed SlackIdentityLink lookup persists mappings, but authenticated pairing UI and truthful deletion/unlink remain Task 24.1 blockers
 - **Notification wiring**: Newly-opened prompts reach NotificationService and the production Slack sink; cadence/window eligibility, closing reminders, persistent retry storage, and later-tick draining remain Task 24 blockers
