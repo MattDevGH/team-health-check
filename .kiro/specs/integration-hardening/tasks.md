@@ -311,7 +311,7 @@ original checklist was marked done.
     - Verify submit/edit refresh, two closes, quiet-period materialisation, threshold transition, averages, counts, subjective distributions, and calculated movement
     - _Requirements: Integration 2.1, 3.3, 4.1–4.3, 5.1, 5.2, 5.4, 9.1; Original 3.4, 3.9, 4.9, 6.5, 19.2_
 
-- [ ] 23. Close auth and session-link contracts
+- [x] 23. Close auth and session-link contracts
   - [x] 23.1 Implement explicit logout/session invalidation with TDD
     - Invalidate the persisted UserSession and emit the clear-cookie header (`Max-Age=0`)
     - Cover authenticated logout, missing/invalid sessions, and cookie attributes
