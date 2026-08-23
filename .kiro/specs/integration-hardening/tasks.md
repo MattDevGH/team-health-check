@@ -318,8 +318,10 @@ original checklist was marked done.
     - _Requirements: 1.6_
 
   - [ ] 23.2 Finish auth and ownership checks across the team route surface with TDD
-    - Protect `/api/teams` GET/POST, team export, session-detail GET, and participation GET as appropriate
-    - Replace participation `x-user-id` trust with AuthContext and enforce URL team/session binding
+    - [x] Authenticate `/api/teams` GET/POST; scope listing and creator identity to AuthContext, with atomic one-team creation
+    - [ ] Authorize team export for the requested team
+    - [ ] Protect session-detail GET without leaking cross-team sessions
+    - [ ] Replace participation `x-user-id` trust and enforce URL team/session binding
     - Return consistent 401/403/404 responses without leaking cross-team resources
     - _Requirements: 2.1, 2.6, 9.1, 9.2, 9.3_
 

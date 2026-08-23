@@ -70,7 +70,6 @@ export function createInMemoryRepositories(): Repositories {
     return found?.teamId ?? null;
   });
 
-  const team = new InMemoryTeamRepository();
   const teamMember = new InMemoryTeamMemberRepository();
   const sessionLink = new InMemorySessionLinkRepository();
   const magicLink = new InMemoryMagicLinkRepository();
@@ -81,6 +80,7 @@ export function createInMemoryRepositories(): Repositories {
   const teamMemberRole = new InMemoryTeamMemberRoleRepository({
     removeMember: (memberId) => teamMember.remove(memberId),
   });
+  const team = new InMemoryTeamRepository({ teamMember, teamMemberRole, auditLog });
   const pairingCode = new InMemoryPairingCodeRepository();
   const userSession = new InMemoryUserSessionRepository();
   const pendingGenesis = new InMemoryPendingGenesisRepository();

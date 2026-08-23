@@ -25,9 +25,22 @@ import type {
   SlackIdentityLink,
 } from './entities';
 
+/** Complete team-creation aggregate persisted atomically by repository implementations. */
+export interface CreateTeamWithCreatorData {
+  team: { name: string; description?: string };
+  creator: { id: string; name: string; email?: string; role: string };
+  audit: {
+    changeType: string;
+    previousValue: string;
+    newValue: string;
+    userId: string;
+  };
+}
+
 /** Requirement 1.1: Team creation and management */
 export interface TeamRepository {
   create(data: { name: string; description?: string; privacyMode?: string; timezone?: string }): Promise<Team>;
+  createWithCreator(data: CreateTeamWithCreatorData): Promise<Team>;
   findById(id: string): Promise<Team | null>;
   update(id: string, data: Partial<Pick<Team, 'name' | 'description' | 'privacyMode' | 'archived' | 'slackDeliveryStart' | 'slackDeliveryEnd' | 'timezone' | 'preSessionRecipient'>>): Promise<Team>;
   list(): Promise<Team[]>;

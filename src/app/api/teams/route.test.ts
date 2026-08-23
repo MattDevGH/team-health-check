@@ -1,142 +1,202 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { POST, GET } from './route';
+import { NextRequest } from 'next/server';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-// Requirements: 1.1, 1.2, 20.1
+import { createGetAuthContext } from '@/lib/auth/with-auth';
+import { createContainer } from '@/lib/container';
+import type { Container } from '@/lib/container';
+import {
+  createInMemoryRepositories,
+  type Repositories,
+} from '@/lib/repositories';
 
-describe('POST /api/teams', () => {
-  beforeEach(() => {
-    // Reset module-level container between tests by re-importing
-    // Since route.ts uses module-level state, we test the handler directly
+import { createTeamRouteHandlers } from './route-handlers';
+
+let repos: Repositories;
+let container: Container;
+let GET: ReturnType<typeof createTeamRouteHandlers>['GET'];
+let POST: ReturnType<typeof createTeamRouteHandlers>['POST'];
+
+beforeEach(() => {
+  repos = createInMemoryRepositories();
+  container = createContainer(repos);
+  ({ GET, POST } = createTeamRouteHandlers({
+    getAuthContext: createGetAuthContext({ userSessionRepo: repos.userSession }),
+    teamService: container.team,
+  }));
+});
+
+async function createSession(
+  memberId = crypto.randomUUID(),
+  expired = false,
+): Promise<string> {
+  const token = `session-${crypto.randomUUID()}`;
+  await repos.userSession.create({
+    memberId,
+    token,
+    expiresAt: new Date(Date.now() + (expired ? -60_000 : 60_000)),
+  });
+  return token;
+}
+
+function request(method: 'GET' | 'POST', token?: string, body?: string): NextRequest {
+  return new NextRequest('http://localhost/api/teams', {
+    method,
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { cookie: `session=${token}` } : {}),
+    },
+    body,
+  });
+}
+
+describe('GET /api/teams', () => {
+  it.each([
+    ['missing', undefined],
+    ['unknown', 'unknown-token'],
+    ['expired', 'expired-token'],
+  ])('returns 401 for a %s session', async (kind, suppliedToken) => {
+    const token = kind === 'expired'
+      ? await createSession(crypto.randomUUID(), true)
+      : suppliedToken;
+
+    const response = await GET(request('GET', token));
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+    });
   });
 
-  it('creates a team with valid name and returns 201', async () => {
-    const request = new Request('http://localhost/api/teams', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'My Team' }),
-    });
+  it('returns only the authenticated member team', async () => {
+    const memberId = crypto.randomUUID();
+    const ownTeam = await container.team.create('Own Team', undefined, memberId);
+    const foreignTeam = await container.team.create(
+      'Foreign Team',
+      undefined,
+      crypto.randomUUID(),
+    );
+    const token = await createSession(memberId);
 
-    const response = await POST(request);
-    expect(response.status).toBe(201);
+    const response = await GET(request('GET', token));
+    const body: Array<{ id: string; name: string }> = await response.json();
 
-    const body = await response.json();
-    expect(body.name).toBe('My Team');
-    expect(body.id).toBeDefined();
+    expect(response.status).toBe(200);
+    expect(body).toEqual([expect.objectContaining({ id: ownTeam.id, name: 'Own Team' })]);
+    expect(body.some(({ id }) => id === foreignTeam.id)).toBe(false);
   });
 
-  it('creates a team with name and description', async () => {
-    const request = new Request('http://localhost/api/teams', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Dev Team', description: 'A great team' }),
-    });
+  it('returns an empty list for an authenticated identity without membership', async () => {
+    const token = await createSession();
 
-    const response = await POST(request);
-    expect(response.status).toBe(201);
+    const response = await GET(request('GET', token));
 
-    const body = await response.json();
-    expect(body.name).toBe('Dev Team');
-    expect(body.description).toBe('A great team');
-  });
-
-  it('rejects empty team name with 400 validation error', async () => {
-    const request = new Request('http://localhost/api/teams', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: '' }),
-    });
-
-    const response = await POST(request);
-    expect(response.status).toBe(400);
-
-    const body = await response.json();
-    expect(body.error.code).toBe('VALIDATION_ERROR');
-    expect(body.error.errors).toBeDefined();
-    expect(body.error.errors.length).toBeGreaterThan(0);
-  });
-
-  it('rejects whitespace-only team name with 400 validation error', async () => {
-    const request = new Request('http://localhost/api/teams', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: '   ' }),
-    });
-
-    const response = await POST(request);
-    expect(response.status).toBe(400);
-
-    const body = await response.json();
-    expect(body.error.code).toBe('VALIDATION_ERROR');
-  });
-
-  it('rejects name exceeding 100 characters with 400', async () => {
-    const request = new Request('http://localhost/api/teams', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'a'.repeat(101) }),
-    });
-
-    const response = await POST(request);
-    expect(response.status).toBe(400);
-
-    const body = await response.json();
-    expect(body.error.code).toBe('VALIDATION_ERROR');
-  });
-
-  it('rejects description exceeding 500 characters with 400', async () => {
-    const request = new Request('http://localhost/api/teams', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Valid Team', description: 'x'.repeat(501) }),
-    });
-
-    const response = await POST(request);
-    expect(response.status).toBe(400);
-
-    const body = await response.json();
-    expect(body.error.code).toBe('VALIDATION_ERROR');
-  });
-
-  it('rejects missing body with 500 (invalid JSON)', async () => {
-    const request = new Request('http://localhost/api/teams', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: 'not json',
-    });
-
-    const response = await POST(request);
-    // Malformed JSON should result in 500 (caught by withErrorHandling)
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual([]);
   });
 });
 
-describe('GET /api/teams', () => {
-  it('returns an array of teams', async () => {
-    const request = new Request('http://localhost/api/teams', { method: 'GET' });
+describe('POST /api/teams', () => {
+  it('returns 401 before reading an unauthenticated body', async () => {
+    const response = await POST(request('POST', undefined, 'not json'));
 
-    const response = await GET(request);
-    expect(response.status).toBe(200);
-
-    const body = await response.json();
-    expect(Array.isArray(body)).toBe(true);
+    expect(response.status).toBe(401);
+    await expect(repos.team.list()).resolves.toEqual([]);
   });
 
-  it('returns teams that were previously created', async () => {
-    // Create a team first
-    const createRequest = new Request('http://localhost/api/teams', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Listed Team' }),
+  it('derives creator membership, role, and audit identity from the cookie', async () => {
+    const memberId = crypto.randomUUID();
+    const token = await createSession(memberId);
+    const createRequest = request(
+      'POST',
+      token,
+      JSON.stringify({
+        name: 'Authenticated Team',
+        description: 'Created safely',
+        creatorId: 'body-attacker',
+      }),
+    );
+    createRequest.headers.set('x-user-id', 'header-attacker');
+
+    const response = await POST(createRequest);
+    const team: { id: string } = await response.json();
+
+    expect(response.status).toBe(201);
+    await expect(repos.teamMember.findById(memberId)).resolves.toMatchObject({
+      id: memberId,
+      teamId: team.id,
     });
-    await POST(createRequest);
+    await expect(
+      repos.teamMemberRole.findByMemberAndTeam(memberId, team.id),
+    ).resolves.toEqual([expect.objectContaining({ role: 'delivery_manager' })]);
+    await expect(repos.auditLog.findByTeamId(team.id)).resolves.toEqual([
+      expect.objectContaining({ changeType: 'team_created', userId: memberId }),
+    ]);
+  });
 
-    // List teams
-    const listRequest = new Request('http://localhost/api/teams', { method: 'GET' });
-    const response = await GET(listRequest);
-    expect(response.status).toBe(200);
+  it('returns 409 without creating an orphan team for an existing member', async () => {
+    const memberId = crypto.randomUUID();
+    const existing = await container.team.create('Existing Team', undefined, memberId);
+    const token = await createSession(memberId);
 
-    const body = await response.json();
-    expect(body.length).toBeGreaterThan(0);
-    expect(body.some((t: { name: string }) => t.name === 'Listed Team')).toBe(true);
+    const response = await POST(
+      request('POST', token, JSON.stringify({ name: 'Second Team' })),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(repos.team.list()).resolves.toHaveLength(1);
+    await expect(repos.teamMember.findById(memberId)).resolves.toMatchObject({
+      teamId: existing.id,
+    });
+  });
+
+  it('atomically creates one complete graph for concurrent requests by one member', async () => {
+    const memberId = crypto.randomUUID();
+    const token = await createSession(memberId);
+
+    const responses = await Promise.all([
+      POST(request('POST', token, JSON.stringify({ name: 'First Team' }))),
+      POST(request('POST', token, JSON.stringify({ name: 'Second Team' }))),
+    ]);
+
+    expect(responses.map(({ status }) => status).sort()).toEqual([201, 409]);
+    const conflictResponse = responses.find(({ status }) => status === 409);
+    await expect(conflictResponse?.json()).resolves.toMatchObject({
+      error: { code: 'CONFLICT' },
+    });
+
+    const teams = await repos.team.list();
+    expect(teams).toHaveLength(1);
+    const [team] = teams;
+    await expect(repos.teamMember.findById(memberId)).resolves.toMatchObject({
+      teamId: team.id,
+    });
+    await expect(
+      repos.teamMemberRole.findByMemberAndTeam(memberId, team.id),
+    ).resolves.toEqual([expect.objectContaining({ role: 'delivery_manager' })]);
+    await expect(repos.auditLog.findByTeamId(team.id)).resolves.toEqual([
+      expect.objectContaining({ changeType: 'team_created', userId: memberId }),
+    ]);
+  });
+
+  it.each([
+    ['empty name', { name: '' }],
+    ['long description', { name: 'Valid Team', description: 'x'.repeat(501) }],
+  ])('returns 400 for %s with valid authentication', async (_case, body) => {
+    const token = await createSession();
+
+    const response = await POST(request('POST', token, JSON.stringify(body)));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'VALIDATION_ERROR' },
+    });
+  });
+
+  it('retains the generic error contract for authenticated malformed JSON', async () => {
+    const token = await createSession();
+
+    const response = await POST(request('POST', token, 'not json'));
+
+    expect(response.status).toBe(500);
   });
 });

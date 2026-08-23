@@ -25,6 +25,10 @@ export class InMemoryAuditLogRepository implements AuditLogRepository {
     return logEntry;
   }
 
+  remove(id: string): void {
+    this.store.delete(id);
+  }
+
   async findByTeamId(
     teamId: string,
     pagination?: { cursor?: string; limit?: number }

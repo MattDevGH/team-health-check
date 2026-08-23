@@ -71,6 +71,35 @@ describe('TeamService.create', () => {
     expect(logs[0].userId).toBe('creator-1');
     expect(logs[0].newValue).toContain('Audit Team');
   });
+
+  it('atomically allows only one team for concurrent creation by one creator', async () => {
+    const creatorId = 'concurrent-creator';
+
+    const results = await Promise.allSettled([
+      teamService.create('First Team', undefined, creatorId),
+      teamService.create('Second Team', undefined, creatorId),
+    ]);
+
+    expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toBeInstanceOf(ConflictError);
+
+    const teams = await repos.team.list();
+    expect(teams).toHaveLength(1);
+    const [team] = teams;
+    await expect(repos.teamMember.findById(creatorId)).resolves.toMatchObject({
+      teamId: team.id,
+    });
+    await expect(
+      repos.teamMemberRole.findByMemberAndTeam(creatorId, team.id),
+    ).resolves.toEqual([expect.objectContaining({ role: 'delivery_manager' })]);
+    await expect(repos.auditLog.findByTeamId(team.id)).resolves.toEqual([
+      expect.objectContaining({ changeType: 'team_created', userId: creatorId }),
+    ]);
+  });
 });
 
 describe('TeamService.addMember', () => {
@@ -403,22 +432,32 @@ describe('TeamService.listTeams', () => {
     });
   });
 
-  it('returns all created teams', async () => {
-    await teamService.create('Team Alpha', 'First team', 'creator-1');
+  it('returns only the authenticated member team', async () => {
+    const ownTeam = await teamService.create('Team Alpha', 'First team', 'creator-1');
     await teamService.create('Team Beta', 'Second team', 'creator-2');
-    await teamService.create('Team Gamma', undefined, 'creator-3');
 
-    const teams = await teamService.listTeams();
+    const teams = await teamService.listTeams('creator-1');
 
-    expect(teams).toHaveLength(3);
-    expect(teams.map(t => t.name)).toContain('Team Alpha');
-    expect(teams.map(t => t.name)).toContain('Team Beta');
-    expect(teams.map(t => t.name)).toContain('Team Gamma');
+    expect(teams).toEqual([ownTeam]);
   });
 
-  it('returns empty array when no teams exist', async () => {
-    const teams = await teamService.listTeams();
+  it('returns an empty array when the identity has no team membership', async () => {
+    await teamService.create('Team Alpha', undefined, 'creator-1');
 
-    expect(teams).toEqual([]);
+    await expect(teamService.listTeams('unknown-member')).resolves.toEqual([]);
+  });
+
+  it('rejects an existing member before creating an orphan team', async () => {
+    const existing = await teamService.create('Team Alpha', undefined, 'creator-1');
+    const before = await repos.team.list();
+
+    await expect(
+      teamService.create('Team Beta', undefined, 'creator-1'),
+    ).rejects.toThrow(ConflictError);
+
+    await expect(repos.team.list()).resolves.toHaveLength(before.length);
+    await expect(repos.teamMember.findById('creator-1')).resolves.toMatchObject({
+      teamId: existing.id,
+    });
   });
 });

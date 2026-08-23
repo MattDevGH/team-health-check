@@ -8,6 +8,10 @@ export class InMemoryTeamMemberRepository implements TeamMemberRepository {
   async create(data: { id?: string; teamId: string; name: string; email?: string }): Promise<TeamMember> {
     const email = data.email ?? null;
 
+    if (data.id && this.store.has(data.id)) {
+      throw new ConflictError('Team member already belongs to a team');
+    }
+
     // Enforce uniqueness on (teamId, name, email)
     const members = Array.from(this.store.values());
     const duplicate = members.find(
@@ -33,6 +37,10 @@ export class InMemoryTeamMemberRepository implements TeamMemberRepository {
     };
     this.store.set(member.id, member);
     return member;
+  }
+
+  has(id: string): boolean {
+    return this.store.has(id);
   }
 
   async findById(id: string): Promise<TeamMember | null> {

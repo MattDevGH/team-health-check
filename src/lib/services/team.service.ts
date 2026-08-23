@@ -32,7 +32,7 @@ export interface TeamService {
   removeMember(teamId: string, memberId: string, userId: string): Promise<void>;
   updateMemberRole(teamId: string, memberId: string, role: TeamRole, actorId: string): Promise<MemberSummary>;
   getMembers(teamId: string): Promise<MemberSummary[]>;
-  listTeams(): Promise<Team[]>;
+  listTeams(memberId: string): Promise<Team[]>;
   archive(teamId: string, userId: string): Promise<void>;
   unarchive(teamId: string, userId: string): Promise<void>;
 }
@@ -53,36 +53,23 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
       ]);
     }
 
-    const team = await teamRepo.create({
-      name: trimmedName,
-      description: description ?? undefined,
+    return teamRepo.createWithCreator({
+      team: {
+        name: trimmedName,
+        description: description ?? undefined,
+      },
+      creator: {
+        id: creatorId,
+        name: creatorId,
+        role: 'delivery_manager',
+      },
+      audit: {
+        changeType: 'team_created',
+        previousValue: '',
+        newValue: JSON.stringify({ name: trimmedName, description }),
+        userId: creatorId,
+      },
     });
-
-    // Create team member record for the creator
-    await teamMemberRepo.create({
-      id: creatorId,
-      teamId: team.id,
-      name: creatorId,
-      email: undefined,
-    });
-
-    // Assign delivery_manager role to creator
-    await teamMemberRoleRepo.assign({
-      memberId: creatorId,
-      teamId: team.id,
-      role: 'delivery_manager',
-    });
-
-    // Log audit entry
-    await auditLogRepo.create({
-      teamId: team.id,
-      changeType: 'team_created',
-      previousValue: '',
-      newValue: JSON.stringify({ name: trimmedName, description }),
-      userId: creatorId,
-    });
-
-    return team;
   }
 
   async function addMember(teamId: string, name: string, email?: string): Promise<MemberSummary> {
@@ -211,9 +198,13 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
     ));
   }
 
-  /** List all teams */
-  async function listTeams(): Promise<Team[]> {
-    return teamRepo.list();
+  /** Return only the team containing the authenticated member. */
+  async function listTeams(memberId: string): Promise<Team[]> {
+    const member = await teamMemberRepo.findById(memberId);
+    if (!member) return [];
+
+    const team = await teamRepo.findById(member.teamId);
+    return team ? [team] : [];
   }
 
   /** Find a team by ID */

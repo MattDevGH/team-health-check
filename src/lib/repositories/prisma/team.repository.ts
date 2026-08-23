@@ -1,7 +1,7 @@
 import type { PrismaClient, Team as PrismaTeam } from '@/generated/prisma';
+import { ConflictError, NotFoundError } from '../../errors';
 import type { Team } from '../entities';
-import type { TeamRepository } from '../types';
-import { NotFoundError } from '../../errors';
+import type { CreateTeamWithCreatorData, TeamRepository } from '../types';
 
 /**
  * Prisma-backed implementation of TeamRepository.
@@ -25,6 +25,46 @@ export class PrismaTeamRepository implements TeamRepository {
       },
     });
     return this.mapToEntity(record);
+  }
+
+  async createWithCreator(data: CreateTeamWithCreatorData): Promise<Team> {
+    try {
+      const record = await this.prisma.$transaction(async (tx) => {
+        const team = await tx.team.create({
+          data: {
+            name: data.team.name,
+            description: data.team.description ?? null,
+            privacyMode: 'anonymous',
+            timezone: 'Europe/London',
+          },
+        });
+        await tx.teamMember.create({
+          data: {
+            id: data.creator.id,
+            teamId: team.id,
+            name: data.creator.name,
+            email: data.creator.email ?? null,
+          },
+        });
+        await tx.teamMemberRole.create({
+          data: {
+            memberId: data.creator.id,
+            teamId: team.id,
+            role: data.creator.role,
+          },
+        });
+        await tx.auditLogEntry.create({
+          data: { teamId: team.id, ...data.audit },
+        });
+        return team;
+      });
+      return this.mapToEntity(record);
+    } catch (error: unknown) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictError('Team member already belongs to a team');
+      }
+      throw error;
+    }
   }
 
   async findById(id: string): Promise<Team | null> {
@@ -65,6 +105,15 @@ export class PrismaTeamRepository implements TeamRepository {
       orderBy: { createdAt: 'desc' },
     });
     return records.map((r) => this.mapToEntity(r));
+  }
+
+  private isUniqueConstraintError(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code: string }).code === 'P2002'
+    );
   }
 
   private mapToEntity(record: PrismaTeam): Team {
