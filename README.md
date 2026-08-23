@@ -29,17 +29,44 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 `feat/<feature-name>` branches, then merge through a pull request only after CI
 and relevant acceptance validation pass.
 
-Integration hardening is currently on `feat/integration-hardening`, pending
-real browser and Slack acceptance validation and a pull request. Manual browser
-validation exposed a live settings-contract issue where member responses omitted
-role and Slack-link relations and could crash team settings. The completed
-member-management fix now returns stable member summaries, assigns explicit
-roles, enforces authenticated delivery-manager role changes/removals with
-final-manager protection, and visibly renders structured mutation errors.
-Hands-on validation is still in progress and must resume with a fresh magic link
-because the previous token was consumed. Playwright happy paths still require
-hardening, so `master` remains blocked until browser/Slack acceptance and CI are
-green; do not merge or push this branch directly to `master`.
+Commits follow one green, testable vertical slice: write the failing test, make
+the minimal implementation pass, update README/AI context when behavior,
+structure, coverage, or conventions change, validate, and commit before starting
+the next slice. A small handful of focused files and usually fewer than 200–300
+changed lines is a reviewability guideline, not a quota. The current browser
+acceptance checkpoint is an explicitly approved one-off consolidation exception;
+one-behavior cadence resumes with Task 23.
+
+Integration hardening remains open on `feat/integration-hardening`; do not
+start the lifecycle-management milestone or merge directly to `master` yet.
+Manual browser acceptance through two complete health-check sessions has passed,
+including validated/audited settings persistence, editable feedback,
+authenticated close, materialisation, closed-link enforcement, and two-session
+dashboard data. The accepted fixes are preserved in the approved one-off
+consolidation checkpoint.
+
+A 2026-08-23 closure audit corrected the earlier “all implemented” status. The
+remaining merge blockers are tracked as Tasks 23–26 in
+`.kiro/specs/integration-hardening/tasks.md`:
+
+1. **Auth/session and audit contracts:** logout invalidation, remaining
+   team-route auth and ownership checks, direct AuthContext documentation,
+   micro-pulse selection, reused-session close scoping, and the still-missing
+   schedule-change and member-addition audit emissions.
+2. **Slack production behavior:** secure pairing and real unlink, actionable
+   command flow, cadence/delivery-window eligibility, closing reminders,
+   persistent retry processing, and disposable-workspace acceptance.
+3. **Automated evidence:** isolated/seeded E2E data, secure test-email capture,
+   non-skipping browser-first Playwright flows, broader axe coverage, corrected
+   MSW identity contracts, executable local libSQL repository evidence, and CI
+   skip/isolation enforcement.
+4. **Final closure:** synchronize requirements/design/tasks/docs, run all local
+   and remote gates, commit/push the accepted work, and merge through a green PR.
+
+Session lifecycle management and the dashboard UX observations are explicitly
+deferred follow-up milestones, not integration-hardening merge blockers. The
+branch stays open until the closure tasks, real Slack evidence, non-skipping
+Playwright suite, build, CI, and documentation are all complete.
 
 ## Environment Variables
 
@@ -91,15 +118,17 @@ Under **OAuth & Permissions**, add these Bot Token Scopes:
 1. Click **Install to Workspace** and authorise the app
 2. Copy the **Bot User OAuth Token** (`xoxb-...`) — set it as `SLACK_BOT_TOKEN` in your `.env`
 
-### 4. Configure Event Subscriptions
+### 4. Configure the Events Endpoint
 
 1. Under **Event Subscriptions**, toggle events **On**
 2. Set the Request URL to: `https://your-domain.com/api/slack/events`
-   - Slack will send a verification challenge — the app handles it automatically
-   - For local development, use a tunnel like [ngrok](https://ngrok.com): `ngrok http 3000`
-3. Under **Subscribe to bot events**, add:
-   - `app_mention` — respond when the bot is @mentioned
-   - `message.im` — handle direct messages to the bot
+   - Slack's verification challenge is implemented
+   - For local development, use an HTTPS tunnel such as `ngrok http 3000`
+
+The current integration does **not** implement conversational behavior for
+`app_mention` or `message.im`; those callbacks are acknowledged only. Do not add
+those subscriptions as a functional setup requirement unless that deferred Slack
+enhancement is implemented.
 
 ### 5. Configure Interactivity
 
@@ -116,13 +145,21 @@ Under **OAuth & Permissions**, add these Bot Token Scopes:
    - **Short Description**: "Respond to the current health check"
    - **Usage Hint**: `[connect]`
 
-### 7. Link Team Members
+### 7. Account Linking — Integration Closure Status
 
-Once the Slack app is installed, team members link their accounts:
+`/healthcheck connect` generates a short-lived pairing code and the database
+identity repository is implemented. The full user flow is **not yet
+production-ready**: authenticated web code entry is missing, the current pairing
+route accepts a caller-supplied member ID, and unlink currently reports success
+without deleting the persisted link. Integration-hardening Task 24.1 must close
+these gaps before real-workspace acceptance or deployment.
 
-1. In Slack, type `/healthcheck connect` — the bot responds with a 6-digit pairing code
-2. Enter the code in the web interface (Profile → Slack section) within 10 minutes
-3. Once linked, the member receives health check prompts via Slack DM
+The intended accepted flow is:
+
+1. The member runs `/healthcheck connect` and receives an ephemeral code
+2. The authenticated member enters the code in the web profile
+3. The link survives reload/restart and Slack prompts route to that member
+4. Unlink deletes the persisted mapping before the UI reports success
 
 ### 8. Schedule Health Checks (Optional)
 
@@ -254,31 +291,49 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (957 tests across the Vitest suite)
+npm test            # unit + property tests (976 tests across 117 Vitest files)
 npm run test:watch  # watch mode for TDD (unit only)
-npx playwright test # e2e browser tests (happy-path + accessibility)
+npm run test:e2e    # Playwright browser tests
+npm run test:a11y   # Playwright axe tests
 ```
 
 | Layer | Purpose |
 |-------|---------|
 | Unit tests | Service logic with in-memory repository fakes |
-| Property tests | 12 formal correctness invariants (fast-check, 100 iterations each) |
-| Integration tests | Full flows against real SQLite plus focused in-memory request→verify→genesis chain coverage |
-| Accessibility tests | WCAG 2.1 AA compliance (jest-axe + Playwright axe-core) |
-| E2E tests | Browser user flows — happy path, cookie persistence, accessibility; happy paths still require hardening before merge |
+| Property tests | 12 formal correctness invariants (fast-check) |
+| Integration tests | Focused service/route flows; closure work adds executable libSQL repository evidence |
+| Accessibility tests | WCAG checks through jest-axe and Playwright axe-core |
+| E2E tests | Browser user flows; required happy paths are currently non-credible because missing test-token capture can skip them |
 
-The focused genesis regression suite covers non-mutating pending-token verification, the single CAS claim during genesis, one-success/second-conflict behavior, submitted team details, route validation plus session cookie creation, and safe rendering of structured or malformed API errors.
+Manual browser acceptance has passed for team settings, editable feedback,
+optional trend clearing, two complete session lifecycles, close/materialisation,
+closed links, and the one-to-two-session dashboard transition. This evidence does
+not replace integration Requirement 10: Playwright must use isolated seeded
+data, a secure test email interceptor, browser-managed cookies, and required
+non-skipping assertions before merge.
+
+The focused genesis regression suite covers non-mutating pending-token
+verification, the single CAS claim during genesis, one-success/second-conflict
+behavior, submitted team details, route validation plus session cookie creation,
+and safe rendering of structured or malformed API errors.
 
 ## CI/CD
 
-GitHub Actions pipeline with two jobs:
+GitHub Actions defines three PR gates:
 
-1. **`ci`** — Install → Lint → Type Check → Unit+Property Tests (957 tests) → Build
-2. **`e2e`** — Install → Build → Playwright E2E Tests (depends on `ci` passing)
+1. **`ci`** — Install → Prisma generate/schema push → Lint → Type Check → Vitest → Build
+2. **`e2e`** — Install → Prisma setup → Build → Chromium install → Playwright, after `ci`
+3. **`requirement-coverage`** — Require requirement references in the PR body
 
-A **requirement coverage** check also runs on PRs to verify requirement IDs are referenced.
+The closure audit found that `DATABASE_URL=file:./test.db` is not yet honored by
+all Prisma runtime/config paths and the E2E job does not seed canonical
+questions. The current happy paths can call `test.skip` when a nonexistent token
+capture endpoint is unavailable. A green job is therefore not sufficient until
+Tasks 25.1, 25.2, and 25.6 make isolation, seeding, and zero required skips
+enforceable.
 
-All stages must pass before merge to master.
+All three jobs and the uploaded Playwright evidence must pass before merge to
+`master`.
 
 ## Working with AI assistants
 
@@ -294,10 +349,11 @@ Feature specifications at `.kiro/specs/`:
 - Technical design (architecture, data models, 34 correctness properties)
 - Task list (28 groups, ~120 sub-tasks)
 
-**`integration-hardening/`** — Integration wiring spec (completed):
-- Requirements (13 covering auth, notification wiring, Turso, E2E)
-- Technical design (12 correctness properties, auth helper patterns)
-- Task list (21 groups, 49 leaf tasks — all implemented)
+**`integration-hardening/`** — Integration wiring spec (**open**):
+- Requirements (13 covering auth, notification wiring, Turso, E2E, and contracts)
+- Technical design (12 correctness properties and integration patterns)
+- Tasks 1–21 record the original implementation pass; Task 22 records completed browser regressions
+- Tasks 23–26 are the authoritative closure plan for auth/session, Slack, automated evidence, documentation, CI, and PR completion
 
 ## Known Issues & Future Work
 
@@ -322,5 +378,14 @@ Feature specifications at `.kiro/specs/`:
 
 ### Testing gaps
 
-- **No end-to-end Slack test** — Slack integration is unit-tested (signature verification, payload parsing, retry logic, identity resolution) but never tested against a real Slack workspace.
-- **No load/performance testing** — SQLite/Turso is fine for small teams but untested under concurrent access patterns.
+- **Playwright closure is incomplete** — required happy paths can skip, use stale
+  contracts/manual cookies, and share non-isolated unseeded data. Tasks 25.1–25.3
+  replace them with deterministic browser-first and accessibility evidence.
+- **No real-workspace Slack acceptance** — low-level behavior is automated, but
+  account linking/unlink, prompts, interactions, reminders, and durable retry
+  still need implementation closure plus a disposable-workspace pass.
+- **No executable libSQL repository proof** — client selection exists, but Task
+  25.5 must execute representative repository behavior through the local libSQL
+  adapter.
+- **No load/performance testing** — explicitly deferred beyond integration
+  hardening; SQLite/Turso remains untested under concurrent load.

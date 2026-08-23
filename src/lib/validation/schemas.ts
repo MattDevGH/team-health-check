@@ -42,9 +42,19 @@ export const scheduleSchema = z.object({
   timezone: z.string().default('Europe/London'),
 });
 
+const deliveryTimeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+  .or(z.literal(''))
+  .transform((value) => value || null)
+  .optional();
+
 export const updateTeamSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
+  privacyMode: z.enum(['anonymous', 'attributed']).optional(),
+  slackDeliveryStart: deliveryTimeSchema,
+  slackDeliveryEnd: deliveryTimeSchema,
 });
 
 export type CreateTeamInput = z.infer<typeof createTeamSchema>;

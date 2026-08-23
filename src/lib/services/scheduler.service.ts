@@ -87,7 +87,7 @@ export function createSchedulerService(deps: SchedulerServiceDeps) {
 
       // Check if it's time to close an open session
       if (currentSession && day === schedule.closeDay && time === schedule.closeTime) {
-        await sessionService.close(currentSession.id);
+        await sessionService.close(team.id, currentSession.id);
       }
 
       // Check if it's time to open (and no session is currently open)

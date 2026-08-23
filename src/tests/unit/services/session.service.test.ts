@@ -104,7 +104,7 @@ describe('SessionService.close', () => {
   it('sets status to "closed" and records actualCloseAt on an open session', async () => {
     const session = await sessionService.open('team-1', 'user-1');
 
-    await sessionService.close(session.id, 'user-1');
+    await sessionService.close('team-1', session.id, 'user-1');
 
     const updated = await repos.session.findById(session.id);
     expect(updated!.status).toBe('closed');
@@ -115,16 +115,28 @@ describe('SessionService.close', () => {
   it('throws ConflictError when closing an already-closed session', async () => {
     const session = await sessionService.open('team-1', 'user-1');
 
-    await sessionService.close(session.id, 'user-1');
+    await sessionService.close('team-1', session.id, 'user-1');
 
-    await expect(sessionService.close(session.id, 'user-1')).rejects.toThrow(ConflictError);
-    await expect(sessionService.close(session.id, 'user-1')).rejects.toThrow(
+    await expect(sessionService.close('team-1', session.id, 'user-1')).rejects.toThrow(ConflictError);
+    await expect(sessionService.close('team-1', session.id, 'user-1')).rejects.toThrow(
       /already closed/i
     );
   });
 
   it('throws NotFoundError when closing a non-existent session', async () => {
-    await expect(sessionService.close('non-existent-id', 'user-1')).rejects.toThrow(NotFoundError);
+    await expect(
+      sessionService.close('team-1', 'non-existent-id', 'user-1'),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it('does not close a session belonging to a different team', async () => {
+    const session = await sessionService.open('team-1', 'user-1');
+
+    await expect(
+      sessionService.close('team-2', session.id, 'user-2'),
+    ).rejects.toThrow(NotFoundError);
+
+    expect(await repos.session.findById(session.id)).toMatchObject({ status: 'open' });
   });
 });
 

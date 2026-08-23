@@ -9,8 +9,8 @@ import { useState } from 'react';
 
 interface SlackDeliverySectionProps {
   teamId: string;
-  deliveryStart: string;
-  deliveryEnd: string;
+  deliveryStart: string | null;
+  deliveryEnd: string | null;
   onUpdated: (start: string, end: string) => void;
 }
 
@@ -20,13 +20,15 @@ export function SlackDeliverySection({
   deliveryEnd,
   onUpdated,
 }: SlackDeliverySectionProps) {
-  const [start, setStart] = useState(deliveryStart);
-  const [end, setEnd] = useState(deliveryEnd);
+  const [start, setStart] = useState(deliveryStart ?? '');
+  const [end, setEnd] = useState(deliveryEnd ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
 
   async function handleSave() {
     setError('');
+    setSaved(false);
     setSaving(true);
 
     try {
@@ -44,6 +46,7 @@ export function SlackDeliverySection({
       }
 
       onUpdated(start, end);
+      setSaved(true);
     } catch {
       setError('Network error');
     }
@@ -66,7 +69,7 @@ export function SlackDeliverySection({
             id="delivery-start"
             type="time"
             value={start}
-            onChange={(e) => setStart(e.target.value)}
+            onChange={(event) => { setStart(event.target.value); setSaved(false); }}
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
           />
         </div>
@@ -79,13 +82,14 @@ export function SlackDeliverySection({
             id="delivery-end"
             type="time"
             value={end}
-            onChange={(e) => setEnd(e.target.value)}
+            onChange={(event) => { setEnd(event.target.value); setSaved(false); }}
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
           />
         </div>
       </div>
 
       {error && <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>}
+      {saved && <p className="mt-2 text-sm text-green-700" role="status">Delivery window saved.</p>}
 
       <button
         type="button"

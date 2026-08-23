@@ -113,12 +113,12 @@ describe('Session Link Landing Page', () => {
         expect(screen.getByText('Delivering Value')).toBeInTheDocument();
       });
 
-      // Each question should have a trend group with 3 options
-      const trendGroups = screen.getAllByRole('radiogroup', { name: /trend/i });
+      // Each question should have an optional trend group with 3 toggle buttons.
+      const trendGroups = screen.getAllByRole('group', { name: 'Optional trend' });
       expect(trendGroups.length).toBe(5);
 
-      const firstGroupRadios = trendGroups[0].querySelectorAll('input[type="radio"]');
-      expect(firstGroupRadios.length).toBe(3);
+      const firstGroupButtons = trendGroups[0].querySelectorAll('button[aria-pressed]');
+      expect(firstGroupButtons.length).toBe(3);
     });
   });
 
@@ -187,11 +187,9 @@ describe('Session Link Landing Page', () => {
         expect(screen.getByText('Delivering Value')).toBeInTheDocument();
       });
 
-      // The trend indicator for Delivering Value should show 'improving' as selected
-      const dvTrendGroup = screen.getByRole('radiogroup', { name: 'Delivering Value trend' });
-      const selectedTrend = dvTrendGroup.querySelector('input[value="improving"]') as HTMLInputElement | null;
-      expect(selectedTrend).not.toBeNull();
-      expect(selectedTrend!.checked).toBe(true);
+      // The trend indicator for Delivering Value should show Improving as selected.
+      const selectedTrend = screen.getAllByRole('button', { name: 'Improving' })[0];
+      expect(selectedTrend).toHaveAttribute('aria-pressed', 'true');
     });
   });
 });

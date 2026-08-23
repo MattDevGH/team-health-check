@@ -44,8 +44,15 @@ export function FeedbackForm({
   }, []);
 
   const setTrend = useCallback((questionId: string, trendIndicator: TrendIndicator) => {
-    setResponses((prev) =>
-      prev.map((r) => (r.questionId === questionId ? { ...r, trendIndicator } : r))
+    setResponses((previous) =>
+      previous.map((response) => response.questionId === questionId
+        ? {
+            ...response,
+            trendIndicator: response.trendIndicator === trendIndicator
+              ? undefined
+              : trendIndicator,
+          }
+        : response)
     );
   }, []);
 
@@ -144,39 +151,37 @@ export function FeedbackForm({
 
               {/* Trend indicator (optional) */}
               <div
-                role="radiogroup"
-                aria-label={`${question.title} trend`}
+                role="group"
+                aria-label="Optional trend"
                 className="mb-2"
               >
                 <span className="text-sm font-medium text-gray-700 block mb-2">
                   Trend <span className="text-gray-400 font-normal">(optional)</span>
                 </span>
                 <div className="flex flex-wrap gap-2">
-                  {(['improving', 'stable', 'declining'] as const).map((trend) => (
-                    <label
-                      key={trend}
-                      className={`
-                        relative flex items-center px-3 py-1.5
-                        rounded-full border cursor-pointer text-sm
-                        transition-colors
-                        ${response?.trendIndicator === trend
-                          ? 'border-blue-600 bg-blue-50 text-blue-700'
-                          : 'border-gray-300 bg-white text-gray-600 hover:border-blue-400'
-                        }
-                      `}
-                    >
-                      <input
-                        type="radio"
-                        name={`trend-${question.id}`}
-                        value={trend}
-                        checked={response?.trendIndicator === trend}
-                        onChange={() => setTrend(question.id, trend)}
-                        aria-label={trend.charAt(0).toUpperCase() + trend.slice(1)}
-                        className="sr-only"
-                      />
-                      {trend.charAt(0).toUpperCase() + trend.slice(1)}
-                    </label>
-                  ))}
+                  {(['improving', 'stable', 'declining'] as const).map((trend) => {
+                    const selected = response?.trendIndicator === trend;
+                    const label = trend.charAt(0).toUpperCase() + trend.slice(1);
+                    return (
+                      <button
+                        key={trend}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => setTrend(question.id, trend)}
+                        className={`
+                          relative flex items-center px-3 py-1.5
+                          rounded-full border cursor-pointer text-sm
+                          transition-colors
+                          ${selected
+                            ? 'border-blue-600 bg-blue-50 text-blue-700'
+                            : 'border-gray-300 bg-white text-gray-600 hover:border-blue-400'
+                          }
+                        `}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

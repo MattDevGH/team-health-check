@@ -156,6 +156,20 @@ describe('Session Link Page — Response Submission', () => {
   });
 
   describe('session ended handling (Req 4.9)', () => {
+    it('shows "session ended" immediately when the loaded session is closed', async () => {
+      server.use(
+        http.get('/api/auth/session-link/:token', () => {
+          return HttpResponse.json({ ...MOCK_CONTEXT, sessionStatus: 'closed' });
+        })
+      );
+
+      renderPage();
+
+      expect(await screen.findByRole('heading', { name: /session ended/i })).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: /delivering value/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /submit/i })).not.toBeInTheDocument();
+    });
+
     it('shows "session ended" message when API returns 409 (session closed)', async () => {
       const user = userEvent.setup();
 
@@ -256,7 +270,7 @@ describe('Session Link Page — Response Submission', () => {
 
       const tcGroup = screen.getByRole('group', { name: /team collaboration/i });
       await user.click(within(tcGroup).getByRole('radio', { name: '5' }));
-      await user.click(within(tcGroup).getByRole('radio', { name: /improving/i }));
+      await user.click(within(tcGroup).getByRole('button', { name: /improving/i }));
 
       await user.click(screen.getByRole('button', { name: /submit/i }));
 

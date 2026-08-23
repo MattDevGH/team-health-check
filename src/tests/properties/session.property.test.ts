@@ -59,7 +59,7 @@ describe('Session Lifecycle Properties', () => {
               const targetId = openedSessionIds[op.sessionIndex];
               if (targetId) {
                 try {
-                  await sessionService.close(targetId, userId);
+                  await sessionService.close(teamId, targetId, userId);
                 } catch (err: unknown) {
                   // ConflictError on double-close is expected behaviour
                   expect(err).toBeInstanceOf(ConflictError);

@@ -22,8 +22,8 @@ interface TeamData {
   name: string;
   description: string;
   privacyMode: string;
-  slackDeliveryStart: string;
-  slackDeliveryEnd: string;
+  slackDeliveryStart: string | null;
+  slackDeliveryEnd: string | null;
   timezone: string;
 }
 

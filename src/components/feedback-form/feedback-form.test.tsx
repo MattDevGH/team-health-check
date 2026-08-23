@@ -69,9 +69,9 @@ describe('FeedbackForm', () => {
 
       for (const q of QUESTIONS) {
         const group = screen.getByRole('group', { name: new RegExp(q.title) });
-        expect(within(group).getByRole('radio', { name: /improving/i })).toBeInTheDocument();
-        expect(within(group).getByRole('radio', { name: /stable/i })).toBeInTheDocument();
-        expect(within(group).getByRole('radio', { name: /declining/i })).toBeInTheDocument();
+        expect(within(group).getByRole('button', { name: /improving/i })).toBeInTheDocument();
+        expect(within(group).getByRole('button', { name: /stable/i })).toBeInTheDocument();
+        expect(within(group).getByRole('button', { name: /declining/i })).toBeInTheDocument();
       }
     });
 
@@ -112,19 +112,44 @@ describe('FeedbackForm', () => {
       render(<FeedbackForm questions={QUESTIONS} onSubmit={mockOnSubmit} />);
 
       const group = screen.getByRole('group', { name: /delivering value/i });
-      const improving = within(group).getByRole('radio', { name: /improving/i });
+      const improving = within(group).getByRole('button', { name: /improving/i });
       await user.click(improving);
 
-      expect(improving).toBeChecked();
+      expect(improving).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('clears an optional trend when the selected option is clicked again', async () => {
+      const user = userEvent.setup();
+      render(<FeedbackForm questions={[QUESTIONS[0]]} onSubmit={mockOnSubmit} />);
+
+      const group = screen.getByRole('group', { name: /delivering value/i });
+      const score = within(group).getByRole('radio', { name: '4' });
+      const improving = within(group).getByRole('button', { name: /improving/i });
+
+      await user.click(score);
+      await user.click(improving);
+      expect(improving).toHaveAttribute('aria-pressed', 'true');
+
+      await user.click(improving);
+      expect(improving).toHaveAttribute('aria-pressed', 'false');
+      expect(score).toBeChecked();
+
+      await user.click(screen.getByRole('button', { name: /submit responses/i }));
+      expect(mockOnSubmit).toHaveBeenCalledWith([
+        { questionId: 'q-delivering-value', score: 4, trendIndicator: undefined },
+      ]);
     });
 
     it('trend indicator defaults to no selection', () => {
       render(<FeedbackForm questions={QUESTIONS} onSubmit={mockOnSubmit} />);
 
       const group = screen.getByRole('group', { name: /delivering value/i });
-      expect(within(group).getByRole('radio', { name: /improving/i })).not.toBeChecked();
-      expect(within(group).getByRole('radio', { name: /stable/i })).not.toBeChecked();
-      expect(within(group).getByRole('radio', { name: /declining/i })).not.toBeChecked();
+      expect(within(group).getByRole('button', { name: /improving/i }))
+        .toHaveAttribute('aria-pressed', 'false');
+      expect(within(group).getByRole('button', { name: /stable/i }))
+        .toHaveAttribute('aria-pressed', 'false');
+      expect(within(group).getByRole('button', { name: /declining/i }))
+        .toHaveAttribute('aria-pressed', 'false');
     });
   });
 
@@ -141,11 +166,13 @@ describe('FeedbackForm', () => {
 
       const dvGroup = screen.getByRole('group', { name: /delivering value/i });
       expect(within(dvGroup).getByRole('radio', { name: '4' })).toBeChecked();
-      expect(within(dvGroup).getByRole('radio', { name: /improving/i })).toBeChecked();
+      expect(within(dvGroup).getByRole('button', { name: /improving/i }))
+        .toHaveAttribute('aria-pressed', 'true');
 
       const tcGroup = screen.getByRole('group', { name: /team collaboration/i });
       expect(within(tcGroup).getByRole('radio', { name: '2' })).toBeChecked();
-      expect(within(tcGroup).getByRole('radio', { name: /declining/i })).toBeChecked();
+      expect(within(tcGroup).getByRole('button', { name: /declining/i }))
+        .toHaveAttribute('aria-pressed', 'true');
     });
   });
 
@@ -211,7 +238,7 @@ describe('FeedbackForm', () => {
 
       // Select trend for first question
       const dvGroup = screen.getByRole('group', { name: /delivering value/i });
-      await user.click(within(dvGroup).getByRole('radio', { name: /improving/i }));
+      await user.click(within(dvGroup).getByRole('button', { name: /improving/i }));
 
       await user.click(screen.getByRole('button', { name: /submit/i }));
 
@@ -251,7 +278,7 @@ describe('FeedbackForm', () => {
 
       // Select trend
       const dvGroup = screen.getByRole('group', { name: /delivering value/i });
-      await user.click(within(dvGroup).getByRole('radio', { name: /stable/i }));
+      await user.click(within(dvGroup).getByRole('button', { name: /stable/i }));
 
       // Submit - should fail
       await user.click(screen.getByRole('button', { name: /submit/i }));
@@ -264,7 +291,8 @@ describe('FeedbackForm', () => {
         const group = screen.getByRole('group', { name: new RegExp(q.title) });
         expect(within(group).getByRole('radio', { name: '3' })).toBeChecked();
       }
-      expect(within(dvGroup).getByRole('radio', { name: /stable/i })).toBeChecked();
+      expect(within(dvGroup).getByRole('button', { name: /stable/i }))
+        .toHaveAttribute('aria-pressed', 'true');
     });
   });
 

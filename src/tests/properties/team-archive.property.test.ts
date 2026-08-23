@@ -156,7 +156,7 @@ describe('Team Archive Properties', () => {
 
             // Open and close a session to create historical data
             const session = await sessionService.open(team.id, creatorId);
-            await sessionService.close(session.id, creatorId);
+            await sessionService.close(team.id, session.id, creatorId);
 
             // Record member count before archive
             const membersBefore = await repos.teamMember.findByTeamId(team.id);

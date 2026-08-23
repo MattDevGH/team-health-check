@@ -40,9 +40,16 @@ export function ScheduleSection({ teamId, schedule, onUpdated }: ScheduleSection
   const [timezone, setTimezone] = useState(schedule?.timezone ?? 'Europe/London');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  function changed(update: () => void) {
+    update();
+    setSaved(false);
+  }
 
   async function handleSave() {
     setError('');
+    setSaved(false);
     setSaving(true);
 
     const payload = {
@@ -55,25 +62,25 @@ export function ScheduleSection({ teamId, schedule, onUpdated }: ScheduleSection
     };
 
     try {
-      const res = await fetch(`/api/teams/${teamId}/schedule`, {
+      const response = await fetch(`/api/teams/${teamId}/schedule`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
         setError(body.errors?.[0]?.message ?? 'Failed to save schedule');
-        setSaving(false);
         return;
       }
 
       onUpdated(payload);
+      setSaved(true);
     } catch {
       setError('Network error');
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
   }
 
   return (
@@ -90,13 +97,11 @@ export function ScheduleSection({ teamId, schedule, onUpdated }: ScheduleSection
           <select
             id="open-day"
             value={openDay}
-            onChange={(e) => setOpenDay(e.target.value)}
+            onChange={(event) => changed(() => setOpenDay(event.target.value))}
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
           >
-            {DAYS.map((d) => (
-              <option key={d.value} value={String(d.value)}>
-                {d.label}
-              </option>
+            {DAYS.map((day) => (
+              <option key={day.value} value={String(day.value)}>{day.label}</option>
             ))}
           </select>
         </div>
@@ -109,7 +114,7 @@ export function ScheduleSection({ teamId, schedule, onUpdated }: ScheduleSection
             id="open-time"
             type="time"
             value={openTime}
-            onChange={(e) => setOpenTime(e.target.value)}
+            onChange={(event) => changed(() => setOpenTime(event.target.value))}
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
           />
         </div>
@@ -121,13 +126,11 @@ export function ScheduleSection({ teamId, schedule, onUpdated }: ScheduleSection
           <select
             id="close-day"
             value={closeDay}
-            onChange={(e) => setCloseDay(e.target.value)}
+            onChange={(event) => changed(() => setCloseDay(event.target.value))}
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
           >
-            {DAYS.map((d) => (
-              <option key={d.value} value={String(d.value)}>
-                {d.label}
-              </option>
+            {DAYS.map((day) => (
+              <option key={day.value} value={String(day.value)}>{day.label}</option>
             ))}
           </select>
         </div>
@@ -140,7 +143,7 @@ export function ScheduleSection({ teamId, schedule, onUpdated }: ScheduleSection
             id="close-time"
             type="time"
             value={closeTime}
-            onChange={(e) => setCloseTime(e.target.value)}
+            onChange={(event) => changed(() => setCloseTime(event.target.value))}
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
           />
         </div>
@@ -153,13 +156,14 @@ export function ScheduleSection({ teamId, schedule, onUpdated }: ScheduleSection
             id="timezone"
             type="text"
             value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
+            onChange={(event) => changed(() => setTimezone(event.target.value))}
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
           />
         </div>
       </div>
 
       {error && <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>}
+      {saved && <p className="mt-2 text-sm text-green-700" role="status">Schedule saved.</p>}
 
       <button
         type="button"

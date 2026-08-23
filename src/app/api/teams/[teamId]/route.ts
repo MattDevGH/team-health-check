@@ -72,10 +72,23 @@ export const PATCH = withErrorHandling(async (request: Request, context) => {
   // Enforce delivery_manager role
   await container.permission.requireRole(teamId, auth.memberId, 'delivery_manager');
 
-  const updatedTeam = await container.team.update(teamId, {
-    name: parsed.data.name,
-    description: parsed.data.description,
-  });
+  await container.team.update(
+    teamId,
+    {
+      name: parsed.data.name,
+      description: parsed.data.description,
+      slackDeliveryStart: parsed.data.slackDeliveryStart,
+      slackDeliveryEnd: parsed.data.slackDeliveryEnd,
+    },
+    auth.memberId,
+  );
+
+  if (parsed.data.privacyMode !== undefined) {
+    await container.privacy.switchMode(teamId, parsed.data.privacyMode, auth.memberId, true);
+  }
+
+  const updatedTeam = await container.team.findById(teamId);
+  if (!updatedTeam) throw new NotFoundError('Team not found');
 
   return Response.json(updatedTeam);
 });

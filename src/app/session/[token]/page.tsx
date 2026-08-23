@@ -32,6 +32,7 @@ interface SessionContext {
   sessionId: string;
   memberName: string;
   cadencePreference: string;
+  sessionStatus: 'open' | 'closed';
   questions: QuestionData[];
   responses: ResponseData[];
 }
@@ -75,6 +76,7 @@ export default function SessionLinkPage({ params }: PageProps) {
         const data: SessionContext = await res.json();
         if (!cancelled) {
           setContext(data);
+          setSessionEnded(data.sessionStatus === 'closed');
           setLoading(false);
         }
       } catch {

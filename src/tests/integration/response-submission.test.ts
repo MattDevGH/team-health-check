@@ -274,7 +274,7 @@ describe('Response submission flow - integration', () => {
       const session = await container.session.open(team.id, 'creator-8');
 
       // Close the session
-      await container.session.close(session.id, 'creator-8');
+      await container.session.close(team.id, session.id, 'creator-8');
 
       // Attempt submission to closed session — should be rejected
       await expect(

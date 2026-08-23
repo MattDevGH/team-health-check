@@ -23,7 +23,11 @@ export interface TeamServiceDeps {
 export interface TeamService {
   create(name: string, description: string | undefined, creatorId: string): Promise<Team>;
   findById(teamId: string): Promise<Team | null>;
-  update(teamId: string, data: { name?: string; description?: string }): Promise<Team>;
+  update(
+    teamId: string,
+    data: Partial<Pick<Team, 'name' | 'description' | 'slackDeliveryStart' | 'slackDeliveryEnd'>>,
+    actorId: string,
+  ): Promise<Team>;
   addMember(teamId: string, name: string, email?: string): Promise<MemberSummary>;
   removeMember(teamId: string, memberId: string, userId: string): Promise<void>;
   updateMemberRole(teamId: string, memberId: string, role: TeamRole, actorId: string): Promise<MemberSummary>;
@@ -217,22 +221,72 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
     return teamRepo.findById(teamId);
   }
 
-  /** Update team name/description */
-  async function update(teamId: string, data: { name?: string; description?: string }): Promise<Team> {
+  /** Update team details and audit valid Slack delivery-window changes. */
+  async function update(
+    teamId: string,
+    data: Partial<Pick<Team, 'name' | 'description' | 'slackDeliveryStart' | 'slackDeliveryEnd'>>,
+    actorId: string,
+  ): Promise<Team> {
     const team = await teamRepo.findById(teamId);
     if (!team) {
       throw new NotFoundError('Team not found');
     }
 
-    const updateData: Partial<Pick<Team, 'name' | 'description'>> = {};
-    if (data.name !== undefined) {
-      updateData.name = data.name;
-    }
-    if (data.description !== undefined) {
-      updateData.description = data.description;
+    const updateData: Partial<
+      Pick<Team, 'name' | 'description' | 'slackDeliveryStart' | 'slackDeliveryEnd'>
+    > = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.description !== undefined) updateData.description = data.description;
+
+    const updatesDeliveryWindow =
+      data.slackDeliveryStart !== undefined || data.slackDeliveryEnd !== undefined;
+    const previousWindow = {
+      slackDeliveryStart: team.slackDeliveryStart,
+      slackDeliveryEnd: team.slackDeliveryEnd,
+    };
+    const nextWindow = {
+      slackDeliveryStart:
+        data.slackDeliveryStart !== undefined
+          ? data.slackDeliveryStart
+          : team.slackDeliveryStart,
+      slackDeliveryEnd:
+        data.slackDeliveryEnd !== undefined ? data.slackDeliveryEnd : team.slackDeliveryEnd,
+    };
+
+    if (
+      updatesDeliveryWindow &&
+      (nextWindow.slackDeliveryStart === null) !== (nextWindow.slackDeliveryEnd === null)
+    ) {
+      throw new ValidationError([
+        {
+          field: 'slackDeliveryWindow',
+          message: 'Slack delivery start and end must both be configured or both be cleared',
+          code: 'custom',
+        },
+      ]);
     }
 
-    return teamRepo.update(teamId, updateData);
+    if (updatesDeliveryWindow) {
+      updateData.slackDeliveryStart = nextWindow.slackDeliveryStart;
+      updateData.slackDeliveryEnd = nextWindow.slackDeliveryEnd;
+    }
+
+    const updatedTeam = await teamRepo.update(teamId, updateData);
+    const deliveryWindowChanged =
+      previousWindow.slackDeliveryStart !== nextWindow.slackDeliveryStart ||
+      previousWindow.slackDeliveryEnd !== nextWindow.slackDeliveryEnd;
+
+    if (updatesDeliveryWindow && deliveryWindowChanged) {
+      await auditLogRepo.create({
+        teamId,
+        changeType: 'delivery_window_change',
+        previousValue: JSON.stringify(previousWindow),
+        newValue: JSON.stringify(nextWindow),
+        userId: actorId,
+      });
+    }
+
+    return updatedTeam;
   }
 
   return {

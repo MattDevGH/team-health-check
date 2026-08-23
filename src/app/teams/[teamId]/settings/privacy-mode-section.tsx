@@ -16,29 +16,37 @@ interface PrivacyModeProps {
 export function PrivacyModeSection({ teamId, privacyMode, onUpdated }: PrivacyModeProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
 
   const isAnonymous = privacyMode === 'anonymous';
   const targetMode = isAnonymous ? 'attributed' : 'anonymous';
 
   async function handleConfirm() {
+    setError('');
+    setSaved(false);
     setSaving(true);
 
     try {
-      const res = await fetch(`/api/teams/${teamId}`, {
+      const response = await fetch(`/api/teams/${teamId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ privacyMode: targetMode }),
       });
 
-      if (res.ok) {
-        onUpdated(targetMode);
+      if (!response.ok) {
+        setError('Failed to save privacy mode');
+        return;
       }
-    } catch {
-      // Silently handle network errors
-    }
 
-    setSaving(false);
-    setShowConfirm(false);
+      onUpdated(targetMode);
+      setSaved(true);
+      setShowConfirm(false);
+    } catch {
+      setError('Network error while saving privacy mode');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -54,7 +62,7 @@ export function PrivacyModeSection({ teamId, privacyMode, onUpdated }: PrivacyMo
       {!showConfirm ? (
         <button
           type="button"
-          onClick={() => setShowConfirm(true)}
+          onClick={() => { setError(''); setSaved(false); setShowConfirm(true); }}
           className="px-4 py-2 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300"
         >
           Switch to {targetMode}
@@ -86,6 +94,9 @@ export function PrivacyModeSection({ teamId, privacyMode, onUpdated }: PrivacyMo
           </div>
         </div>
       )}
+
+      {error && <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>}
+      {saved && <p className="mt-2 text-sm text-green-700" role="status">Privacy mode saved.</p>}
     </section>
   );
 }

@@ -6,12 +6,22 @@
  * Thin route handler: validate input, enforce role, call service, format response.
  */
 
+import { NextRequest } from 'next/server';
+
 import { withErrorHandling } from '@/lib/api-utils';
-import { ForbiddenError, NotFoundError } from '@/lib/errors';
+import { createAuthorizeDeliveryManager } from '@/lib/auth/authorize-team-member';
+import { createGetAuthContext } from '@/lib/auth/with-auth';
 import { container, repos } from '@/lib/container-production';
+import { NotFoundError } from '@/lib/errors';
 
 // Test seam: allows route tests to seed data via repos
 export { repos as _testRepos };
+
+const getAuthContext = createGetAuthContext({ userSessionRepo: repos.userSession });
+const authorizeDeliveryManager = createAuthorizeDeliveryManager({
+  teamMemberRepo: repos.teamMember,
+  teamMemberRoleRepo: repos.teamMemberRole,
+});
 
 /**
  * GET — Retrieve details for a specific session.
@@ -35,18 +45,17 @@ export const GET = withErrorHandling(async (_request, context) => {
  */
 export const PATCH = withErrorHandling(async (request, context) => {
   const { teamId, sessionId } = await context!.params;
+  const auth = await getAuthContext(request as NextRequest);
 
-  // Extract userId from x-user-id header (placeholder auth)
-  const userId = request.headers.get('x-user-id');
-  if (!userId) {
-    throw new ForbiddenError('Missing x-user-id header');
+  if (!auth) {
+    return Response.json(
+      { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+      { status: 401 },
+    );
   }
 
-  // Enforce delivery_manager role
-  await container.permission.requireRole(teamId, userId, 'delivery_manager');
-
-  // Close session (throws NotFoundError or ConflictError as appropriate)
-  await container.session.close(sessionId, userId);
+  await authorizeDeliveryManager(auth.memberId, teamId);
+  await container.session.close(teamId, sessionId, auth.memberId);
 
   return Response.json({ closed: true });
 });

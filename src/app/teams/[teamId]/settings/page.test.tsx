@@ -12,7 +12,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import { server } from '@/tests/mocks/server';
 
@@ -179,7 +179,8 @@ describe('Team Settings Page', () => {
       await user.click(confirmBtn);
 
       await waitFor(() => {
-        expect(screen.getByText(/attributed/i)).toBeInTheDocument();
+        expect(screen.getByText(/current mode:/i)).toHaveTextContent('attributed');
+        expect(screen.getByText(/privacy mode saved/i)).toBeInTheDocument();
       });
     });
   });
@@ -290,11 +291,35 @@ describe('Team Settings Page', () => {
 
       await waitFor(() => {
         expect(screen.getByLabelText(/open day/i)).toHaveValue('2');
+        expect(screen.getByText(/schedule saved/i)).toBeInTheDocument();
       });
     });
   });
 
   describe('Slack Delivery Window (Req 5.1)', () => {
+    it('renders unset delivery times as empty controlled inputs without a React warning', async () => {
+      server.use(
+        http.get(`/api/teams/${TEAM_ID}`, () => HttpResponse.json({
+          ...mockTeam,
+          slackDeliveryStart: null,
+          slackDeliveryEnd: null,
+        })),
+      );
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      try {
+        renderPage();
+
+        await waitFor(() => {
+          expect(screen.getByLabelText(/delivery start/i)).toHaveValue('');
+          expect(screen.getByLabelText(/delivery end/i)).toHaveValue('');
+        });
+        expect(consoleError).not.toHaveBeenCalled();
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
     it('displays existing Slack delivery window', async () => {
       renderPage();
       await waitFor(() => {
@@ -320,6 +345,7 @@ describe('Team Settings Page', () => {
 
       await waitFor(() => {
         expect(screen.getByDisplayValue('10:00')).toBeInTheDocument();
+        expect(screen.getByText(/delivery window saved/i)).toBeInTheDocument();
       });
     });
   });

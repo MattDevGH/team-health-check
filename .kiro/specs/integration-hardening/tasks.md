@@ -266,12 +266,12 @@ All tasks follow TDD (Red → Green → Refactor) and reference specific require
 - [x] 19. Checkpoint — All unit and property tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [x] 20. End-to-end acceptance test
-  - [x] 20.1 Create Playwright happy-path test (`e2e/happy-path.spec.ts`)
-    - Implement test: request magic link → capture token via interceptor → verify → genesis → create team → add member → open session → submit responses → view dashboard
-    - Use test email interceptor (InMemoryEmailService in TEST_MODE)
-    - Verify session cookie is set after magic-link verification
-    - Verify response submission results visible on dashboard (or "needs more data" state)
+- [ ] 20. End-to-end acceptance test
+  - [ ] 20.1 Create a non-skipping Playwright happy-path test (`e2e/happy-path.spec.ts`)
+    - Implement test: request magic link → capture token → verify → genesis → add member → open session → submit responses → close/materialise → view dashboard
+    - Use a test email interceptor that is available only when `TEST_MODE=true`
+    - Verify the server sets and the browser retains the session cookie without manual cookie injection
+    - Use canonical seeded questions and require successful persistence; required scenarios must fail rather than skip
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
   - [x] 20.2 Update CI workflow (`.github/workflows/ci.yml`)
@@ -280,19 +280,165 @@ All tasks follow TDD (Red → Green → Refactor) and reference specific require
     - Ensure no external service dependencies in CI
     - _Requirements: 10.5, 10.6_
 
-- [x] 21. Final checkpoint — Full integration verification
-  - Ensure all tests pass (unit, property, integration, E2E), ask the user if questions arise.
+- [ ] 21. Final checkpoint — Full integration verification
+  - Ensure all tests pass (unit, property, integration, non-skipping E2E), complete real-workspace Slack acceptance, and reconcile all documentation before merge.
+
+## Closure audit correction — 2026-08-23
+
+Tasks 1–21 record the original implementation pass, but checked boxes alone do
+not constitute current requirement evidence. Live acceptance and repository
+inspection found additional completed regressions plus genuine auth, Slack,
+Playwright, mock-contract, and database-evidence gaps. The spec remains open
+until Tasks 23–26 are complete. Task 22 records work already completed after the
+original checklist was marked done.
+
+- [x] 22. Record post-implementation browser acceptance regressions
+  - [x] 22.1 Harden genesis and member-management contracts
+    - Make pending-token inspection non-mutating and genesis the sole CAS claim
+    - Persist submitted team details, establish the cookie, and render structured errors safely
+    - Return stable member summaries with roles/Slack links and protect the final Delivery Manager
+    - _Requirements: Integration 1.5; Original 1.3, 1.6, 1.7, 7.9, 19.2, 19.4–19.9_
+
+  - [x] 22.2 Close settings and feedback browser defects
+    - Normalize null delivery times, persist Slack windows, privacy mode/audit, and cookie-authenticated schedules
+    - Show save success feedback and preserve explicit role/default contracts
+    - Make optional subjective trends clearable while required score radios remain selected
+    - _Requirements: Integration 2.1, 9.1, 9.4; Original 3.1, 4.3, 4.8, 5.1, 14.4, 18.1, 18.2, 19.2_
+
+  - [x] 22.3 Harden close behavior and record two-session browser acceptance
+    - Authenticate close by cookie, require Delivery Manager, and enforce URL team/session ownership
+    - Render Session Ended immediately from `sessionStatus`, retaining the 409 race fallback
+    - Verify submit/edit refresh, two closes, quiet-period materialisation, threshold transition, averages, counts, subjective distributions, and calculated movement
+    - _Requirements: Integration 2.1, 3.3, 4.1–4.3, 5.1, 5.2, 5.4, 9.1; Original 3.4, 3.9, 4.9, 6.5, 19.2_
+
+- [ ] 23. Close auth and session-link contracts
+  - [ ] 23.1 Implement explicit logout/session invalidation with TDD
+    - Invalidate the persisted UserSession and emit the clear-cookie header (`Max-Age=0`)
+    - Cover authenticated logout, missing/invalid sessions, and cookie attributes
+    - _Requirements: 1.6_
+
+  - [ ] 23.2 Finish auth and ownership checks across the team route surface with TDD
+    - Protect `/api/teams` GET/POST, team export, session-detail GET, and participation GET as appropriate
+    - Replace participation `x-user-id` trust with AuthContext and enforce URL team/session binding
+    - Return consistent 401/403/404 responses without leaking cross-team resources
+    - _Requirements: 2.1, 2.6, 9.1, 9.2, 9.3_
+
+  - [ ] 23.3 Reconcile auth requirements/design with the safer direct AuthContext contract
+    - Make direct AuthContext authoritative instead of injecting compatibility identity headers
+    - Document intentional token-auth exemptions including magic links, session links, genesis, Slack signatures, and CRON_SECRET
+    - Add regression evidence for the agreed contract
+    - _Requirements: 2.1, 2.2, 2.3, 2.7, 2.8_
+
+  - [ ] 23.4 Complete session-link cadence and authentication scoping with TDD
+    - Implement weighted micro-pulse question selection plus the `expandable` contract
+    - Cap newly-created and reused authentication to the earliest of session close, existing expiry, and seven days
+    - Cover weekly/micro-pulse responses and reused near-close sessions with route/property/UI tests
+    - _Requirements: 3.2, 3.4, 3.5; Properties 4 and 12_
+
+  - [ ] 23.5 Complete remaining required team audit emissions with TDD
+    - Audit schedule configuration changes with previous/new values and the authenticated actor
+    - Audit team-member additions with the added summary and the authenticated actor
+    - Keep these as separate green vertical-slice commits and cover route-to-service actor wiring
+    - _Requirements: Original 18.1, 18.2, 18.3_
+
+- [ ] 24. Close Slack account and production notification behavior
+  - [ ] 24.1 Implement secure, truthful account linking and unlinking with TDD
+    - Authenticate pairing and derive memberId from AuthContext instead of accepting it from the body
+    - Add the web pairing-code input flow and persist status across reload/restart
+    - Make unlink delete the SlackIdentityLink before the UI reports success
+    - _Requirements: 2.1, 7.1, 7.2, 9.3_
+
+  - [ ] 24.2 Align Slack command/prompt eligibility with the documented contract
+    - Return an actionable current-session prompt or member session link from `/healthcheck`
+    - Honor Slack linkage, availability, reminder preference, cadence, and configured delivery windows
+    - Add route-level tests of exported handlers rather than reproducing orchestration
+    - _Requirements: 7.4, 8.1, 8.3, 8.4_
+
+  - [ ] 24.3 Dispatch closing reminders from scheduler ticks with TDD
+    - Implement configurable reminder lead-time detection, defaulting to 24 hours
+    - Notify only linked, available, enabled members with incomplete responses
+    - Prevent duplicate delivery across repeated ticks
+    - _Requirements: 8.2, 8.3, 8.4_
+
+  - [ ] 24.4 Persist and process failed Slack deliveries with TDD
+    - Add/register a Prisma InteractionQueueRepository and store replayable destination/payload data
+    - Drain due entries on later scheduler ticks with backoff and terminal failure handling
+    - Prove persistence across route/service instances and remove request-local in-memory production wiring
+    - _Requirements: 8.5_
+
+  - [ ] 24.5 Complete disposable-workspace Slack acceptance
+    - Verify endpoint registration/signatures, pairing persistence, unlink, `/healthcheck`, opening prompt, interactive update, browser fallback, closing reminder, and one forced durable retry
+    - Use disposable users/data, redact codes/tokens, record observable results, and clean up
+    - _Requirements: 7.1–7.4, 8.1–8.5_
+
+- [ ] 25. Close automated acceptance and deployment evidence
+  - [ ] 25.1 Create deterministic, isolated E2E infrastructure with TDD
+    - Make Prisma CLI and runtime honor a disposable E2E SQLite path, never `prisma/dev.db`
+    - Reset/push schema and seed canonical questions for each run; serialize or isolate workers/retries
+    - Add a test-only email capture seam guarded by `TEST_MODE=true`; missing capture must fail, not skip
+    - _Requirements: 10.2, 10.5, 10.6_
+
+  - [ ] 25.2 Replace permissive Playwright flows with real browser acceptance
+    - Drive login/genesis and assert the server-set cookie without `addCookies` or manual Cookie headers
+    - Exercise accepted settings behavior and two complete generated-session-link feedback lifecycles
+    - Close/materialise sessions and assert insufficient/populated dashboard UI, values, distributions, and drill-downs
+    - Fail on required skips, page errors, unexpected console errors, and failed first-party requests
+    - _Requirements: 10.1–10.5_
+
+  - [ ] 25.3 Expand Playwright accessibility coverage
+    - Run axe against genesis, settings, active feedback, confirmation, ended session, insufficient dashboard, and populated dashboard states
+    - _Requirements: 10.1, 10.4; Original NFR accessibility criteria_
+
+  - [ ] 25.4 Correct MSW response-submission identity contracts
+    - Remove body `memberId` from handlers and UI expectations
+    - Require `{ sessionId, responses }`; model identity through cookie/AuthContext behavior
+    - _Requirements: 5.1–5.3, 12.1–12.4_
+
+  - [ ] 25.5 Add executable local libSQL repository evidence
+    - Run representative repository create/read/update behavior through Prisma's libSQL adapter without an external Turso account
+    - _Requirements: 13.1, 13.2, 13.3, 13.5_
+
+  - [ ] 25.6 Harden CI semantics
+    - Initialize/seed the isolated E2E database and ensure `DATABASE_URL` is genuinely consumed
+    - Fail the job if required Playwright scenarios are skipped; retain reports/traces as artifacts
+    - _Requirements: 10.5, 10.6_
+
+- [ ] 26. Reconcile and close the branch
+  - [ ] 26.1 Keep requirements, design, tasks, README, and AI_CONTEXT synchronized
+    - Update both README and AI_CONTEXT with every behavior/test/convention commit
+    - Record current test totals and manual browser/Slack evidence accurately
+    - Keep lifecycle-management and dashboard-UX follow-ups explicitly deferred
+    - _Requirements: 11.3, 11.4_
+
+  - [ ] 26.2 Run the final clean merge gate
+    - Run install/generate/schema setup, lint, typecheck, Vitest, build, non-skipping Playwright, and `git diff --check`
+    - Confirm real-workspace Slack acceptance and executable libSQL evidence
+    - _Requirements: 8.1–8.5, 10.1–10.6, 12.1–12.4, 13.1–13.5_
+
+  - [ ] 26.3 Commit, push, and merge through a green pull request
+    - Ensure no accepted work remains unstaged/uncommitted and the remote branch contains the final evidence
+    - Include exact requirement references in the PR description and verify `ci`, `e2e`, and `requirement-coverage` jobs
+    - Merge only after required reviews/checks pass; then branch the next milestone from updated `master`
+
+## Deferred follow-up milestones — not integration-hardening blockers
+
+- **Session lifecycle management:** dedicated manager UI, explicit materialisation state, resilient lifecycle operations, delivery/progress controls, and recent-session history.
+- **Dashboard UX:** chart title/explanation/legend and accessible data-point detail; clarify or remove Latest Session; add question disclosure affordances and pluralisation fixes.
+- **Slack enhancements beyond Requirements 7–8:** implement `app_mention`/`message.im` behavior or keep those subscriptions undocumented; richer interaction confirmations, observability, and admin history.
+- **Broader product work:** design system, dark mode, shared navigation, CSRF, generalized rate limiting, load/performance testing, and operational telemetry.
 
 ## Notes
 
-- Tasks marked with `*` are optional property-based test sub-tasks and can be skipped for faster MVP
-- Each task references specific requirements for traceability
-- Checkpoints ensure incremental validation after logical groups complete
-- Property tests validate universal correctness properties from the design document (12 properties)
-- Unit tests validate specific examples and edge cases following TDD (Red → Green → Refactor)
-- All services use factory injection with repository interfaces — never import Prisma directly
-- All errors extend AppError with typed codes — no raw string throws
-- Route handlers remain thin: validate (Zod), call service, format response
+- Tasks 23–26 are the authoritative integration-hardening closure plan.
+- Previously checked tasks record implementation history but do not override closure-audit evidence.
+- Tasks marked with `*` are optional property-based test sub-tasks and can be skipped for faster MVP; no acceptance/closure task is optional.
+- Each task references specific requirements for traceability.
+- Checkpoints require recorded validation evidence, not only a green command exit.
+- Property tests validate universal correctness properties from the design document.
+- Unit tests validate specific examples and edge cases following TDD (Red → Green → Refactor).
+- All services use factory injection with repository interfaces — never import Prisma directly.
+- All errors extend AppError with typed codes — no raw string throws.
+- Route handlers remain thin: validate (Zod), call service, format response.
 
 ## Task Dependency Graph
 
@@ -311,7 +457,13 @@ All tasks follow TDD (Red → Green → Refactor) and reference specific require
     { "id": 9, "tasks": ["16.1", "16.2", "17.1", "17.2"] },
     { "id": 10, "tasks": ["18.1"] },
     { "id": 11, "tasks": ["18.2"] },
-    { "id": 12, "tasks": ["20.1", "20.2"] }
+    { "id": 12, "tasks": ["20.1", "20.2"] },
+    { "id": 13, "tasks": ["22.1", "22.2", "22.3"] },
+    { "id": 14, "tasks": ["23.1", "23.2", "23.3", "23.4"] },
+    { "id": 15, "tasks": ["24.1", "24.2", "24.3", "24.4"] },
+    { "id": 16, "tasks": ["24.5", "25.1", "25.4", "25.5"] },
+    { "id": 17, "tasks": ["25.2", "25.3", "25.6"] },
+    { "id": 18, "tasks": ["26.1", "26.2", "26.3"] }
   ]
 }
 ```

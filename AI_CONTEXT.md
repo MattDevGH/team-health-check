@@ -17,17 +17,162 @@ Team Health Check — a lightweight feedback tool for delivery teams, inspired b
 `feat/<feature-name>` branches and merges through a pull request only after CI
 and relevant acceptance validation pass.
 
-**Current branch status:** Integration hardening is on
-`feat/integration-hardening`, pending real browser and Slack acceptance
-validation and a pull request. Manual browser validation exposed a live
-settings-contract issue: member responses omitted role and Slack-link relations,
-which could crash team settings. The member-management fix is now complete on
-this branch: stable member-summary DTOs, explicit roles on add, authenticated
-role replacement/removal, final-delivery-manager protection, and visible UI
-errors are covered by service, route, and RTL regressions. Manual browser
-validation is still in progress and must resume with a fresh magic link because
-the previous token was consumed. Playwright happy paths still require hardening,
-and `master` remains blocked until browser/Slack acceptance and CI are green.
+**Current branch status:** Integration hardening remains open on
+`feat/integration-hardening`. This branch contains the approved one-off
+browser-acceptance consolidation checkpoint; preserve it and the persistent
+`prisma/dev.db`, and do not start the lifecycle-management milestone yet.
+Two-session browser acceptance is complete, but the 2026-08-23 closure audit
+found unsupported completion claims in auth, Slack production wiring,
+Playwright/isolation, MSW contracts, and libSQL evidence. Tasks 23–26 in the
+integration-hardening spec are now the authoritative merge plan.
+
+## Latest Manual Acceptance Checkpoint — 2026-08-23
+
+**Resume cue:** Browser acceptance through the first two health-check sessions
+is complete. Do not recreate those sessions or repeat those scenarios unless a
+regression requires it. Preserve the current worktree and persistent
+`prisma/dev.db`. Resume the integration-hardening closure plan at Task 23.1
+(logout/session invalidation), following Tasks 23–26 in order; do not begin the
+deferred lifecycle-management or dashboard-UX milestones first.
+
+### Accepted live state
+
+- Team: `cmt4sfyxs0001fc0f3v6uecya` — **Browser Validated Team**
+- Member/Delivery Manager: `mattheptinstall`
+- First session `cmt4w7ugx0007ek0frb2zmfqm`: closed/materialised with scores
+  `4/5/3/3/4` and subjective trends
+  `improving/none/none/none/stable`.
+- Second session `cmt4y3aj50005aw0fv5ay2m0o`: closed/materialised with scores
+  `5/4/3/4/2` and subjective trends
+  `stable/declining/none/improving/improving`.
+- Both close PATCH requests and scheduler ticks returned 200. Each session has
+  five one-response aggregates with the expected averages and trend counts.
+- Calculated score movement across sessions is `up/down/flat/up/down`; the
+  subjective trend distribution remains independent, including the deliberate
+  mismatches for Delivering Value and Psychological Safety.
+- Both participant links immediately render **Session Ended** after close.
+- The dashboard correctly changed from **More data needed** after one closed
+  session to two-session chart/detail data after the second. Latest counts,
+  subjective distributions, and question drill-down values all matched the API.
+- User reported no browser errors; dev-server logs contained successful 200
+  requests only.
+- Current managed dev server: `term_1787437157697_j206ug48n7`. It uses an
+  ephemeral process-only `CRON_SECRET`; `.env` has a blank value. After restart,
+  configure a non-empty local secret and restart before testing scheduler ticks.
+
+### Deferred dashboard UX improvements from live acceptance
+
+1. **Chart clarity:** Add a descriptive chart title and short explanation. Make
+   question-to-line mapping obvious with at least a legend. Consider accessible
+   line/data-point detail: hover **and keyboard focus** should emphasise the
+   series and expose question name, score, date, response count, and useful
+   aggregate context. Do not expose participant attribution without an explicit
+   privacy-aware product decision and supporting data contract.
+2. **Latest Session purpose:** It currently repeats only response counts, so its
+   intent as a sample-size/confidence indicator is unclear and its standalone
+   value is weak. Either remove/merge it or redesign it with the session date,
+   average score, change from the prior session, response count, and explanatory
+   copy. Fix singular/plural wording (`1 response`, not `1 responses`).
+3. **Question disclosure affordance:** Make it obvious that question rows expand.
+   Add introductory text and/or a chevron, visible expanded/collapsed state, and
+   `aria-expanded`/`aria-controls` semantics. Preserve keyboard operation.
+
+Implement these later as separate TDD vertical slices rather than one dashboard
+rewrite. No production changes were made for these UX observations yet.
+
+### Acceptance status
+
+1. Open and verify second session/link — complete.
+2. Collect and refresh-persist changed feedback — complete.
+3. Close/materialise and verify calculated + subjective data — complete.
+4. Validate the two-session dashboard and drill-downs — complete.
+
+### Integration-hardening closure audit — authoritative next work
+
+The original Tasks 1–21 were checked too early. Task 20.1 and the final
+checkpoint are reopened; Task 22 records the accepted regressions above. Complete
+these dependency-ordered waves before commit/merge or a new milestone:
+
+1. **Task 23 — Auth/session and audit closure:** persisted logout and cookie
+   clearing; protect remaining team/export/session-detail/participation routes
+   with ownership checks; amend requirements/design so direct AuthContext—not
+   injected identity headers—is authoritative; implement micro-pulse selection;
+   scope reused session-link auth to close/expiry; and emit the still-missing
+   schedule-change and member-addition audit records.
+2. **Task 24 — Slack production closure:** authenticated pairing UI and actual
+   unlink; actionable `/healthcheck`; cadence/delivery-window eligibility;
+   scheduler closing reminders; persistent retry queue/drain; then redacted
+   disposable-workspace acceptance covering signatures, prompts, interactions,
+   browser fallback, reminder, retry, persistence, and cleanup.
+3. **Task 25 — Automated/deployment evidence:** isolated seeded E2E database;
+   TEST_MODE-only email capture that fails rather than skips; browser-managed
+   auth and two complete Playwright lifecycles; expanded axe coverage; canonical
+   MSW response identity contract; executable local libSQL repository behavior;
+   CI enforcement of isolation/seeding/zero required skips.
+4. **Task 26 — Reconciliation and merge:** keep requirements/design/tasks,
+   README, and AI_CONTEXT synchronized; run clean lint/type/Vitest/build/E2E,
+   libSQL, Slack, and diff gates; commit/push this branch; obtain green `ci`,
+   `e2e`, and `requirement-coverage` PR jobs; merge before branching new work.
+
+### Commit boundaries from Task 23 onward
+
+The browser-acceptance checkpoint is a one-off consolidation exception. After
+it, commit each green testable behavior before starting the next. Task 23 is
+expected to land as these independent conventional commits (split further if a
+slice stops being reviewable):
+
+1. `fix: invalidate authenticated sessions on logout` — Task 23.1.
+2. `fix: authenticate team collection routes` — `/api/teams` GET/POST portion of Task 23.2.
+3. `fix: authorize team data exports` — export portion of Task 23.2.
+4. `fix: protect session detail reads` — session-detail GET portion of Task 23.2.
+5. `fix: replace participation header authentication` — participation and URL ownership portion of Task 23.2.
+6. `docs: make direct auth context authoritative` — requirements/design plus contract regression for Task 23.3.
+7. `feat: select weighted micro-pulse questions` — first half of Task 23.4.
+8. `fix: scope reused session-link authentication` — second half of Task 23.4.
+9. `fix: audit schedule configuration changes` — first half of Task 23.5.
+10. `fix: audit team member additions` — second half of Task 23.5.
+
+Each slice includes its red/green tests, required README and AI_CONTEXT updates,
+and targeted validation. Do not wait for all of Task 23 to commit or leave a
+green slice uncommitted while beginning the next one.
+
+Current known blockers are implementation gaps, not merely missing manual proof:
+logout has no endpoint; several team routes remain unauthenticated or trust
+`x-user-id`; micro-pulse and reused-close scoping are incomplete; schedule
+changes and member additions still omit required audit entries; pairing accepts
+caller memberId and unlink does not delete; scheduler omits closing reminders
+and uses a request-local retry queue; required Playwright tests can skip through
+a nonexistent token endpoint and use unseeded/non-isolated data; the response
+MSW body remains stale; Turso selection lacks repository execution evidence.
+
+Explicitly deferred non-blockers: session lifecycle management UI; dashboard
+chart/Latest Session/question-disclosure UX; `app_mention`/`message.im` behavior
+if those subscriptions remain undocumented; broader design-system, navigation,
+CSRF, generalized rate-limiting, performance, and telemetry work.
+
+### Changes and validation already completed
+
+- Team settings acceptance fixes: null time inputs, Slack delivery persistence +
+  success feedback, complete-pair validation, authenticated before/after audit;
+  privacy persistence/audit + success feedback; cookie-auth schedule persistence
+  + success feedback; and final-Delivery-Manager safety.
+- Feedback trends are accessible toggle buttons: optional trends can be cleared;
+  required score radios cannot.
+- Session close PATCH now uses cookie auth and Delivery Manager authorization,
+  not spoofable `x-user-id`; `SessionService.close` enforces the URL team/session
+  ownership invariant.
+- A closed link now renders **Session Ended** immediately from the existing
+  `sessionStatus` API field, while retaining the 409 fallback for pages already
+  open at close time.
+- Both live closes and scheduler ticks returned 200, all ten expected
+  aggregates were verified, and the trends API correctly transitioned from the
+  one-session threshold response to two-session data.
+- Latest validation: **117 test files / 976 tests passed**,
+  `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
+  all passed.
+- Temporary local execution scripts were deleted. The approved consolidation
+  checkpoint preserves the accepted fixes; run `git status --short` before
+  starting Task 23.1.
 
 ---
 
@@ -156,8 +301,11 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **957 tests**, including member-summary contract,
-member mutation authorization/final-manager, and legacy UI boundary regressions.
+The Vitest suite now contains **976 tests across 117 files**, including
+member-summary contract, member mutation authorization/final-manager, optional
+trend toggles, authenticated complete-pair delivery-window audit/validation,
+cookie-auth session close/team binding, and closed-link initial-render
+regressions.
 
 ---
 
@@ -193,10 +341,11 @@ All stages must pass. Branch protection requires CI green before merge.
 - `design.md` — Architecture, data models, 34 correctness properties, testing strategy, SOLID, TDD, SlackInteractionQueue, documentation-as-code CI (complete)
 - `tasks.md` — 28 task groups, ~120 sub-tasks including property tests (complete)
 
-### Completed spec: `.kiro/specs/integration-hardening/`
+### Open spec: `.kiro/specs/integration-hardening/`
 - `requirements.md` — 13 requirements covering auth/cookie foundation, session-link enrichment, response submission, protected routes, notification wiring, Slack identity, Turso production DB, E2E tests, MSW alignment, and repo hygiene
-- `design.md` — Integration architecture, 12 correctness properties, auth helper design, cookie scoping, notification sink pattern
-- `tasks.md` — 21 task groups, 49 leaf tasks — **all completed**
+- `design.md` — Integration architecture, 12 correctness properties, auth helper design, cookie scoping, notification sink pattern; Task 23.3 must reconcile its identity-header wording with direct AuthContext
+- `tasks.md` — Tasks 1–21 record the original pass, Task 22 records completed acceptance regressions, and open Tasks 23–26 define auth/session, Slack, automated evidence, and final merge closure
+- Do not mark this spec complete or create the lifecycle-management spec until Tasks 23–26 and the final PR gates pass
 
 ---
 
@@ -208,11 +357,11 @@ All stages must pass. Branch protection requires CI green before merge.
 - **`withAuth`**: Factory-created HOF wrapper that enforces auth on route handlers (401 if invalid)
 - **`authorizeTeamMember`**: Factory function verifying member belongs to requested team (403 if not)
 - **`authorizeDeliveryManager`**: Extends team membership check with delivery_manager role requirement
-- **All `/api/me/*`, `/api/teams/*`, `/api/responses` routes**: Protected via cookie auth
+- **Protected routes**: `/api/me/*`, responses, and core team settings/trends/member/session routes use cookie auth; Task 23.2 still covers `/api/teams` GET/POST, export, session-detail GET, participation GET, and consistent ownership checks
 - **Member management**: GET/POST/PATCH return a stable member-summary DTO; delivery managers can add, replace roles, and remove members with final-manager protection
-- **Slack identity**: Persistent DB-backed SlackIdentityLink records (replaces in-memory Map)
-- **Notification wiring**: Scheduler tick → NotificationService → ProductionNotificationSink → Slack API
-- **Turso**: Environment-aware Prisma client (better-sqlite3 locally, @libsql/client in production)
+- **Slack identity**: Prisma-backed SlackIdentityLink lookup persists mappings, but authenticated pairing UI and truthful deletion/unlink remain Task 24.1 blockers
+- **Notification wiring**: Newly-opened prompts reach NotificationService and the production Slack sink; cadence/window eligibility, closing reminders, persistent retry storage, and later-tick draining remain Task 24 blockers
+- **Turso**: Environment-aware Prisma client selection exists (better-sqlite3 locally, @libsql/client in production); executable repository behavior through local libSQL remains Task 25.5
 
 ---
 
@@ -224,11 +373,18 @@ All stages must pass. Branch protection requires CI green before merge.
 
 ## Outstanding Work
 
-- Design system / component library (currently ad-hoc Tailwind)
-- Dark mode support
-- Responsive navigation / shared layout
-- CSRF protection on form submissions
-- Rate limiting on non-auth endpoints
-- Session revocation UI
-- Load/performance testing
-- End-to-end Slack integration test (against real workspace)
+### Integration-hardening merge blockers
+
+- Task 23: auth/session contract closure
+- Task 24: Slack production behavior and real-workspace acceptance
+- Task 25: deterministic non-skipping E2E/MSW/libSQL evidence
+- Task 26: documentation, full gates, commit/push/PR/merge
+
+### Deferred follow-up milestones
+
+- Session lifecycle management UI and explicit materialisation state
+- Dashboard chart clarity, Latest Session redesign, and question affordances
+- Design system / component library, dark mode, responsive shared navigation
+- CSRF protection and generalized non-auth rate limiting
+- Load/performance testing and operational telemetry
+- Optional Slack conversational events and richer interaction feedback beyond Requirements 7–8
