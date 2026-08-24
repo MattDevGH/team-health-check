@@ -141,9 +141,7 @@ and targeted validation. Do not wait for all of Task 23/24 to commit or leave a
 green slice uncommitted while beginning the next one.
 
 Current known blockers are implementation gaps, not merely missing manual proof:
-`/api/slack/interactions` acks every click with an empty 200, so scores are stored
-but the member gets no confirmation, validation error, or session-ended message
-(Original 5.7–5.9), tracked as Task 24.3a; scheduler never dispatches closing reminders;
+scheduler never dispatches closing reminders;
 the interaction queue has no Prisma implementation and is instantiated fresh
 per scheduler tick, so it is never actually drained; required Playwright tests
 can skip through a nonexistent token endpoint and use
@@ -168,6 +166,18 @@ Block Kit check unless `buildPromptMessage` changes.
 
 ### Changes and validation already completed
 
+- `/api/slack/interactions` now replies to the member instead of acking silently.
+  A stored score returns a confirmation naming the question and score (5.8), an
+  out-of-range or malformed score returns a validation error naming the affected
+  question (5.7), a click with no open session returns a session-ended rejection
+  (5.9), and an unlinked Slack user is pointed at `/healthcheck connect`. Replies
+  go through the payload's `response_url` via `createInteractionResponder`
+  (`src/lib/slack/interaction-response.ts`) because ephemeral prompts cannot be
+  updated with `chat.update`. `replace_original: false` keeps the prompt and its
+  buttons in place so 5.10 updates still work. The sender makes a single attempt
+  and never throws: the 3-second ack is returned regardless of reply failure, and
+  durable retry of exhausted replies stays Task 24.4. Route tests inject the
+  responder through `_setInteractionResponder`, so no test performs real network I/O.
 - `NotificationService.sendSlackPrompt` now owns bot-initiated prompt eligibility:
   Slack link, active-away check, and the team's configured Slack delivery window
   evaluated in the team timezone (inclusive boundaries, midnight-spanning windows
@@ -258,7 +268,7 @@ Block Kit check unless `buildPromptMessage` changes.
 - Both live closes and scheduler ticks returned 200, all ten expected
   aggregates were verified, and the trends API correctly transitioned from the
   one-session threshold response to two-session data.
-- Latest validation: **130 test files / 1081 tests passed**,
+- Latest validation: **131 test files / 1091 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
@@ -394,7 +404,10 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1081 tests across 130 files**, including
+The Vitest suite now contains **1091 tests across 131 files**, including
+Slack interaction reply coverage for confirmations, score rejections,
+session-ended and unlinked cases, missing `response_url`, and reply failure
+preserving the ack, plus response_url transport tests over an injected fetch,
 bot-initiated prompt eligibility coverage for away members, delivery-window
 boundaries, team-timezone evaluation, and midnight-spanning windows,
 on-demand `/healthcheck` service and route coverage for unlinked users,

@@ -12,9 +12,28 @@
 import { withErrorHandling } from '@/lib/api-utils';
 import { verifySlackSignature } from '@/lib/slack/verify-signature';
 import { container, repos } from '@/lib/container-production';
+import {
+  buildConfirmationText,
+  buildScoreRejectionText,
+  buildSessionEndedText,
+  buildUnlinkedText,
+  createInteractionResponder,
+} from '@/lib/slack/interaction-response';
+import type { InteractionResponder } from '@/lib/slack/interaction-response';
 
 // Test seam: allows route tests to seed data via repos
 export { repos as _repos, container as _container };
+
+let _responderOverride: InteractionResponder | null = null;
+
+/** Test seam: replaces the response_url sender so tests make no network calls. */
+export function _setInteractionResponder(responder: InteractionResponder): void {
+  _responderOverride = responder;
+}
+
+function getResponder(): InteractionResponder {
+  return _responderOverride ?? createInteractionResponder();
+}
 
 /**
  * Slack interaction payload types for type safety.
@@ -92,53 +111,93 @@ export const POST = withErrorHandling(async (request: Request): Promise<Response
 
   // Process block_actions (button clicks for score submission)
   if (payload.type === 'block_actions') {
-    const slackUserId = payload.user?.id;
-    if (!slackUserId) {
-      // Ack without processing — malformed payload
-      return new Response(null, { status: 200 });
-    }
-
-    // Resolve Slack user to internal memberId
-    const memberId = await resolveMemberId(slackUserId);
-    if (!memberId) {
-      // User not linked — ack but cannot process (Req 5.9: inform user session ended)
-      return new Response(null, { status: 200 });
-    }
-
-    // Find the member's current open session
-    const sessionId = await findOpenSessionForMember(memberId);
-    if (!sessionId) {
-      // No open session — Req 5.9: session ended, reject submission gracefully
-      return new Response(null, { status: 200 });
-    }
-
-    // Process each score action
-    for (const action of payload.actions ?? []) {
-      if (!action.action_id?.startsWith('score_') || !action.value) {
-        continue;
-      }
-
-      const parsed = parseScoreAction(action.value);
-      if (!parsed) {
-        // Invalid score format or out of range (Req 5.7) — skip this action
-        continue;
-      }
-
-      try {
-        // Upsert response via the service (handles uniqueness, Req 5.10)
-        await container.response.upsert({
-          memberId,
-          sessionId,
-          questionId: parsed.questionId,
-          score: parsed.score,
-        });
-      } catch {
-        // Swallow errors per action — continue processing remaining actions
-        continue;
-      }
-    }
+    const replyText = await processScoreActions(payload);
+    await reply(payload.response_url, replyText);
   }
 
   // Return 200 to acknowledge (Slack requires response within 3 seconds)
   return new Response(null, { status: 200 });
 });
+
+/**
+ * Processes the payload's score actions and returns the member-visible reply.
+ * Returns null when there is nothing to say (malformed payload, no score actions).
+ */
+async function processScoreActions(
+  payload: SlackInteractionPayload,
+): Promise<string | null> {
+  const slackUserId = payload.user?.id;
+  if (!slackUserId) {
+    // Malformed payload — nobody to reply to
+    return null;
+  }
+
+  const memberId = await resolveMemberId(slackUserId);
+  if (!memberId) {
+    return buildUnlinkedText();
+  }
+
+  const sessionId = await findOpenSessionForMember(memberId);
+  if (!sessionId) {
+    // Requirement 5.9: session ended, reject the submission and say so
+    return buildSessionEndedText();
+  }
+
+  const lines: string[] = [];
+
+  for (const action of payload.actions ?? []) {
+    if (!action.action_id?.startsWith('score_') || !action.value) {
+      continue;
+    }
+
+    const parsed = parseScoreAction(action.value);
+    if (!parsed) {
+      // Requirement 5.7: validation error naming the affected question
+      lines.push(buildScoreRejectionText(await questionTitle(questionIdOf(action.value))));
+      continue;
+    }
+
+    try {
+      // Upsert response via the service (handles uniqueness, Req 5.10)
+      await container.response.upsert({
+        memberId,
+        sessionId,
+        questionId: parsed.questionId,
+        score: parsed.score,
+      });
+      // Requirement 5.8: confirm the stored score
+      lines.push(buildConfirmationText(await questionTitle(parsed.questionId), parsed.score));
+    } catch {
+      lines.push(buildScoreRejectionText(await questionTitle(parsed.questionId)));
+    }
+  }
+
+  return lines.length > 0 ? lines.join('\n') : null;
+}
+
+/** Extracts the question id from an unparsed action value ("questionId:score"). */
+function questionIdOf(value: string): string {
+  const colonIndex = value.indexOf(':');
+  return colonIndex === -1 ? value : value.substring(0, colonIndex);
+}
+
+/** Resolves a question's display title, falling back to its id. */
+async function questionTitle(questionId: string): Promise<string> {
+  const question = await repos.question.findById(questionId);
+  return question?.title ?? questionId;
+}
+
+/**
+ * Delivers the reply, if there is one and Slack gave us somewhere to send it.
+ * A failed reply must never break the acknowledgement Slack is waiting for.
+ */
+async function reply(responseUrl: string | undefined, text: string | null): Promise<void> {
+  if (!responseUrl || !text) return;
+
+  try {
+    await getResponder().respond(responseUrl, text);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`Slack interaction reply failed: ${message}`);
+  }
+}

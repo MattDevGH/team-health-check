@@ -8,7 +8,22 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import crypto from 'node:crypto';
-import { POST, _repos as repos } from './route';
+import { POST, _repos as repos, _setInteractionResponder } from './route';
+import type { InteractionResponder } from '@/lib/slack/interaction-response';
+
+/** Records replies instead of POSTing to Slack's response_url. */
+function createRecordingResponder(): InteractionResponder & {
+  replies: Array<{ responseUrl: string; text: string }>;
+} {
+  const replies: Array<{ responseUrl: string; text: string }> = [];
+  return {
+    replies,
+    async respond(responseUrl: string, text: string): Promise<boolean> {
+      replies.push({ responseUrl, text });
+      return true;
+    },
+  };
+}
 
 /** Helper to seed a SlackIdentityLink via the repository */
 async function linkSlackUser(slackUserId: string, memberId: string) {
@@ -60,8 +75,12 @@ function makeSignedRequest(payload: Record<string, unknown>): Request {
 }
 
 describe('POST /api/slack/interactions', () => {
+  let responder: ReturnType<typeof createRecordingResponder>;
+
   beforeEach(() => {
     vi.stubEnv('SLACK_SIGNING_SECRET', 'test-slack-signing-secret');
+    responder = createRecordingResponder();
+    _setInteractionResponder(responder);
   });
 
   it('returns 403 when signature is invalid', async () => {
@@ -314,6 +333,138 @@ describe('POST /api/slack/interactions', () => {
     expect(responses).toHaveLength(1);
     expect(responses[0].questionId).toBe('q-delivering-value');
     expect(responses[0].score).toBe(4);
+  });
+
+  describe('member-visible replies (Requirements 5.7, 5.8, 5.9)', () => {
+    it('confirms a recorded score, naming the question and score', async () => {
+      const team = await repos.team.create({ name: 'Confirm Team' });
+      const member = await repos.teamMember.create({ teamId: team.id, name: 'Confirmed', email: 'confirm@example.com' });
+      await repos.session.create({ teamId: team.id, status: 'open' });
+      await linkSlackUser('UCONFIRM1', member.id);
+
+      const res = await POST(
+        makeSignedRequest(
+          buildInteractionPayload({
+            user: { id: 'UCONFIRM1', name: 'confirmed' },
+            actions: [
+              {
+                action_id: 'score_q-ease-of-delivery_4',
+                block_id: 'score_q-ease-of-delivery',
+                value: 'q-ease-of-delivery:4',
+                type: 'button',
+              },
+            ],
+          }),
+        ),
+      );
+
+      expect(res.status).toBe(200);
+      expect(responder.replies).toHaveLength(1);
+      expect(responder.replies[0].responseUrl).toBe('https://hooks.slack.com/actions/T123/456/response');
+      expect(responder.replies[0].text).toContain('Ease of Delivery');
+      expect(responder.replies[0].text).toContain('4');
+      // Requirement 5.10: the member can still change their answer
+      expect(responder.replies[0].text).toContain('change');
+    });
+
+    it('reports a validation error naming the question for an out-of-range score', async () => {
+      const team = await repos.team.create({ name: 'Reject Team' });
+      const member = await repos.teamMember.create({ teamId: team.id, name: 'Rejected', email: 'reject@example.com' });
+      await repos.session.create({ teamId: team.id, status: 'open' });
+      await linkSlackUser('UREJECT1', member.id);
+
+      const res = await POST(
+        makeSignedRequest(
+          buildInteractionPayload({
+            user: { id: 'UREJECT1', name: 'rejected' },
+            actions: [
+              {
+                action_id: 'score_q-psychological-safety_9',
+                block_id: 'score_q-psychological-safety',
+                value: 'q-psychological-safety:9',
+                type: 'button',
+              },
+            ],
+          }),
+        ),
+      );
+
+      expect(res.status).toBe(200);
+      expect(responder.replies).toHaveLength(1);
+      expect(responder.replies[0].text).toContain('Psychological Safety');
+      expect(responder.replies[0].text).toContain('1 and 5');
+    });
+
+    it('tells the member the session has ended when nothing is open', async () => {
+      const team = await repos.team.create({ name: 'Ended Team' });
+      const member = await repos.teamMember.create({ teamId: team.id, name: 'Ended', email: 'ended@example.com' });
+      await repos.session.create({ teamId: team.id, status: 'closed' });
+      await linkSlackUser('UENDED1', member.id);
+
+      const res = await POST(
+        makeSignedRequest(
+          buildInteractionPayload({ user: { id: 'UENDED1', name: 'ended' } }),
+        ),
+      );
+
+      expect(res.status).toBe(200);
+      expect(responder.replies).toHaveLength(1);
+      expect(responder.replies[0].text).toContain('ended');
+    });
+
+    it('points an unlinked Slack user at the pairing command', async () => {
+      const res = await POST(
+        makeSignedRequest(
+          buildInteractionPayload({ user: { id: 'UNOLINK999', name: 'ghost' } }),
+        ),
+      );
+
+      expect(res.status).toBe(200);
+      expect(responder.replies).toHaveLength(1);
+      expect(responder.replies[0].text).toContain('/healthcheck connect');
+    });
+
+    it('skips the reply when Slack sends no response_url', async () => {
+      const team = await repos.team.create({ name: 'No Url Team' });
+      const member = await repos.teamMember.create({ teamId: team.id, name: 'NoUrl', email: 'nourl@example.com' });
+      const session = await repos.session.create({ teamId: team.id, status: 'open' });
+      await linkSlackUser('UNOURL1', member.id);
+
+      const payload = buildInteractionPayload({ user: { id: 'UNOURL1', name: 'nourl' } });
+      delete payload.response_url;
+
+      const res = await POST(makeSignedRequest(payload));
+
+      expect(res.status).toBe(200);
+      expect(responder.replies).toHaveLength(0);
+      // The score is still recorded — only the reply is skipped
+      const responses = await repos.response.findByMemberAndSession(member.id, session.id);
+      expect(responses).toHaveLength(1);
+    });
+
+    it('still acknowledges Slack when the reply fails to deliver', async () => {
+      const team = await repos.team.create({ name: 'Reply Fail Team' });
+      const member = await repos.teamMember.create({ teamId: team.id, name: 'Failer', email: 'failer@example.com' });
+      const session = await repos.session.create({ teamId: team.id, status: 'open' });
+      await linkSlackUser('UFAIL1', member.id);
+
+      _setInteractionResponder({
+        async respond(): Promise<boolean> {
+          throw new Error('network down');
+        },
+      });
+
+      const res = await POST(
+        makeSignedRequest(
+          buildInteractionPayload({ user: { id: 'UFAIL1', name: 'failer' } }),
+        ),
+      );
+
+      // The 3-second ack contract survives a failed reply
+      expect(res.status).toBe(200);
+      const responses = await repos.response.findByMemberAndSession(member.id, session.id);
+      expect(responses).toHaveLength(1);
+    });
   });
 
   it('returns 200 ack without processing when Slack userId has no SlackIdentityLink record', async () => {

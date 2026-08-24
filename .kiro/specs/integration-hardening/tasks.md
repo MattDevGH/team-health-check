@@ -377,7 +377,7 @@ original checklist was marked done.
       instead of reproducing route orchestration inline
     - _Requirements: 8.2, 8.3, 8.4_
 
-  - [ ] 24.3a Respond to Slack interactions instead of acking silently (adjacent slice)
+  - [x] 24.3a Respond to Slack interactions instead of acking silently (adjacent slice)
     - `/api/slack/interactions` currently returns an empty 200 on every path, so a member
       who clicks a score button sees no change and reasonably assumes it failed. Scores are
       stored, but Original 5.7, 5.8, and 5.9 are unimplemented
@@ -393,6 +393,10 @@ original checklist was marked done.
       syntax, italic away note, acceptable density at five questions), so this is a response
       gap rather than a message-construction gap
     - _Requirements: Original 5.7, 5.8, 5.9; supports the "interactive update" item in 24.5_
+    - Delivered as a new ephemeral reply (`replace_original: false`), so the prompt and its
+      buttons stay in place and Requirement 5.10 updates keep working. Rebuilding the prompt
+      in place with recorded scores shown inline remains available as a later refinement if
+      24.5 shows the separate confirmations are too noisy.
 
   - [ ] 24.4 Persist and process failed Slack deliveries with TDD
     - Add/register a Prisma InteractionQueueRepository and store replayable destination/payload data

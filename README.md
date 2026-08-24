@@ -52,10 +52,9 @@ remaining merge blockers are tracked as Tasks 23–26 in
 1. **Auth/session and audit contracts:** Task 23 is complete: browser identity is AuthContext-bound, team resources are ownership-protected, weighted session-link cadence and expiry scoping are enforced, and schedule/member-addition audits commit atomically.
 2. **Slack production behavior:** secure pairing, real unlink, the actionable
    on-demand `/healthcheck` prompt, and bot-initiated prompt eligibility
-   (Slack link, availability, delivery window) are complete; remaining work is
-   interaction responses (button clicks are stored but acked silently, with no
-   confirmation, validation error, or session-ended reply), closing reminders,
-   persistent retry processing, and disposable-workspace acceptance.
+   (Slack link, availability, delivery window), and member-visible interaction
+   replies are complete; remaining work is closing reminders, persistent retry
+   processing, and disposable-workspace acceptance.
 3. **Automated evidence:** isolated/seeded E2E data, secure test-email capture,
    non-skipping browser-first Playwright flows, broader axe coverage, corrected
    MSW identity contracts, executable local libSQL repository evidence, and CI
@@ -135,8 +134,10 @@ enhancement is implemented.
 1. Under **Interactivity & Shortcuts**, toggle **On**
 2. Set the Request URL to: `https://your-domain.com/api/slack/interactions`
    - This receives button clicks (score submissions) from health check prompts
-   - Scores are stored, but the bot does not yet reply to a click with a
-     confirmation, validation error, or session-ended message (Task 24.3a)
+   - A click is answered through Slack's `response_url`: a confirmation naming the
+     question and score, a validation error for an out-of-range score, or a
+     session-ended message if nothing is open. The prompt and its buttons stay in
+     place so answers can still be changed until the session closes
 
 ### 6. Register Slash Commands
 
@@ -307,6 +308,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 - **Secure Slack linking** — pairing derives memberId from the session cookie (never the request body); a persisted, upserted `SlackIdentityLink` survives restarts and is returned by `GET /api/me`; unlink deletes the record before the UI reports success
 - **On-demand Slack prompts** — `/healthcheck` resolves the linked member, their team's open session, and the outstanding questions for their cadence preference, reusing (or minting) the member's session link and returning interactive score blocks with a browser fallback
 - **Gated bot prompts** — `NotificationService` sends scheduler-initiated prompts only to Slack-linked, available members inside the team's delivery window, evaluated in the team timezone
+- **Answered interactions** — score button clicks reply through Slack's `response_url` with a confirmation, validation error, or session-ended message, without breaking the 3-second acknowledgement Slack requires
 - **Authorized team exports** — `/api/teams/[teamId]/export` authenticates from the session cookie and returns aggregate CSV data only when the member belongs to the requested team
 - **Protected session details** — session-detail GET permits ordinary members of the requested team and returns the same 404 for missing or cross-team sessions
 - **Protected participation** — participation GET derives identity only from the session cookie, binds the session to the URL team, and preserves privacy-aware counts without exposing response details
@@ -325,7 +327,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (1081 tests across 130 Vitest files)
+npm test            # unit + property tests (1091 tests across 131 Vitest files)
 npm run test:watch  # watch mode for TDD (unit only)
 npm run test:e2e    # Playwright browser tests
 npm run test:a11y   # Playwright axe tests
