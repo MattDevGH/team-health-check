@@ -76,21 +76,18 @@ export const POST = withErrorHandling(async (request: Request) => {
     sessionRepo: repos.session,
     notificationSink,
     slackLinkChecker,
+    now: () => now,
   });
 
-  // 6. Send Slack prompts for newly opened sessions (Requirement 8.1)
+  // 6. Send Slack prompts for newly opened sessions (Requirement 8.1).
+  // NotificationService owns eligibility: Slack link, availability, delivery window.
   for (const team of teams) {
     if (team.archived) continue;
     const openSession = await repos.session.findOpenByTeamId(team.id);
     if (openSession && !openSessionsBefore.has(team.id)) {
-      // Session was just opened — notify eligible members
       const members = await repos.teamMember.findByTeamId(team.id);
       for (const member of members) {
-        // Skip members who are away (Requirement 8.2)
-        const awayRecord = await repos.availability.findActiveByMemberIdAndDate(member.id, now);
-        if (!awayRecord) {
-          await notificationService.sendSlackPrompt(member.id, openSession);
-        }
+        await notificationService.sendSlackPrompt(member.id, openSession);
       }
     }
   }

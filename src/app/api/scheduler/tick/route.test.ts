@@ -261,11 +261,12 @@ describe('POST /api/scheduler/tick — notification wiring', () => {
       sessionRepo: repos.session,
       notificationSink: sink,
       slackLinkChecker,
+      now: () => now,
     });
 
-    // Act: snapshot, tick, detect, notify (using sendSlackPrompt — checks link only)
-    // Note: sendSlackPrompt doesn't check availability; it only checks Slack link.
-    // The route should filter out away members before calling sendSlackPrompt.
+    // Act: snapshot, tick, detect, notify.
+    // Eligibility (Slack link, availability, delivery window) belongs to
+    // NotificationService, so the caller prompts every member unconditionally.
     const openSessionsBefore = new Map<string, string>();
     const teams = await repos.team.list();
     for (const t of teams) {
@@ -282,11 +283,7 @@ describe('POST /api/scheduler/tick — notification wiring', () => {
       if (openSession && !openSessionsBefore.has(t.id)) {
         const members = await repos.teamMember.findByTeamId(t.id);
         for (const member of members) {
-          // Check availability before sending — route-level filtering
-          const awayRecord = await repos.availability.findActiveByMemberIdAndDate(member.id, now);
-          if (!awayRecord) {
-            await notificationService.sendSlackPrompt(member.id, openSession);
-          }
+          await notificationService.sendSlackPrompt(member.id, openSession);
         }
       }
     }

@@ -351,23 +351,30 @@ original checklist was marked done.
     - [x] Make unlink delete the SlackIdentityLink before the UI reports success
     - _Requirements: 2.1, 7.1, 7.2, 9.3_
 
-  - [ ] 24.2 Align Slack command/prompt eligibility with the documented contract
+  - [x] 24.2 Align Slack command/prompt eligibility with the documented contract
     - [x] Return an actionable current-session prompt and member session link from
       `/healthcheck`, honoring Slack linkage, cadence preference, and outstanding questions
-    - [ ] Honor availability, reminder preference, and the configured delivery window for
-      bot-initiated prompts
-    - Add route-level tests of exported handlers rather than reproducing orchestration
+    - [x] Honor availability and the configured delivery window for bot-initiated prompts;
+      `NotificationService.sendSlackPrompt` owns the gates instead of the tick route
+    - [x] Route-level `/healthcheck` tests drive the exported POST handler
     - _Requirements: 7.4, 8.1, 8.3, 8.4_
     - Accepted contract: an explicit `/healthcheck` is never refused because the member is
       away, has reminders disabled, or is outside the delivery window (Original 5.15 defines
       the command by cadence and outstanding questions). Those gates govern bot-initiated
       sends only (Original 5.1–5.3, Integration 8.1). An away member is prompted with an
       advisory note.
+    - Accepted contract: `remindersEnabled` (Original 13.1) governs closing reminders and
+      mid-session nudges, not opening prompts — opting out of reminders must not silently
+      remove a member from the health check. `sendClosingReminder` already honors it;
+      `sendMidSessionNudge` does not yet, and is folded into Task 24.3.
 
   - [ ] 24.3 Dispatch closing reminders from scheduler ticks with TDD
     - Implement configurable reminder lead-time detection, defaulting to 24 hours
     - Notify only linked, available, enabled members with incomplete responses
+    - Apply `remindersEnabled` and availability to `sendMidSessionNudge` (Original 13.6, 13.7)
     - Prevent duplicate delivery across repeated ticks
+    - Drive the exported tick POST handler in tests through a container/deps seam
+      instead of reproducing route orchestration inline
     - _Requirements: 8.2, 8.3, 8.4_
 
   - [ ] 24.4 Persist and process failed Slack deliveries with TDD

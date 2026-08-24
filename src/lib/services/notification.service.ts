@@ -13,7 +13,8 @@ import type {
   AvailabilityRepository,
   SessionRepository,
 } from '@/lib/repositories/types';
-import type { HealthCheckSession } from '@/lib/repositories/entities';
+import type { HealthCheckSession, Team } from '@/lib/repositories/entities';
+import { getLocalDayAndTime, isWithinTimeWindow } from '@/lib/local-time';
 
 /** Injectable sink that captures notification intents for delivery */
 export interface NotificationSink {
@@ -34,6 +35,7 @@ export interface NotificationServiceDeps {
   sessionRepo: SessionRepository;
   notificationSink: NotificationSink;
   slackLinkChecker: SlackLinkChecker;
+  now?: () => Date;
 }
 
 export interface NotificationService {
@@ -61,18 +63,49 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     notificationSink,
     slackLinkChecker,
   } = deps;
+  const now = deps.now ?? (() => new Date());
 
   // Track nudges sent per session to enforce max-once-per-session rule (Requirement 13.8)
   const nudgesSent = new Map<string, Set<string>>();
 
   /**
+   * True when the team's Slack delivery window is currently open.
+   * An unconfigured window imposes no restriction.
+   * Requirement 5.1: prompts are only delivered inside the configured window.
+   */
+  function isDeliveryWindowOpen(team: Team | null, at: Date): boolean {
+    if (!team?.slackDeliveryStart || !team.slackDeliveryEnd) {
+      return true;
+    }
+
+    const { time } = getLocalDayAndTime(at, team.timezone || 'UTC');
+    return isWithinTimeWindow(time, team.slackDeliveryStart, team.slackDeliveryEnd);
+  }
+
+  /**
    * Send a Slack prompt to a member for a session.
-   * Only sends to members with a linked Slack identity.
    * Requirement 2.8, 5.13: Only linked members receive Slack prompts.
+   * Requirement 8.1: Members marked away are not prompted.
+   * Requirement 5.1: Prompts are only sent inside the team's delivery window.
+   *
+   * These gates apply to bot-initiated prompts only — a member who runs
+   * `/healthcheck` explicitly is always answered.
    */
   async function sendSlackPrompt(memberId: string, session: HealthCheckSession): Promise<boolean> {
     const hasLink = await slackLinkChecker.hasSlackLink(memberId);
     if (!hasLink) {
+      return false;
+    }
+
+    const at = now();
+
+    const awayRecord = await availabilityRepo.findActiveByMemberIdAndDate(memberId, at);
+    if (awayRecord !== null) {
+      return false;
+    }
+
+    const team = await teamRepo.findById(session.teamId);
+    if (!isDeliveryWindowOpen(team, at)) {
       return false;
     }
 
@@ -103,7 +136,7 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     }
 
     // Check not away
-    const awayRecord = await availabilityRepo.findActiveByMemberIdAndDate(memberId, new Date());
+    const awayRecord = await availabilityRepo.findActiveByMemberIdAndDate(memberId, now());
     if (awayRecord !== null) {
       return false;
     }
