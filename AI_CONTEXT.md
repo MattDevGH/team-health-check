@@ -34,8 +34,10 @@ regression requires it. Preserve the current worktree and persistent
 `prisma/dev.db`. Task 23 auth/session/audit closure is complete, including
 atomic actor-bound schedule and team-member-addition audits. Task 23 is fully
 reconciled, and Task 24.1 (secure authenticated Slack pairing and truthful
-unlink behavior) is complete. Resume with Task 24.2 (`/healthcheck` command
-eligibility).
+unlink behavior) is complete. The first half of Task 24.2 is complete:
+`/healthcheck` now returns an actionable cadence-aware prompt. Resume with the
+second half of Task 24.2 (availability, reminder preference, and delivery-window
+eligibility for bot-initiated prompts).
 
 ### Accepted live state
 
@@ -132,14 +134,15 @@ slice stops being reviewable):
 9. `fix: audit schedule configuration changes` — first half of Task 23.5 complete in this checkpoint.
 10. `fix: audit team member additions` — second half of Task 23.5 complete in this checkpoint.
 11. `fix: secure slack account linking and unlinking` — Task 24.1 complete in this checkpoint.
+12. `feat: prompt on-demand health check from slack` — first half of Task 24.2 complete in this checkpoint.
 
 Each slice includes its red/green tests, required README and AI_CONTEXT updates,
 and targeted validation. Do not wait for all of Task 23/24 to commit or leave a
 green slice uncommitted while beginning the next one.
 
 Current known blockers are implementation gaps, not merely missing manual proof:
-`/healthcheck` ignores cadence/reminders/availability/delivery-window eligibility
-and returns no actionable link; scheduler never dispatches closing reminders;
+bot-initiated Slack prompts ignore availability, reminder preference, and the
+configured delivery window; scheduler never dispatches closing reminders;
 the interaction queue has no Prisma implementation and is instantiated fresh
 per scheduler tick, so it is never actually drained; required Playwright tests
 can skip through a nonexistent token endpoint and use
@@ -153,6 +156,16 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 
 ### Changes and validation already completed
 
+- `/healthcheck` now resolves through `HealthCheckPromptService`, which owns Slack
+  identity resolution, open-session lookup, outstanding-question calculation, and
+  session-link reuse (minting one only when the session opened without it). Weekly
+  members receive every outstanding question; micro-pulse members receive the
+  weighted subset from `QuestionSelectionService`. The route returns interactive
+  score blocks plus the browser fallback link, or an ephemeral message for
+  unlinked, no-active-session, and fully-answered cases. Accepted contract: an
+  explicit command is never refused for away/reminders-off/outside-window state —
+  those gates govern bot-initiated sends only — and an away member is prompted
+  with an advisory note.
 - Team-member addition now passes the authenticated Delivery Manager actor into
   `TeamService`, builds one stable summary for both the response and exact
   `member_added` audit payload, and atomically persists the member, default role,
@@ -224,13 +237,14 @@ CSRF, generalized rate-limiting, performance, and telemetry work.
 - Both live closes and scheduler ticks returned 200, all ten expected
   aggregates were verified, and the trends API correctly transitioned from the
   one-session threshold response to two-session data.
-- Latest validation: **128 test files / 1062 tests passed**,
+- Latest validation: **129 test files / 1073 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
-  checkpoint preserves the accepted fixes; Task 23 is fully reconciled and
-  Task 24.1 (secure Slack account linking/unlinking) is complete. Resume with
-  Task 24.2 (`/healthcheck` command eligibility).
+  checkpoint preserves the accepted fixes; Task 23 is fully reconciled,
+  Task 24.1 (secure Slack account linking/unlinking) is complete, and the
+  `/healthcheck` half of Task 24.2 is complete. Resume with bot-initiated prompt
+  eligibility (availability, reminder preference, delivery window).
 
 ---
 
@@ -359,7 +373,10 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1062 tests across 128 files**, including
+The Vitest suite now contains **1073 tests across 129 files**, including
+on-demand `/healthcheck` service and route coverage for unlinked users,
+missing sessions, weekly and micro-pulse selection, session-link reuse/creation,
+fully-answered members, and away advisory notes,
 cookie-authenticated Slack pairing/unlink/persisted-status coverage across
 routes and the `/me` page pairing-code UI, actor-bound `member_added`
 route/service/property coverage with exact stable summary serialization and
@@ -431,8 +448,9 @@ All stages must pass. Branch protection requires CI green before merge.
 - **`authorizeDeliveryManager`**: Extends team membership check with delivery_manager role requirement
 - **Protected routes**: `/api/me/*`, `/api/teams` GET/POST, team exports, session details, participation, responses, and core team settings/trends/member/session routes use cookie AuthContext with requested-resource ownership checks; Task 23.2 route authorization is complete
 - **Member management**: GET/POST/PATCH return a stable member-summary DTO; Delivery Manager additions serialize that exact DTO into an actor-bound `member_added` audit and atomically persist member/default-role/audit; role replacement and removal retain final-manager protection
-- **Slack identity**: Pairing derives memberId from AuthContext (never the request body) and `createContainer` wires `slackIdentityLinkRepo` into `AuthService`, so a verified code persists/upserts the link. `DELETE /api/me/slack-link` deletes the record before reporting success, and `GET /api/me` returns the persisted `slackLink`, so status survives reload/restart. The `/me` page's `SlackSection` has a pairing-code input for the unlinked state. Task 24.1 is complete; `/healthcheck` eligibility (24.2), closing reminders (24.3), and the persistent retry queue (24.4) remain
-- **Notification wiring**: Newly-opened prompts reach NotificationService and the production Slack sink; cadence/window eligibility, closing reminders, persistent retry storage, and later-tick draining remain Task 24 blockers
+- **Slack identity**: Pairing derives memberId from AuthContext (never the request body) and `createContainer` wires `slackIdentityLinkRepo` into `AuthService`, so a verified code persists/upserts the link. `DELETE /api/me/slack-link` deletes the record before reporting success, and `GET /api/me` returns the persisted `slackLink`, so status survives reload/restart. The `/me` page's `SlackSection` has a pairing-code input for the unlinked state. Task 24.1 is complete
+- **On-demand prompts**: `/healthcheck` delegates to `HealthCheckPromptService`, which resolves the linked member, the team's open session, the outstanding questions for their cadence preference, and a reused-or-minted session link; the route returns interactive score blocks with a browser fallback. An explicit command is never refused for away/reminders-off/outside-window state
+- **Notification wiring**: Newly-opened prompts reach NotificationService and the production Slack sink; bot-initiated availability/reminder/delivery-window eligibility (24.2 second half), closing reminders, persistent retry storage, and later-tick draining remain Task 24 blockers
 - **Turso**: Environment-aware Prisma client selection exists (better-sqlite3 locally, @libsql/client in production); executable repository behavior through local libSQL remains Task 25.5
 
 ---

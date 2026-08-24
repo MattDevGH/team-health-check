@@ -352,10 +352,17 @@ original checklist was marked done.
     - _Requirements: 2.1, 7.1, 7.2, 9.3_
 
   - [ ] 24.2 Align Slack command/prompt eligibility with the documented contract
-    - Return an actionable current-session prompt or member session link from `/healthcheck`
-    - Honor Slack linkage, availability, reminder preference, cadence, and configured delivery windows
+    - [x] Return an actionable current-session prompt and member session link from
+      `/healthcheck`, honoring Slack linkage, cadence preference, and outstanding questions
+    - [ ] Honor availability, reminder preference, and the configured delivery window for
+      bot-initiated prompts
     - Add route-level tests of exported handlers rather than reproducing orchestration
     - _Requirements: 7.4, 8.1, 8.3, 8.4_
+    - Accepted contract: an explicit `/healthcheck` is never refused because the member is
+      away, has reminders disabled, or is outside the delivery window (Original 5.15 defines
+      the command by cadence and outstanding questions). Those gates govern bot-initiated
+      sends only (Original 5.1–5.3, Integration 8.1). An away member is prompted with an
+      advisory note.
 
   - [ ] 24.3 Dispatch closing reminders from scheduler ticks with TDD
     - Implement configurable reminder lead-time detection, defaulting to 24 hours

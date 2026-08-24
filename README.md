@@ -50,9 +50,11 @@ remaining merge blockers are tracked as Tasks 23–26 in
 `.kiro/specs/integration-hardening/tasks.md`:
 
 1. **Auth/session and audit contracts:** Task 23 is complete: browser identity is AuthContext-bound, team resources are ownership-protected, weighted session-link cadence and expiry scoping are enforced, and schedule/member-addition audits commit atomically.
-2. **Slack production behavior:** secure pairing and real unlink are complete;
-   remaining work is the `/healthcheck` command eligibility contract, closing
-   reminders, persistent retry processing, and disposable-workspace acceptance.
+2. **Slack production behavior:** secure pairing, real unlink, and the actionable
+   on-demand `/healthcheck` prompt are complete; remaining work is bot-initiated
+   prompt eligibility (availability, reminder preference, delivery window),
+   closing reminders, persistent retry processing, and disposable-workspace
+   acceptance.
 3. **Automated evidence:** isolated/seeded E2E data, secure test-email capture,
    non-skipping browser-first Playwright flows, broader axe coverage, corrected
    MSW identity contracts, executable local libSQL repository evidence, and CI
@@ -144,19 +146,32 @@ enhancement is implemented.
 
 ### 7. Account Linking — Integration Closure Status
 
-`/healthcheck connect` generates a short-lived pairing code and the database
-identity repository is implemented. The full user flow is **not yet
-production-ready**: authenticated web code entry is missing, the current pairing
-route accepts a caller-supplied member ID, and unlink currently reports success
-without deleting the persisted link. Integration-hardening Task 24.1 must close
-these gaps before real-workspace acceptance or deployment.
-
-The intended accepted flow is:
+Account linking is implemented end to end (integration-hardening Task 24.1):
 
 1. The member runs `/healthcheck connect` and receives an ephemeral code
-2. The authenticated member enters the code in the web profile
-3. The link survives reload/restart and Slack prompts route to that member
+2. The authenticated member enters the code in the web profile — the pairing
+   route derives the member from the session cookie, never from the request body
+3. The link is persisted, survives reload/restart, and Slack prompts route to
+   that member
 4. Unlink deletes the persisted mapping before the UI reports success
+
+Real-workspace acceptance of this flow is still outstanding (Task 24.5).
+
+### 7a. On-demand `/healthcheck`
+
+A bare `/healthcheck` returns the member's outstanding questions for the current
+open session as interactive score buttons, plus their session link as a browser
+fallback. Weekly members are prompted with every outstanding question;
+micro-pulse members receive the weighted subset chosen by the question selection
+service. Unlinked users get pairing instructions, teams with no open session get
+an informative message, and a member who has answered everything is told so and
+linked to their responses.
+
+An explicit `/healthcheck` is never refused because the member is marked away,
+has reminders disabled, or is outside the team's Slack delivery window — those
+gates apply to bot-initiated prompts. An away member is prompted with an
+advisory note. Applying those gates to scheduler-sent prompts is the remaining
+half of Task 24.2.
 
 ### 8. Schedule Health Checks (Optional)
 
@@ -281,6 +296,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 - **Audited schedule configuration** — Delivery Manager changes emit stable complete `schedule_change` snapshots with the authenticated actor; normalized no-ops skip persistence/audit, while schedule, canonical team timezone, and audit append commit atomically
 - **Audited member addition** — Delivery Manager additions return the same stable summary serialized into `member_added`; member, default role, and actor-bound audit commit atomically
 - **Secure Slack linking** — pairing derives memberId from the session cookie (never the request body); a persisted, upserted `SlackIdentityLink` survives restarts and is returned by `GET /api/me`; unlink deletes the record before the UI reports success
+- **On-demand Slack prompts** — `/healthcheck` resolves the linked member, their team's open session, and the outstanding questions for their cadence preference, reusing (or minting) the member's session link and returning interactive score blocks with a browser fallback
 - **Authorized team exports** — `/api/teams/[teamId]/export` authenticates from the session cookie and returns aggregate CSV data only when the member belongs to the requested team
 - **Protected session details** — session-detail GET permits ordinary members of the requested team and returns the same 404 for missing or cross-team sessions
 - **Protected participation** — participation GET derives identity only from the session cookie, binds the session to the URL team, and preserves privacy-aware counts without exposing response details
@@ -299,7 +315,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (1062 tests across 128 Vitest files)
+npm test            # unit + property tests (1073 tests across 129 Vitest files)
 npm run test:watch  # watch mode for TDD (unit only)
 npm run test:e2e    # Playwright browser tests
 npm run test:a11y   # Playwright axe tests
@@ -389,9 +405,10 @@ Feature specifications at `.kiro/specs/`:
 - **Playwright closure is incomplete** — required happy paths can skip, use stale
   contracts/manual cookies, and share non-isolated unseeded data. Tasks 25.1–25.3
   replace them with deterministic browser-first and accessibility evidence.
-- **No real-workspace Slack acceptance** — low-level behavior is automated, but
-  account linking/unlink, prompts, interactions, reminders, and durable retry
-  still need implementation closure plus a disposable-workspace pass.
+- **No real-workspace Slack acceptance** — account linking/unlink and the
+  on-demand `/healthcheck` prompt are implemented and unit/route tested, but
+  bot-initiated prompt eligibility, reminders, and durable retry still need
+  implementation closure, and all of it needs a disposable-workspace pass.
 - **No executable libSQL repository proof** — client selection exists, but Task
   25.5 must execute representative repository behavior through the local libSQL
   adapter.

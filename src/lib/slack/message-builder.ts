@@ -22,6 +22,8 @@ export interface SlackMessage {
 export function buildPromptMessage(params: {
   questions: Question[];
   sessionLinkUrl: string;
+  /** Optional advisory line rendered above the questions (e.g. away notice). */
+  note?: string;
 }): SlackMessage {
   const blocks: SlackBlock[] = [];
 
@@ -33,6 +35,13 @@ export function buildPromptMessage(params: {
       text: '*🏥 Health Check Time!*\nRate each area from 1 (strongly disagree) to 5 (strongly agree).',
     },
   });
+
+  if (params.note) {
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: `_${params.note}_` }],
+    });
+  }
 
   // One section + actions per question with score buttons
   for (const question of params.questions) {

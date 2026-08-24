@@ -21,6 +21,7 @@ import { createAvailabilityService } from './services/availability.service';
 import { createStreakService } from './services/streak.service';
 import { createQuestionSelectionService } from './services/question-selection.service';
 import { createParticipationService } from './services/participation.service';
+import { createHealthCheckPromptService } from './services/health-check-prompt.service';
 import type { Repositories } from './repositories';
 import type { TeamService } from './services/team.service';
 import type { SessionService } from './services/session.service';
@@ -34,6 +35,7 @@ import type { AvailabilityService } from './services/availability.service';
 import type { StreakService } from './services/streak.service';
 import type { QuestionSelectionService } from './services/question-selection.service';
 import type { ParticipationService } from './services/participation.service';
+import type { HealthCheckPromptService } from './services/health-check-prompt.service';
 import type { EmailService } from './services/email.service';
 
 /** Optional service overrides for production wiring */
@@ -58,6 +60,7 @@ export interface Container {
   streak: StreakService;
   questionSelection: QuestionSelectionService;
   participation: ParticipationService;
+  healthCheckPrompt: HealthCheckPromptService;
 }
 
 /**
@@ -161,6 +164,18 @@ export function createContainer(repos: Repositories, options?: ContainerOptions)
     responseRepo: repos.response,
   });
 
+  const healthCheckPrompt = createHealthCheckPromptService({
+    slackIdentityLinkRepo: repos.slackIdentityLink,
+    teamMemberRepo: repos.teamMember,
+    sessionRepo: repos.session,
+    questionRepo: repos.question,
+    responseRepo: repos.response,
+    sessionLinkRepo: repos.sessionLink,
+    availabilityRepo: repos.availability,
+    questionSelection,
+    appUrl: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+  });
+
   return {
     team,
     session,
@@ -177,5 +192,6 @@ export function createContainer(repos: Repositories, options?: ContainerOptions)
     streak,
     questionSelection,
     participation,
+    healthCheckPrompt,
   };
 }

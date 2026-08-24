@@ -15,29 +15,19 @@
 
 import { withErrorHandling } from '@/lib/api-utils';
 import { verifySlackSignature } from '@/lib/slack/verify-signature';
+import { buildPromptMessage } from '@/lib/slack/message-builder';
 import { container as prodContainer } from '@/lib/container-production';
-import { repos as prodRepos } from '@/lib/container-production';
 import type { Container } from '@/lib/container';
-import type { Repositories } from '@/lib/repositories';
 
 /** Test seam: allows tests to inject a container with pre-populated data */
 let _containerOverride: Container | null = null;
-let _reposOverride: Repositories | null = null;
 
 export function _setContainer(c: Container): void {
   _containerOverride = c;
 }
 
-export function _setRepos(r: Repositories): void {
-  _reposOverride = r;
-}
-
 function getContainer(): Container {
   return _containerOverride ?? prodContainer;
-}
-
-function getRepos(): Repositories {
-  return _reposOverride ?? prodRepos;
 }
 
 export const POST = withErrorHandling(async (request: Request) => {
@@ -83,48 +73,58 @@ async function handleConnect(slackUserId: string): Promise<Response> {
 }
 
 /**
- * Handle `/healthcheck` — show health check prompt for current session.
- * Requirement 7.4: Use SlackIdentityLinkRepository to identify the member.
- * Requirement 5.15: on-demand slash command responds with appropriate prompts.
- * Requirement 5.16: no active session returns informative message.
+ * Handle `/healthcheck` — show the health check prompt for the current session.
+ * Requirement 7.4: the member is identified through the SlackIdentityLink.
+ * Requirement 5.15: prompts reflect cadence preference and outstanding questions.
+ * Requirement 5.16: no active session returns an informative message.
  */
 async function handleHealthCheck(slackUserId: string): Promise<Response> {
-  const r = getRepos();
+  const result = await getContainer().healthCheckPrompt.resolveOnDemandPrompt(slackUserId);
 
-  // Step 1: Look up Slack identity link
-  const link = await r.slackIdentityLink.findBySlackUserId(slackUserId);
+  switch (result.kind) {
+    case 'unlinked':
+      return ephemeral(
+        'Your Slack account is not linked to a Team Health Check member.\nUse `/healthcheck connect` to generate a pairing code and link your account.',
+      );
 
-  if (!link) {
-    // Unlinked user — return pairing instructions
-    return Response.json({
-      response_type: 'ephemeral',
-      text: 'Your Slack account is not linked to a Team Health Check member.\nUse `/healthcheck connect` to generate a pairing code and link your account.',
-    });
+    case 'no_active_session':
+      return ephemeral(
+        'No active health check session for your team. Check back when one is open!',
+      );
+
+    case 'all_answered':
+      return ephemeral(
+        `You have already answered every question in this health check session. Review or update your responses: ${result.sessionLinkUrl}`,
+      );
+
+    case 'prompt': {
+      const message = buildPromptMessage({
+        questions: result.questions,
+        sessionLinkUrl: result.sessionLinkUrl,
+        note: buildAwayNote(result.awayUntil),
+      });
+
+      return Response.json({
+        response_type: 'ephemeral',
+        text: 'Your health check session is open — rate the questions below or submit via browser.',
+        blocks: message.blocks,
+      });
+    }
   }
+}
 
-  // Step 2: Look up the member to find their team
-  const member = await r.teamMember.findById(link.memberId);
-  if (!member) {
-    // Member no longer exists — treat as unlinked
-    return Response.json({
-      response_type: 'ephemeral',
-      text: 'Your Slack account is not linked to a Team Health Check member.\nUse `/healthcheck connect` to generate a pairing code and link your account.',
-    });
-  }
+/** Ephemeral text-only Slack response. */
+function ephemeral(text: string): Response {
+  return Response.json({ response_type: 'ephemeral', text });
+}
 
-  // Step 3: Find open session for the member's team
-  const openSession = await r.session.findOpenByTeamId(member.teamId);
+/**
+ * Members who marked themselves away can still respond on demand; they are only
+ * excluded from bot-initiated prompts, so the away state is advisory here.
+ */
+function buildAwayNote(awayUntil: Date | null): string | undefined {
+  if (!awayUntil) return undefined;
 
-  if (!openSession) {
-    return Response.json({
-      response_type: 'ephemeral',
-      text: 'No active health check session for your team. Check back when one is open!',
-    });
-  }
-
-  // Step 4: Return health check prompt with session info
-  return Response.json({
-    response_type: 'ephemeral',
-    text: `You have an active health check session open for your team. Submit your responses to share how things are going!\nSession started: ${openSession.actualOpenAt.toISOString().split('T')[0]}`,
-  });
+  const until = awayUntil.toISOString().split('T')[0];
+  return `You are marked away until ${until}, so you will not be prompted automatically. Responding here still counts.`;
 }
