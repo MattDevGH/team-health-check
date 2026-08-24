@@ -166,6 +166,19 @@ Block Kit check unless `buildPromptMessage` changes.
 
 ### Changes and validation already completed
 
+- Closing reminders are now dispatched. `SessionService.open` stores
+  `scheduledOpenAt`/`scheduledCloseAt` from the team schedule via
+  `nextOccurrenceUtc` (DST-safe: calendar arithmetic on date components, wall-clock
+  conversion through `fromZonedTime`), which the design already specified but the
+  code never did. `NotificationService.sendDueClosingReminders` reminds every
+  eligible member once `now` is inside the lead window and before the close;
+  the lead time defaults to 24 hours and is configurable through
+  `CLOSING_REMINDER_LEAD_HOURS`. The scheduler tick calls it for every open session.
+  Duplicate delivery is prevented by a new `NotificationDelivery` table with a
+  unique index on `(memberId, sessionId, type)`; the Prisma claim relies on that
+  constraint rather than a read-then-write, so racing ticks cannot both send, and
+  the in-memory fake mirrors first-caller-wins. The claim is taken only after every
+  eligibility gate, so an ineligible member keeps their slot for a later tick.
 - `/api/slack/interactions` now replies to the member instead of acking silently.
   A stored score returns a confirmation naming the question and score (5.8), an
   out-of-range or malformed score returns a validation error naming the affected
@@ -268,7 +281,12 @@ Block Kit check unless `buildPromptMessage` changes.
 - Both live closes and scheduler ticks returned 200, all ten expected
   aggregates were verified, and the trends API correctly transitioned from the
   one-session threshold response to two-session data.
-- Latest validation: **131 test files / 1091 tests passed**,
+- **Suite flake to watch (2026-08-25):** one full run reported a single test
+  failure that did not reproduce across four subsequent full runs, and the
+  failing test's identity was lost to truncated output. Not diagnosed. If it
+  recurs, capture full output — a nondeterministic test undermines the CI
+  skip/isolation enforcement Task 25.6 depends on.
+- Latest validation: **135 test files / 1121 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
@@ -404,7 +422,10 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1091 tests across 131 files**, including
+The Vitest suite now contains **1121 tests across 135 files**, including
+DST-safe next-occurrence resolution, stored scheduled open/close windows,
+closing-reminder eligibility with durable once-per-session claims, and
+lead-window dispatch with a configurable lead time,
 Slack interaction reply coverage for confirmations, score rejections,
 session-ended and unlinked cases, missing `response_url`, and reply failure
 preserving the ack, plus response_url transport tests over an injected fetch,

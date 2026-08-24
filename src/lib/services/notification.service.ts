@@ -44,9 +44,20 @@ export interface NotificationServiceDeps {
   now?: () => Date;
 }
 
+/** Requirement 13.2: closing reminders default to 24 hours before close. */
+export const DEFAULT_REMINDER_LEAD_MS = 24 * 60 * 60 * 1000;
+
 export interface NotificationService {
   sendSlackPrompt(memberId: string, session: HealthCheckSession): Promise<boolean>;
   sendClosingReminder(memberId: string, session: HealthCheckSession): Promise<boolean>;
+  /**
+   * Reminds every eligible member when the session is inside its closing window.
+   * Returns how many reminders were sent.
+   */
+  sendDueClosingReminders(
+    session: HealthCheckSession,
+    leadTimeMs?: number,
+  ): Promise<number>;
   sendMidSessionNudge(memberId: string, session: HealthCheckSession): Promise<boolean>;
   sendPreSessionNotification(teamId: string, session: HealthCheckSession): Promise<void>;
 }
@@ -188,6 +199,39 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
   }
 
   /**
+   * Reminds every eligible member of a session whose close is within the lead
+   * window. Idempotent across ticks: the per-member claim in sendClosingReminder
+   * means a member is reminded at most once per session.
+   * Requirement 13.2: configurable lead time, defaulting to 24 hours.
+   */
+  async function sendDueClosingReminders(
+    session: HealthCheckSession,
+    leadTimeMs: number = DEFAULT_REMINDER_LEAD_MS,
+  ): Promise<number> {
+    if (!session.scheduledCloseAt) {
+      // No scheduled close means no lead time can be derived
+      return 0;
+    }
+
+    const at = now().getTime();
+    const closesAt = session.scheduledCloseAt.getTime();
+    const isDue = at >= closesAt - leadTimeMs && at < closesAt;
+    if (!isDue) {
+      return 0;
+    }
+
+    const members = await teamMemberRepo.findByTeamId(session.teamId);
+    let sent = 0;
+    for (const member of members) {
+      if (await sendClosingReminder(member.id, session)) {
+        sent++;
+      }
+    }
+
+    return sent;
+  }
+
+  /**
    * Send a mid-session nudge to a member who missed the previous session.
    * Requirement 13.6: Only if member didn't respond in previous closed session.
    * Requirement 13.8: Max once per session per member.
@@ -280,5 +324,11 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     });
   }
 
-  return { sendSlackPrompt, sendClosingReminder, sendMidSessionNudge, sendPreSessionNotification };
+  return {
+    sendSlackPrompt,
+    sendClosingReminder,
+    sendDueClosingReminders,
+    sendMidSessionNudge,
+    sendPreSessionNotification,
+  };
 }

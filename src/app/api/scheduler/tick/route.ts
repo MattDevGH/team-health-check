@@ -12,11 +12,26 @@ import { withErrorHandling } from '@/lib/api-utils';
 import { ForbiddenError } from '@/lib/errors';
 import { container, repos } from '@/lib/container-production';
 import { createSchedulerService } from '@/lib/services/scheduler.service';
-import { createNotificationService } from '@/lib/services/notification.service';
+import {
+  createNotificationService,
+  DEFAULT_REMINDER_LEAD_MS,
+} from '@/lib/services/notification.service';
 import { createProductionNotificationSink } from '@/lib/slack/production-notification-sink';
 import { createProductionSlackLinkChecker } from '@/lib/slack/production-slack-link-checker';
 import { createSlackApiClient } from '@/lib/slack/delivery';
 import { InMemoryInteractionQueueRepository } from '@/lib/repositories/in-memory/interaction-queue.repository';
+
+/**
+ * Closing-reminder lead time, configurable via CLOSING_REMINDER_LEAD_HOURS.
+ * Requirement 13.2: defaults to 24 hours.
+ */
+function reminderLeadMs(): number {
+  const configured = Number(process.env.CLOSING_REMINDER_LEAD_HOURS);
+  if (!Number.isFinite(configured) || configured <= 0) {
+    return DEFAULT_REMINDER_LEAD_MS;
+  }
+  return configured * 60 * 60 * 1000;
+}
 
 export const POST = withErrorHandling(async (request: Request) => {
   // 1. Authenticate via CRON_SECRET
@@ -80,17 +95,25 @@ export const POST = withErrorHandling(async (request: Request) => {
     now: () => now,
   });
 
-  // 6. Send Slack prompts for newly opened sessions (Requirement 8.1).
-  // NotificationService owns eligibility: Slack link, availability, delivery window.
+  // 6. Notify for open sessions (Requirements 8.1, 8.2).
+  // NotificationService owns eligibility: Slack link, availability, delivery
+  // window, reminder preference, completion, and the once-per-session guard.
   for (const team of teams) {
     if (team.archived) continue;
+
     const openSession = await repos.session.findOpenByTeamId(team.id);
-    if (openSession && !openSessionsBefore.has(team.id)) {
+    if (!openSession) continue;
+
+    if (!openSessionsBefore.has(team.id)) {
+      // Session was just opened — prompt eligible members
       const members = await repos.teamMember.findByTeamId(team.id);
       for (const member of members) {
         await notificationService.sendSlackPrompt(member.id, openSession);
       }
     }
+
+    // Remind members whose session is approaching its close
+    await notificationService.sendDueClosingReminders(openSession, reminderLeadMs());
   }
 
   return Response.json({ ok: true });
