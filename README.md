@@ -53,8 +53,9 @@ remaining merge blockers are tracked as Tasks 23–26 in
 2. **Slack production behavior:** secure pairing, real unlink, the actionable
    on-demand `/healthcheck` prompt, and bot-initiated prompt eligibility
    (Slack link, availability, delivery window) are complete; remaining work is
-   closing reminders, persistent retry processing, and disposable-workspace
-   acceptance.
+   interaction responses (button clicks are stored but acked silently, with no
+   confirmation, validation error, or session-ended reply), closing reminders,
+   persistent retry processing, and disposable-workspace acceptance.
 3. **Automated evidence:** isolated/seeded E2E data, secure test-email capture,
    non-skipping browser-first Playwright flows, broader axe coverage, corrected
    MSW identity contracts, executable local libSQL repository evidence, and CI
@@ -134,6 +135,8 @@ enhancement is implemented.
 1. Under **Interactivity & Shortcuts**, toggle **On**
 2. Set the Request URL to: `https://your-domain.com/api/slack/interactions`
    - This receives button clicks (score submissions) from health check prompts
+   - Scores are stored, but the bot does not yet reply to a click with a
+     confirmation, validation error, or session-ended message (Task 24.3a)
 
 ### 6. Register Slash Commands
 

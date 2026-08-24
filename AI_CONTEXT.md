@@ -141,7 +141,9 @@ and targeted validation. Do not wait for all of Task 23/24 to commit or leave a
 green slice uncommitted while beginning the next one.
 
 Current known blockers are implementation gaps, not merely missing manual proof:
-scheduler never dispatches closing reminders;
+`/api/slack/interactions` acks every click with an empty 200, so scores are stored
+but the member gets no confirmation, validation error, or session-ended message
+(Original 5.7–5.9), tracked as Task 24.3a; scheduler never dispatches closing reminders;
 the interaction queue has no Prisma implementation and is instantiated fresh
 per scheduler tick, so it is never actually drained; required Playwright tests
 can skip through a nonexistent token endpoint and use
@@ -152,6 +154,17 @@ Explicitly deferred non-blockers: session lifecycle management UI; dashboard
 chart/Latest Session/question-disclosure UX; `app_mention`/`message.im` behavior
 if those subscriptions remain undocumented; broader design-system, navigation,
 CSRF, generalized rate-limiting, performance, and telemetry work.
+
+### Slack message rendering — verified 2026-08-24
+
+The `/healthcheck` payloads produced by `buildPromptMessage` were pasted into
+Slack's Block Kit Builder and render correctly: bold `mrkdwn` headers and question
+titles, a working `<url|label>` browser-fallback link, the italic away note in a
+context block, and acceptable density with five question groups (12 blocks, well
+under Slack's 50-block limit). Message construction is therefore de-risked without
+a workspace; what remains unproven is `action_id`/`value` round-tripping and the
+ephemeral response wrapper, both of which need Task 24.5. Do not repeat this
+Block Kit check unless `buildPromptMessage` changes.
 
 ### Changes and validation already completed
 

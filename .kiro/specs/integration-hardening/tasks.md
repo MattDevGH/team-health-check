@@ -377,6 +377,23 @@ original checklist was marked done.
       instead of reproducing route orchestration inline
     - _Requirements: 8.2, 8.3, 8.4_
 
+  - [ ] 24.3a Respond to Slack interactions instead of acking silently (adjacent slice)
+    - `/api/slack/interactions` currently returns an empty 200 on every path, so a member
+      who clicks a score button sees no change and reasonably assumes it failed. Scores are
+      stored, but Original 5.7, 5.8, and 5.9 are unimplemented
+    - Send a confirmation on successful submission (5.8), a validation error for an
+      out-of-range or malformed score (5.7), and a session-ended message when no open
+      session exists (5.9)
+    - Reply through the payload's `response_url`, already captured but unused: prompts
+      delivered from `/healthcheck` are ephemeral and cannot be updated via `chat.update`
+    - Keep the immediate-ack contract — acknowledge within 3 seconds, then deliver the
+      response — and leave exhausted-retry persistence to Task 24.4 (Original 5.13)
+    - Verified 2026-08-24: block rendering itself is sound. The `/healthcheck` payloads were
+      confirmed in Slack's Block Kit Builder (bold headers, working browser-fallback link
+      syntax, italic away note, acceptable density at five questions), so this is a response
+      gap rather than a message-construction gap
+    - _Requirements: Original 5.7, 5.8, 5.9; supports the "interactive update" item in 24.5_
+
   - [ ] 24.4 Persist and process failed Slack deliveries with TDD
     - Add/register a Prisma InteractionQueueRepository and store replayable destination/payload data
     - Drain due entries on later scheduler ticks with backoff and terminal failure handling
