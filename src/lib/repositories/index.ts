@@ -20,6 +20,7 @@ import type {
   PendingGenesisRepository,
   TeamScheduleRepository,
   SlackIdentityLinkRepository,
+  NotificationDeliveryRepository,
 } from './types';
 
 import { InMemoryTeamRepository } from './in-memory/team.repository';
@@ -38,6 +39,7 @@ import { InMemoryUserSessionRepository } from './in-memory/user-session.reposito
 import { InMemoryPendingGenesisRepository } from './in-memory/pending-genesis.repository';
 import { InMemoryTeamScheduleRepository } from './in-memory/team-schedule.repository';
 import { InMemorySlackIdentityLinkRepository } from './in-memory/slack-identity-link.repository';
+import { InMemoryNotificationDeliveryRepository } from './in-memory/notification-delivery.repository';
 
 export interface Repositories {
   team: TeamRepository;
@@ -56,6 +58,7 @@ export interface Repositories {
   pendingGenesis: PendingGenesisRepository;
   teamSchedule: TeamScheduleRepository;
   slackIdentityLink: SlackIdentityLinkRepository;
+  notificationDelivery: NotificationDeliveryRepository;
 }
 
 /**
@@ -92,6 +95,7 @@ export function createInMemoryRepositories(): Repositories {
     },
   });
   const slackIdentityLink = new InMemorySlackIdentityLinkRepository();
+  const notificationDelivery = new InMemoryNotificationDeliveryRepository();
 
   return {
     team,
@@ -110,6 +114,7 @@ export function createInMemoryRepositories(): Repositories {
     pendingGenesis,
     teamSchedule,
     slackIdentityLink,
+    notificationDelivery,
   };
 }
 

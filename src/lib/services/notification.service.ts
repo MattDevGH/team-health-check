@@ -12,6 +12,7 @@ import type {
   QuestionRepository,
   AvailabilityRepository,
   SessionRepository,
+  NotificationDeliveryRepository,
 } from '@/lib/repositories/types';
 import type { HealthCheckSession, Team } from '@/lib/repositories/entities';
 import { getLocalDayAndTime, isWithinTimeWindow } from '@/lib/local-time';
@@ -35,6 +36,11 @@ export interface NotificationServiceDeps {
   sessionRepo: SessionRepository;
   notificationSink: NotificationSink;
   slackLinkChecker: SlackLinkChecker;
+  /**
+   * Durable once-per-session guard. Omitted only by focused tests that do not
+   * exercise repeat delivery; production wiring always injects it.
+   */
+  notificationDeliveryRepo?: NotificationDeliveryRepository;
   now?: () => Date;
 }
 
@@ -62,8 +68,23 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     sessionRepo,
     notificationSink,
     slackLinkChecker,
+    notificationDeliveryRepo,
   } = deps;
   const now = deps.now ?? (() => new Date());
+
+  /**
+   * Claims the single allowed delivery of `type` for this member and session.
+   * Returns false when an earlier tick already claimed it.
+   * Requirements 13.8, 13.10.
+   */
+  async function claimDelivery(
+    memberId: string,
+    sessionId: string,
+    type: string,
+  ): Promise<boolean> {
+    if (!notificationDeliveryRepo) return true;
+    return notificationDeliveryRepo.claim({ memberId, sessionId, type });
+  }
 
   // Track nudges sent per session to enforce max-once-per-session rule (Requirement 13.8)
   const nudgesSent = new Map<string, Set<string>>();
@@ -148,6 +169,12 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     const allCompleted = questions.every(q => answeredQuestionIds.has(q.id));
 
     if (allCompleted) {
+      return false;
+    }
+
+    // Claim last, so an ineligible member never consumes their single slot
+    // and can still be reminded if they become eligible on a later tick.
+    if (!(await claimDelivery(memberId, session.id, 'closing_reminder'))) {
       return false;
     }
 

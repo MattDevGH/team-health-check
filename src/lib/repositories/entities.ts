@@ -164,6 +164,15 @@ export interface SlackIdentityLink {
   createdAt: Date;
 }
 
+/** Requirements 13.8, 13.10: one notification of a given type per member per session */
+export interface NotificationDelivery {
+  id: string;
+  memberId: string;
+  sessionId: string;
+  type: string;
+  sentAt: Date;
+}
+
 /** Requirements: 5.12, NFR 1.2 — Slack interaction retry queue */
 export interface SlackInteractionQueue {
   id: string;

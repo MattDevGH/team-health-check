@@ -74,6 +74,7 @@ export const POST = withErrorHandling(async (request: Request) => {
     questionRepo: repos.question,
     availabilityRepo: repos.availability,
     sessionRepo: repos.session,
+    notificationDeliveryRepo: repos.notificationDelivery,
     notificationSink,
     slackLinkChecker,
     now: () => now,

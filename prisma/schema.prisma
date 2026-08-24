@@ -214,6 +214,21 @@ model PendingGenesis {
   createdAt              DateTime            @default(now())
 }
 
+/// Records that a notification was delivered to a member for a session, so the
+/// scheduler never sends a second one across repeated ticks.
+/// Requirements: 13.8, 13.10; Integration 8.2
+model NotificationDelivery {
+  id                     String              @id @default(cuid())
+  memberId               String
+  sessionId              String
+  /// 'closing_reminder' | 'mid_session_nudge'
+  type                   String
+  sentAt                 DateTime            @default(now())
+
+  @@unique([memberId, sessionId, type])
+  @@index([sessionId, type])
+}
+
 model SlackInteractionQueue {
   id                     String              @id @default(cuid())
   interactionPayload     String

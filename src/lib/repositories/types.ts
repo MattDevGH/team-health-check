@@ -174,6 +174,19 @@ export interface TeamScheduleRepository {
   ): Promise<TeamSchedule>;
 }
 
+/**
+ * Requirements 13.8, 13.10: at most one notification of a given type per member
+ * per session, recorded durably so repeated scheduler ticks cannot re-send.
+ */
+export interface NotificationDeliveryRepository {
+  /**
+   * Atomically records an intent to deliver.
+   * Returns true when this caller won the claim, false when one already exists.
+   */
+  claim(data: { memberId: string; sessionId: string; type: string }): Promise<boolean>;
+  hasDelivered(memberId: string, sessionId: string, type: string): Promise<boolean>;
+}
+
 /** Requirements 7.1, 7.2, 7.3: Slack identity link persistence */
 export interface SlackIdentityLinkRepository {
   create(data: { memberId: string; slackUserId: string }): Promise<SlackIdentityLink>;
