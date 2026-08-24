@@ -95,6 +95,7 @@ export function createContainer(repos: Repositories, options?: ContainerOptions)
     teamMemberRepo: repos.teamMember,
     responseRepo: repos.response,
     sessionAggregateRepo: repos.sessionAggregate,
+    teamScheduleRepo: repos.teamSchedule,
   });
 
   const response = createResponseService({

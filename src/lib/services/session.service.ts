@@ -10,9 +10,11 @@ import type {
   TeamMemberRepository,
   ResponseRepository,
   SessionAggregateRepository,
+  TeamScheduleRepository,
 } from '@/lib/repositories/types';
 import type { HealthCheckSession } from '@/lib/repositories/entities';
 import { NotFoundError, ConflictError } from '@/lib/errors';
+import { nextOccurrenceUtc } from '@/lib/local-time';
 
 export interface SessionServiceDeps {
   sessionRepo: SessionRepository;
@@ -20,6 +22,12 @@ export interface SessionServiceDeps {
   teamMemberRepo: TeamMemberRepository;
   responseRepo: ResponseRepository;
   sessionAggregateRepo: SessionAggregateRepository;
+  /**
+   * Supplies the team's configured close day/time. Omitted only by focused tests
+   * that do not exercise the scheduled window; production wiring always injects it.
+   */
+  teamScheduleRepo?: TeamScheduleRepository;
+  now?: () => Date;
 }
 
 export interface SessionService {
@@ -34,7 +42,15 @@ export interface SessionService {
  * Factory function for creating the session service.
  */
 export function createSessionService(deps: SessionServiceDeps): SessionService {
-  const { sessionRepo, sessionLinkRepo, teamMemberRepo, responseRepo, sessionAggregateRepo } = deps;
+  const {
+    sessionRepo,
+    sessionLinkRepo,
+    teamMemberRepo,
+    responseRepo,
+    sessionAggregateRepo,
+    teamScheduleRepo,
+  } = deps;
+  const now = deps.now ?? (() => new Date());
 
   async function generateSessionLinks(sessionId: string): Promise<void> {
     const session = await sessionRepo.findById(sessionId);
@@ -70,10 +86,27 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
       });
     }
 
+    // Record the cycle's scheduled window so closing reminders and micro-pulse
+    // bundling have a real close time to work from (design.md).
+    const openedAt = now();
+    const schedule = (await teamScheduleRepo?.findByTeamId(teamId)) ?? null;
+    const scheduledWindow = schedule
+      ? {
+          scheduledOpenAt: openedAt,
+          scheduledCloseAt: nextOccurrenceUtc(
+            openedAt,
+            schedule.closeDay,
+            schedule.closeTime,
+            schedule.timezone || 'UTC',
+          ),
+        }
+      : {};
+
     // Create new open session
     const session = await sessionRepo.create({
       teamId,
       status: 'open',
+      ...scheduledWindow,
     });
 
     // Generate session links for all team members
