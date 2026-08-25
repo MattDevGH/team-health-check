@@ -97,9 +97,6 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     return notificationDeliveryRepo.claim({ memberId, sessionId, type });
   }
 
-  // Track nudges sent per session to enforce max-once-per-session rule (Requirement 13.8)
-  const nudgesSent = new Map<string, Set<string>>();
-
   /**
    * True when the team's Slack delivery window is currently open.
    * An unconfigured window imposes no restriction.
@@ -243,9 +240,17 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
       return false;
     }
 
-    // Check max once per session (Requirement 13.8)
-    const sessionNudges = nudgesSent.get(session.id) ?? new Set<string>();
-    if (sessionNudges.has(memberId)) {
+    // Requirement 13.1: respect the member's reminder preference.
+    // Requirement 13.6: nudges target weekly-mode members; micro-pulse members
+    // already receive a prompt every day.
+    const member = await teamMemberRepo.findById(memberId);
+    if (!member || !member.remindersEnabled || member.cadencePreference !== 'weekly') {
+      return false;
+    }
+
+    // Requirement 13.6: not currently marked away
+    const awayNow = await availabilityRepo.findActiveByMemberIdAndDate(memberId, now());
+    if (awayNow !== null) {
       return false;
     }
 
@@ -273,18 +278,47 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
       return false;
     }
 
-    // Send nudge
+    // Requirement 13.7: a member who was away during the previous session was
+    // never expected to respond, so their silence is not a missed session.
+    if (await wasAwayDuring(memberId, previousSession)) {
+      return false;
+    }
+
+    // Requirement 13.8: at most one nudge per session per member
+    if (!(await claimDelivery(memberId, session.id, 'mid_session_nudge'))) {
+      return false;
+    }
+
     await notificationSink.send(memberId, 'mid_session_nudge', {
       sessionId: session.id,
       teamId: session.teamId,
       previousSessionId: previousSession.id,
     });
 
-    // Record that nudge was sent for this session
-    sessionNudges.add(memberId);
-    nudgesSent.set(session.id, sessionNudges);
-
     return true;
+  }
+
+  /**
+   * Whether the member was marked away while the given session ran.
+   * Probes the session's open and close instants, the two points the
+   * availability repository can answer for directly.
+   */
+  async function wasAwayDuring(
+    memberId: string,
+    session: HealthCheckSession,
+  ): Promise<boolean> {
+    const probes = [session.actualOpenAt, session.actualCloseAt].filter(
+      (date): date is Date => date !== null,
+    );
+
+    for (const probe of probes) {
+      const away = await availabilityRepo.findActiveByMemberIdAndDate(memberId, probe);
+      if (away !== null) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**

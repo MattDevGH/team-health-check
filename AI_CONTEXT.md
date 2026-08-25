@@ -34,9 +34,11 @@ regression requires it. Preserve the current worktree and persistent
 `prisma/dev.db`. Task 23 auth/session/audit closure is complete, including
 atomic actor-bound schedule and team-member-addition audits. Task 23 is fully
 reconciled, and Task 24.1 (secure authenticated Slack pairing and truthful
-unlink behavior) and Task 24.2 (actionable cadence-aware `/healthcheck` plus
-availability/delivery-window eligibility for bot-initiated prompts) are complete.
-Resume with Task 24.3 (closing reminders from scheduler ticks).
+unlink behavior), Task 24.2 (actionable cadence-aware `/healthcheck` plus
+availability/delivery-window eligibility for bot-initiated prompts), Task 24.3a
+(member-visible interaction replies), and Task 24.3 (closing reminders, nudge
+eligibility, and route-level tick tests) are complete. Resume with Task 24.4
+(persistent Slack interaction retry queue).
 
 ### Accepted live state
 
@@ -141,7 +143,6 @@ and targeted validation. Do not wait for all of Task 23/24 to commit or leave a
 green slice uncommitted while beginning the next one.
 
 Current known blockers are implementation gaps, not merely missing manual proof:
-scheduler never dispatches closing reminders;
 the interaction queue has no Prisma implementation and is instantiated fresh
 per scheduler tick, so it is never actually drained; required Playwright tests
 can skip through a nonexistent token endpoint and use
@@ -179,6 +180,15 @@ Block Kit check unless `buildPromptMessage` changes.
   constraint rather than a read-then-write, so racing ticks cannot both send, and
   the in-memory fake mirrors first-caller-wins. The claim is taken only after every
   eligibility gate, so an ineligible member keeps their slot for a later tick.
+- `sendMidSessionNudge` now honors `remindersEnabled`, weekly-only cadence
+  (micro-pulse members are prompted daily anyway), current availability, and
+  availability during the previous session (Original 13.1, 13.6, 13.7). Its
+  once-per-session guard moved from the in-process Map — which could not survive a
+  serverless invocation boundary — to the same durable `NotificationDelivery` claim.
+- The scheduler tick route is now driven directly by its tests through
+  `_setTickTestDeps` (recording sink plus fixed clock), replacing tests that
+  reproduced the route's orchestration inline and therefore never exercised the
+  route's own wiring.
 - `/api/slack/interactions` now replies to the member instead of acking silently.
   A stored score returns a confirmation naming the question and score (5.8), an
   out-of-range or malformed score returns a validation error naming the affected
@@ -286,7 +296,7 @@ Block Kit check unless `buildPromptMessage` changes.
   failing test's identity was lost to truncated output. Not diagnosed. If it
   recurs, capture full output — a nondeterministic test undermines the CI
   skip/isolation enforcement Task 25.6 depends on.
-- Latest validation: **135 test files / 1121 tests passed**,
+- Latest validation: **136 test files / 1130 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
@@ -422,7 +432,10 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1121 tests across 135 files**, including
+The Vitest suite now contains **1130 tests across 136 files**, including
+route-level scheduler-tick coverage that drives the exported POST handler
+(cron auth, session opening, prompt eligibility, lead-window reminders, and
+no repeat reminders across ticks), mid-session nudge eligibility,
 DST-safe next-occurrence resolution, stored scheduled open/close windows,
 closing-reminder eligibility with durable once-per-session claims, and
 lead-window dispatch with a configurable lead time,
@@ -523,7 +536,8 @@ All stages must pass. Branch protection requires CI green before merge.
 ### Integration-hardening merge blockers
 
 - Task 23: complete; run final reconciliation before Task 24
-- Task 24: Slack production behavior and real-workspace acceptance
+- Task 24: 24.1, 24.2, 24.3, and 24.3a are complete. Remaining: 24.4 persistent
+  Slack retry queue, then 24.5 disposable-workspace acceptance
 - Task 25: deterministic non-skipping E2E/MSW/libSQL evidence
 - Task 26: documentation, full gates, commit/push/PR/merge
 

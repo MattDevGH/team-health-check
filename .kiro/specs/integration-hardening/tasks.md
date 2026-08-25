@@ -368,13 +368,20 @@ original checklist was marked done.
       remove a member from the health check. `sendClosingReminder` already honors it;
       `sendMidSessionNudge` does not yet, and is folded into Task 24.3.
 
-  - [ ] 24.3 Dispatch closing reminders from scheduler ticks with TDD
-    - Implement configurable reminder lead-time detection, defaulting to 24 hours
-    - Notify only linked, available, enabled members with incomplete responses
-    - Apply `remindersEnabled` and availability to `sendMidSessionNudge` (Original 13.6, 13.7)
-    - Prevent duplicate delivery across repeated ticks
-    - Drive the exported tick POST handler in tests through a container/deps seam
+  - [x] 24.3 Dispatch closing reminders from scheduler ticks with TDD
+    - [x] Configurable reminder lead-time detection via `CLOSING_REMINDER_LEAD_HOURS`,
+      defaulting to 24 hours
+    - [x] Notify only linked, available, enabled members with incomplete responses
+    - [x] Apply `remindersEnabled`, weekly cadence, current availability, and
+      previous-session availability to `sendMidSessionNudge` (Original 13.1, 13.6, 13.7)
+    - [x] Prevent duplicate delivery across repeated ticks through the
+      unique-constrained `NotificationDelivery` claim, replacing the in-process Map
+      that could not survive a serverless invocation boundary
+    - [x] Drive the exported tick POST handler in tests through a container/deps seam
       instead of reproducing route orchestration inline
+    - Prerequisite delivered first: `SessionService.open` now stores the DST-safe
+      `scheduledOpenAt`/`scheduledCloseAt` the design already specified, without which
+      no lead time could be derived
     - _Requirements: 8.2, 8.3, 8.4_
 
   - [x] 24.3a Respond to Slack interactions instead of acking silently (adjacent slice)

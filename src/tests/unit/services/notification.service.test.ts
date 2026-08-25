@@ -49,6 +49,8 @@ describe('NotificationService', () => {
       questionRepo: repos.question,
       availabilityRepo: repos.availability,
       sessionRepo: repos.session,
+      // Durable once-per-session guard (Requirements 13.8, 13.10)
+      notificationDeliveryRepo: repos.notificationDelivery,
       notificationSink: sink,
       slackLinkChecker,
     });

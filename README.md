@@ -52,9 +52,9 @@ remaining merge blockers are tracked as Tasks 23–26 in
 1. **Auth/session and audit contracts:** Task 23 is complete: browser identity is AuthContext-bound, team resources are ownership-protected, weighted session-link cadence and expiry scoping are enforced, and schedule/member-addition audits commit atomically.
 2. **Slack production behavior:** secure pairing, real unlink, the actionable
    on-demand `/healthcheck` prompt, and bot-initiated prompt eligibility
-   (Slack link, availability, delivery window), and member-visible interaction
-   replies are complete; remaining work is closing reminders, persistent retry
-   processing, and disposable-workspace acceptance.
+   (Slack link, availability, delivery window), member-visible interaction
+   replies, and closing reminders are complete; remaining work is persistent
+   retry processing and disposable-workspace acceptance.
 3. **Automated evidence:** isolated/seeded E2E data, secure test-email capture,
    non-skipping browser-first Playwright flows, broader axe coverage, corrected
    MSW identity contracts, executable local libSQL repository evidence, and CI
@@ -328,7 +328,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (1121 tests across 135 Vitest files)
+npm test            # unit + property tests (1130 tests across 136 Vitest files)
 npm run test:watch  # watch mode for TDD (unit only)
 npm run test:e2e    # Playwright browser tests
 npm run test:a11y   # Playwright axe tests

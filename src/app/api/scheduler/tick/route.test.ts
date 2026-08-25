@@ -1,216 +1,49 @@
 /**
- * Tests for POST /api/scheduler/tick — NotificationService wiring.
- * Validates: Requirements 8.1, 8.2, 8.3
+ * Tests for POST /api/scheduler/tick — notification wiring.
  *
- * When the scheduler tick opens a session, NotificationService.send
- * should be called for eligible (Slack-linked, available) members.
+ * These drive the exported handler rather than reproducing its orchestration,
+ * so the route's own wiring and eligibility delegation are under test.
+ *
+ * Requirements: 3.2, 3.3, 8.1, 8.2, 8.3
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createInMemoryRepositories } from '@/lib/repositories';
-import { createSchedulerService } from '@/lib/services/scheduler.service';
-import { createSessionService } from '@/lib/services/session.service';
-import { createNotificationService } from '@/lib/services/notification.service';
-import type { NotificationSink, SlackLinkChecker } from '@/lib/services/notification.service';
-import type { Repositories } from '@/lib/repositories';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-/**
- * Creates a fake NotificationSink that records all calls.
- */
-function createFakeNotificationSink(): NotificationSink & { calls: Array<{ memberId: string; type: string; payload: unknown }> } {
-  const calls: Array<{ memberId: string; type: string; payload: unknown }> = [];
+import { POST, _setTickTestDeps, _resetTickTestDeps } from './route';
+import { repos } from '@/lib/container-production';
+import type { NotificationSink } from '@/lib/services/notification.service';
+import type { Team } from '@/lib/repositories/entities';
+
+const CRON_SECRET = 'test-cron-secret';
+
+/** Monday 09:00 UTC — matches the schedule seeded below, so a session opens. */
+const OPEN_TICK = new Date('2026-08-24T09:00:00.000Z');
+
+function createRecordingSink(): NotificationSink & {
+  calls: Array<{ memberId: string; type: string }>;
+} {
+  const calls: Array<{ memberId: string; type: string }> = [];
   return {
     calls,
-    async send(memberId: string, type: string, payload: unknown): Promise<void> {
-      calls.push({ memberId, type, payload });
+    async send(memberId: string, type: string): Promise<void> {
+      calls.push({ memberId, type });
     },
   };
 }
 
-/**
- * Creates a SlackLinkChecker backed by the in-memory SlackIdentityLinkRepository.
- */
-function createFakeSlackLinkChecker(repos: Repositories): SlackLinkChecker {
-  return {
-    async hasSlackLink(memberId: string): Promise<boolean> {
-      const link = await repos.slackIdentityLink.findByMemberId(memberId);
-      return link !== null;
-    },
-  };
+function tickRequest(secret = CRON_SECRET): Request {
+  return new Request('http://localhost/api/scheduler/tick', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${secret}` },
+  });
 }
 
-describe('POST /api/scheduler/tick — notification wiring', () => {
-  let repos: Repositories;
-  let sink: ReturnType<typeof createFakeNotificationSink>;
+describe('POST /api/scheduler/tick', () => {
+  let sink: ReturnType<typeof createRecordingSink>;
 
-  beforeEach(() => {
-    repos = createInMemoryRepositories();
-    sink = createFakeNotificationSink();
-  });
-
-  it('sends Slack prompts to eligible members when a session is opened', async () => {
-    // Arrange: Create a team with a schedule that triggers NOW
-    const team = await repos.team.create({ name: 'Test Team', timezone: 'UTC' });
-
-    // Get current day/time in UTC for schedule matching
-    const now = new Date('2025-01-06T09:00:00.000Z'); // Monday 09:00 UTC
-    await repos.teamSchedule.create({
-      teamId: team.id,
-      cadence: 'weekly',
-      openDay: 1, // Monday
-      openTime: '09:00',
-      closeDay: 5, // Friday
-      closeTime: '17:00',
-      timezone: 'UTC',
-    });
-
-    // Create two members
-    const member1 = await repos.teamMember.create({ teamId: team.id, name: 'Alice', email: 'alice@test.com' });
-    await repos.teamMember.create({ teamId: team.id, name: 'Bob', email: 'bob@test.com' });
-
-    // Only member1 has a Slack link (eligible)
-    await repos.slackIdentityLink.create({ memberId: member1.id, slackUserId: 'U_ALICE' });
-
-    // Wire services as the route would
-    const sessionService = createSessionService({
-      sessionRepo: repos.session,
-      sessionLinkRepo: repos.sessionLink,
-      teamMemberRepo: repos.teamMember,
-      responseRepo: repos.response,
-      sessionAggregateRepo: repos.sessionAggregate,
-    });
-
-    const scheduler = createSchedulerService({
-      teamRepo: repos.team,
-      teamScheduleRepo: repos.teamSchedule,
-      sessionRepo: repos.session,
-      sessionAggregateRepo: repos.sessionAggregate,
-      sessionService,
-    });
-
-    const slackLinkChecker = createFakeSlackLinkChecker(repos);
-
-    const notificationService = createNotificationService({
-      teamRepo: repos.team,
-      teamMemberRepo: repos.teamMember,
-      responseRepo: repos.response,
-      questionRepo: repos.question,
-      availabilityRepo: repos.availability,
-      sessionRepo: repos.session,
-      notificationSink: sink,
-      slackLinkChecker,
-    });
-
-    // Act: Simulate what the route does — snapshot, tick, detect new sessions, notify
-    const openSessionsBefore = new Map<string, string>();
-    const teams = await repos.team.list();
-    for (const t of teams) {
-      const openSession = await repos.session.findOpenByTeamId(t.id);
-      if (openSession) {
-        openSessionsBefore.set(t.id, openSession.id);
-      }
-    }
-
-    await scheduler.tick(now);
-
-    // Detect newly opened sessions and send notifications
-    for (const t of teams) {
-      const openSession = await repos.session.findOpenByTeamId(t.id);
-      if (openSession && !openSessionsBefore.has(t.id)) {
-        // Session was just opened — notify eligible members
-        const members = await repos.teamMember.findByTeamId(t.id);
-        for (const member of members) {
-          await notificationService.sendSlackPrompt(member.id, openSession);
-        }
-      }
-    }
-
-    // Assert: Only member1 (with Slack link) should receive a prompt
-    expect(sink.calls).toHaveLength(1);
-    expect(sink.calls[0].memberId).toBe(member1.id);
-    expect(sink.calls[0].type).toBe('slack_prompt');
-    expect(sink.calls[0].payload).toEqual(
-      expect.objectContaining({ sessionId: expect.any(String), teamId: team.id })
-    );
-  });
-
-  it('does not send notifications when no new session is opened', async () => {
-    // Arrange: Create team with a schedule that does NOT match the current time
-    const team = await repos.team.create({ name: 'Quiet Team', timezone: 'UTC' });
-    await repos.teamSchedule.create({
-      teamId: team.id,
-      cadence: 'weekly',
-      openDay: 3, // Wednesday
-      openTime: '10:00',
-      closeDay: 5,
-      closeTime: '17:00',
-      timezone: 'UTC',
-    });
-
-    const member = await repos.teamMember.create({ teamId: team.id, name: 'Charlie', email: 'charlie@test.com' });
-    await repos.slackIdentityLink.create({ memberId: member.id, slackUserId: 'U_CHARLIE' });
-
-    const sessionService = createSessionService({
-      sessionRepo: repos.session,
-      sessionLinkRepo: repos.sessionLink,
-      teamMemberRepo: repos.teamMember,
-      responseRepo: repos.response,
-      sessionAggregateRepo: repos.sessionAggregate,
-    });
-
-    const scheduler = createSchedulerService({
-      teamRepo: repos.team,
-      teamScheduleRepo: repos.teamSchedule,
-      sessionRepo: repos.session,
-      sessionAggregateRepo: repos.sessionAggregate,
-      sessionService,
-    });
-
-    const slackLinkChecker = createFakeSlackLinkChecker(repos);
-    const notificationService = createNotificationService({
-      teamRepo: repos.team,
-      teamMemberRepo: repos.teamMember,
-      responseRepo: repos.response,
-      questionRepo: repos.question,
-      availabilityRepo: repos.availability,
-      sessionRepo: repos.session,
-      notificationSink: sink,
-      slackLinkChecker,
-    });
-
-    // Act: tick on Monday 09:00 — schedule opens on Wednesday
-    const now = new Date('2025-01-06T09:00:00.000Z'); // Monday
-
-    const openSessionsBefore = new Map<string, string>();
-    const teams = await repos.team.list();
-    for (const t of teams) {
-      const openSession = await repos.session.findOpenByTeamId(t.id);
-      if (openSession) {
-        openSessionsBefore.set(t.id, openSession.id);
-      }
-    }
-
-    await scheduler.tick(now);
-
-    for (const t of teams) {
-      const openSession = await repos.session.findOpenByTeamId(t.id);
-      if (openSession && !openSessionsBefore.has(t.id)) {
-        const members = await repos.teamMember.findByTeamId(t.id);
-        for (const member of members) {
-          await notificationService.sendSlackPrompt(member.id, openSession);
-        }
-      }
-    }
-
-    // Assert: No notifications because no session was opened
-    expect(sink.calls).toHaveLength(0);
-  });
-
-  it('skips away members even if they have Slack links', async () => {
-    // Arrange: Team with schedule matching NOW
-    const team = await repos.team.create({ name: 'Away Team', timezone: 'UTC' });
-    const now = new Date('2025-01-06T09:00:00.000Z'); // Monday 09:00 UTC
-
+  /** Seeds a team whose schedule opens Monday 09:00 and closes Friday 17:00 UTC. */
+  async function seedScheduledTeam(name: string): Promise<Team> {
+    const team = await repos.team.create({ name, timezone: 'UTC' });
     await repos.teamSchedule.create({
       teamId: team.id,
       cadence: 'weekly',
@@ -220,76 +53,144 @@ describe('POST /api/scheduler/tick — notification wiring', () => {
       closeTime: '17:00',
       timezone: 'UTC',
     });
+    return team;
+  }
 
-    const member1 = await repos.teamMember.create({ teamId: team.id, name: 'Alice', email: 'alice@test.com' });
-    const member2 = await repos.teamMember.create({ teamId: team.id, name: 'Bob', email: 'bob@test.com' });
+  beforeEach(() => {
+    vi.stubEnv('CRON_SECRET', CRON_SECRET);
+    sink = createRecordingSink();
+    _setTickTestDeps({ notificationSink: sink, now: () => OPEN_TICK });
+  });
 
-    // Both have Slack links
-    await repos.slackIdentityLink.create({ memberId: member1.id, slackUserId: 'U_ALICE' });
-    await repos.slackIdentityLink.create({ memberId: member2.id, slackUserId: 'U_BOB' });
+  afterEach(() => {
+    _resetTickTestDeps();
+    vi.unstubAllEnvs();
+  });
 
-    // member2 is away
+  it('rejects a request without the cron secret', async () => {
+    const res = await POST(tickRequest('wrong-secret'));
+
+    expect(res.status).toBe(403);
+  });
+
+  it('opens a due session and prompts its Slack-linked members', async () => {
+    const team = await seedScheduledTeam('Tick Prompt Team');
+    const linked = await repos.teamMember.create({
+      teamId: team.id,
+      name: 'Alice',
+      email: 'alice@tick.test',
+    });
+    await repos.teamMember.create({ teamId: team.id, name: 'Bob', email: 'bob@tick.test' });
+    await repos.slackIdentityLink.create({ memberId: linked.id, slackUserId: 'U_TICK_ALICE' });
+
+    const res = await POST(tickRequest());
+
+    expect(res.status).toBe(200);
+
+    // The tick opened the session
+    const session = await repos.session.findOpenByTeamId(team.id);
+    expect(session).not.toBeNull();
+
+    // Only the linked member was prompted (Bob has no Slack link)
+    expect(sink.calls).toEqual([{ memberId: linked.id, type: 'slack_prompt' }]);
+  });
+
+  it('does not prompt a member who is marked away', async () => {
+    const team = await seedScheduledTeam('Tick Away Team');
+    const present = await repos.teamMember.create({
+      teamId: team.id,
+      name: 'Present',
+      email: 'present@tick.test',
+    });
+    const away = await repos.teamMember.create({
+      teamId: team.id,
+      name: 'Away',
+      email: 'away@tick.test',
+    });
+    await repos.slackIdentityLink.create({ memberId: present.id, slackUserId: 'U_TICK_PRESENT' });
+    await repos.slackIdentityLink.create({ memberId: away.id, slackUserId: 'U_TICK_AWAY' });
     await repos.availability.create({
-      memberId: member2.id,
-      awayFrom: new Date('2025-01-05'),
-      awayUntil: new Date('2025-01-10'),
+      memberId: away.id,
+      awayFrom: new Date('2026-08-23T00:00:00.000Z'),
+      awayUntil: new Date('2026-08-26T00:00:00.000Z'),
     });
 
-    const sessionService = createSessionService({
-      sessionRepo: repos.session,
-      sessionLinkRepo: repos.sessionLink,
-      teamMemberRepo: repos.teamMember,
-      responseRepo: repos.response,
-      sessionAggregateRepo: repos.sessionAggregate,
-    });
+    const res = await POST(tickRequest());
 
-    const scheduler = createSchedulerService({
-      teamRepo: repos.team,
-      teamScheduleRepo: repos.teamSchedule,
-      sessionRepo: repos.session,
-      sessionAggregateRepo: repos.sessionAggregate,
-      sessionService,
-    });
+    expect(res.status).toBe(200);
+    expect(sink.calls).toEqual([{ memberId: present.id, type: 'slack_prompt' }]);
+  });
 
-    const slackLinkChecker = createFakeSlackLinkChecker(repos);
-    const notificationService = createNotificationService({
-      teamRepo: repos.team,
-      teamMemberRepo: repos.teamMember,
-      responseRepo: repos.response,
-      questionRepo: repos.question,
-      availabilityRepo: repos.availability,
-      sessionRepo: repos.session,
+  it('sends no prompts when no session is due to open', async () => {
+    const team = await repos.team.create({ name: 'Tick Idle Team', timezone: 'UTC' });
+    await repos.teamSchedule.create({
+      teamId: team.id,
+      cadence: 'weekly',
+      // Opens Wednesday, so a Monday tick does nothing
+      openDay: 3,
+      openTime: '09:00',
+      closeDay: 5,
+      closeTime: '17:00',
+      timezone: 'UTC',
+    });
+    const member = await repos.teamMember.create({
+      teamId: team.id,
+      name: 'Idle',
+      email: 'idle@tick.test',
+    });
+    await repos.slackIdentityLink.create({ memberId: member.id, slackUserId: 'U_TICK_IDLE' });
+
+    const res = await POST(tickRequest());
+
+    expect(res.status).toBe(200);
+    expect(await repos.session.findOpenByTeamId(team.id)).toBeNull();
+    expect(sink.calls).toEqual([]);
+  });
+
+  it('reminds members once the session close is inside the lead window', async () => {
+    const team = await seedScheduledTeam('Tick Reminder Team');
+    const member = await repos.teamMember.create({
+      teamId: team.id,
+      name: 'Reminded',
+      email: 'reminded@tick.test',
+    });
+    await repos.slackIdentityLink.create({ memberId: member.id, slackUserId: 'U_TICK_REMIND' });
+
+    // Opening tick — prompts, but the Friday 17:00 close is still four days out
+    await POST(tickRequest());
+    expect(sink.calls.map(call => call.type)).toEqual(['slack_prompt']);
+
+    // A later tick, 23 hours before close, is inside the default 24h lead window
+    _setTickTestDeps({
       notificationSink: sink,
-      slackLinkChecker,
-      now: () => now,
+      now: () => new Date('2026-08-27T18:00:00.000Z'),
     });
+    const res = await POST(tickRequest());
 
-    // Act: snapshot, tick, detect, notify.
-    // Eligibility (Slack link, availability, delivery window) belongs to
-    // NotificationService, so the caller prompts every member unconditionally.
-    const openSessionsBefore = new Map<string, string>();
-    const teams = await repos.team.list();
-    for (const t of teams) {
-      const openSession = await repos.session.findOpenByTeamId(t.id);
-      if (openSession) {
-        openSessionsBefore.set(t.id, openSession.id);
-      }
+    expect(res.status).toBe(200);
+    expect(sink.calls).toContainEqual({ memberId: member.id, type: 'closing_reminder' });
+  });
+
+  it('does not repeat the closing reminder on subsequent ticks', async () => {
+    const team = await seedScheduledTeam('Tick Repeat Team');
+    const member = await repos.teamMember.create({
+      teamId: team.id,
+      name: 'Once',
+      email: 'once@tick.test',
+    });
+    await repos.slackIdentityLink.create({ memberId: member.id, slackUserId: 'U_TICK_ONCE' });
+
+    await POST(tickRequest());
+
+    for (const hour of ['18:00', '19:00', '20:00']) {
+      _setTickTestDeps({
+        notificationSink: sink,
+        now: () => new Date(`2026-08-27T${hour}:00.000Z`),
+      });
+      await POST(tickRequest());
     }
 
-    await scheduler.tick(now);
-
-    for (const t of teams) {
-      const openSession = await repos.session.findOpenByTeamId(t.id);
-      if (openSession && !openSessionsBefore.has(t.id)) {
-        const members = await repos.teamMember.findByTeamId(t.id);
-        for (const member of members) {
-          await notificationService.sendSlackPrompt(member.id, openSession);
-        }
-      }
-    }
-
-    // Assert: Only member1 should get a notification (member2 is away)
-    expect(sink.calls).toHaveLength(1);
-    expect(sink.calls[0].memberId).toBe(member1.id);
+    const reminders = sink.calls.filter(call => call.type === 'closing_reminder');
+    expect(reminders).toHaveLength(1);
   });
 });

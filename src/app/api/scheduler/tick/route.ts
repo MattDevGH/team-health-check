@@ -20,6 +20,26 @@ import { createProductionNotificationSink } from '@/lib/slack/production-notific
 import { createProductionSlackLinkChecker } from '@/lib/slack/production-slack-link-checker';
 import { createSlackApiClient } from '@/lib/slack/delivery';
 import { InMemoryInteractionQueueRepository } from '@/lib/repositories/in-memory/interaction-queue.repository';
+import type { NotificationSink } from '@/lib/services/notification.service';
+
+/**
+ * Test seam: lets route tests drive the exported handler with a recording sink
+ * and a fixed clock, instead of reproducing this orchestration in the test.
+ */
+interface TickTestDeps {
+  notificationSink?: NotificationSink;
+  now?: () => Date;
+}
+
+let _testDeps: TickTestDeps = {};
+
+export function _setTickTestDeps(deps: TickTestDeps): void {
+  _testDeps = deps;
+}
+
+export function _resetTickTestDeps(): void {
+  _testDeps = {};
+}
 
 /**
  * Closing-reminder lead time, configurable via CLOSING_REMINDER_LEAD_HOURS.
@@ -52,7 +72,7 @@ export const POST = withErrorHandling(async (request: Request) => {
   });
 
   // 3. Snapshot open sessions before tick (to detect newly opened ones)
-  const now = new Date();
+  const now = _testDeps.now?.() ?? new Date();
   const teams = await repos.team.list();
   const openSessionsBefore = new Map<string, string>();
   for (const team of teams) {
@@ -72,7 +92,8 @@ export const POST = withErrorHandling(async (request: Request) => {
   });
 
   const slackBotToken = process.env.SLACK_BOT_TOKEN;
-  const notificationSink = slackBotToken
+  const notificationSink = _testDeps.notificationSink
+    ?? (slackBotToken
     ? createProductionNotificationSink({
         slackClient: createSlackApiClient(slackBotToken),
         slackIdentityLinkRepo: repos.slackIdentityLink,
@@ -80,7 +101,7 @@ export const POST = withErrorHandling(async (request: Request) => {
         questionRepo: repos.question,
         sessionLinkRepo: repos.sessionLink,
       })
-    : { send: async () => {} }; // No-op sink if no Slack token configured
+      : { send: async () => {} }); // No-op sink if no Slack token configured
 
   const notificationService = createNotificationService({
     teamRepo: repos.team,
