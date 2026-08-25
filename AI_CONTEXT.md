@@ -37,8 +37,9 @@ reconciled, and Task 24.1 (secure authenticated Slack pairing and truthful
 unlink behavior), Task 24.2 (actionable cadence-aware `/healthcheck` plus
 availability/delivery-window eligibility for bot-initiated prompts), Task 24.3a
 (member-visible interaction replies), and Task 24.3 (closing reminders, nudge
-eligibility, and route-level tick tests) are complete. Resume with Task 24.4
-(persistent Slack interaction retry queue).
+eligibility, and route-level tick tests), and Task 24.4 (persistent Slack retry
+queue with draining) are complete. Resume with Task 24.5 (disposable-workspace
+Slack acceptance) — the last piece of Task 24.
 
 ### Accepted live state
 
@@ -167,6 +168,17 @@ Block Kit check unless `buildPromptMessage` changes.
 
 ### Changes and validation already completed
 
+- Failed Slack deliveries now survive the request that produced them. A Prisma
+  `InteractionQueueRepository` is registered in `Repositories`, and the tick route
+  no longer constructs a request-local `InMemoryInteractionQueueRepository` whose
+  contents were discarded when the request ended. Entries carry a replayable
+  `QueuedDelivery` descriptor (`src/lib/slack/queued-delivery.ts`): a `dm` stores
+  the resolved Slack user plus built blocks, a `response_url` stores the URL and
+  text, because the retry runs in a process with none of the original context.
+  `createQueuedDeliveryDispatcher` picks the transport per entry; the tick drains
+  due entries through the existing `createInteractionQueue` backoff (30s/2m/8m/20m,
+  5 attempts, then permanently failed). An undecodable entry returns false and
+  terminates through the same backoff rather than failing on first sight.
 - Closing reminders are now dispatched. `SessionService.open` stores
   `scheduledOpenAt`/`scheduledCloseAt` from the team schedule via
   `nextOccurrenceUtc` (DST-safe: calendar arithmetic on date components, wall-clock
@@ -296,7 +308,7 @@ Block Kit check unless `buildPromptMessage` changes.
   failing test's identity was lost to truncated output. Not diagnosed. If it
   recurs, capture full output — a nondeterministic test undermines the CI
   skip/isolation enforcement Task 25.6 depends on.
-- Latest validation: **136 test files / 1130 tests passed**,
+- Latest validation: **139 test files / 1150 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
@@ -432,7 +444,10 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1130 tests across 136 files**, including
+The Vitest suite now contains **1150 tests across 139 files**, including
+queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
+a stubbed client, per-transport replay dispatch, and route-level drain coverage
+(replay, backoff, and exhausted-retry termination),
 route-level scheduler-tick coverage that drives the exported POST handler
 (cron auth, session opening, prompt eligibility, lead-window reminders, and
 no repeat reminders across ticks), mid-session nudge eligibility,
@@ -536,8 +551,8 @@ All stages must pass. Branch protection requires CI green before merge.
 ### Integration-hardening merge blockers
 
 - Task 23: complete; run final reconciliation before Task 24
-- Task 24: 24.1, 24.2, 24.3, and 24.3a are complete. Remaining: 24.4 persistent
-  Slack retry queue, then 24.5 disposable-workspace acceptance
+- Task 24: 24.1, 24.2, 24.3, 24.3a, and 24.4 are complete. Remaining: 24.5
+  disposable-workspace acceptance
 - Task 25: deterministic non-skipping E2E/MSW/libSQL evidence
 - Task 26: documentation, full gates, commit/push/PR/merge
 

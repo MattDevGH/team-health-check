@@ -11,6 +11,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { POST, _setTickTestDeps, _resetTickTestDeps } from './route';
 import { repos } from '@/lib/container-production';
+import { encodeQueuedDelivery } from '@/lib/slack/queued-delivery';
+import type { InMemoryInteractionQueueRepository } from '@/lib/repositories/in-memory/interaction-queue.repository';
 import type { NotificationSink } from '@/lib/services/notification.service';
 import type { Team } from '@/lib/repositories/entities';
 
@@ -29,6 +31,11 @@ function createRecordingSink(): NotificationSink & {
       calls.push({ memberId, type });
     },
   };
+}
+
+/** The in-memory queue exposes every entry regardless of status, for assertions. */
+function queueEntries() {
+  return (repos.interactionQueue as InMemoryInteractionQueueRepository).getAll();
 }
 
 function tickRequest(secret = CRON_SECRET): Request {
@@ -169,6 +176,110 @@ describe('POST /api/scheduler/tick', () => {
 
     expect(res.status).toBe(200);
     expect(sink.calls).toContainEqual({ memberId: member.id, type: 'closing_reminder' });
+  });
+
+  describe('Slack retry queue draining (Requirement 8.5)', () => {
+    it('replays a queued delivery on a later tick and marks it delivered', async () => {
+      const queued = await repos.interactionQueue.add({
+        interactionPayload: encodeQueuedDelivery({
+          kind: 'dm',
+          memberId: 'queued-member',
+          slackUserId: 'U_QUEUED',
+          blocks: [{ type: 'section' }],
+        }),
+        responseUrl: '',
+        failureReason: 'channel_not_found',
+      });
+
+      // Entries are enqueued against the real clock, so drain after that instant
+      const drainAt = new Date(Date.now() + 60_000);
+      const attempts: string[] = [];
+      _setTickTestDeps({
+        notificationSink: sink,
+        now: () => drainAt,
+        queueDeliver: async (_responseUrl, payload) => {
+          attempts.push(payload);
+          return true;
+        },
+      });
+
+      const res = await POST(tickRequest());
+
+      expect(res.status).toBe(200);
+      expect(attempts).toHaveLength(1);
+      expect(attempts[0]).toContain('U_QUEUED');
+
+      // Entry is settled, so a further tick does not replay it
+      const stillPending = await repos.interactionQueue.findPending(drainAt);
+      expect(stillPending.map(entry => entry.id)).not.toContain(queued.id);
+    });
+
+    it('backs off a failed replay instead of retrying it immediately', async () => {
+      const queued = await repos.interactionQueue.add({
+        interactionPayload: encodeQueuedDelivery({
+          kind: 'response_url',
+          responseUrl: 'https://hooks.slack.com/actions/T1/1/x',
+          text: 'Recorded 4',
+        }),
+        responseUrl: 'https://hooks.slack.com/actions/T1/1/x',
+        failureReason: 'timeout',
+      });
+
+      const drainAt = new Date(Date.now() + 60_000);
+      let attempts = 0;
+      _setTickTestDeps({
+        notificationSink: sink,
+        now: () => drainAt,
+        queueDeliver: async () => {
+          attempts++;
+          return false;
+        },
+      });
+
+      await POST(tickRequest());
+      // A second tick at the same instant must not retry — backoff has not elapsed
+      await POST(tickRequest());
+
+      expect(attempts).toBe(1);
+
+      const entry = queueEntries().find(e => e.id === queued.id);
+      expect(entry?.retryCount).toBe(1);
+      expect(entry?.status).toBe('pending');
+      expect(entry?.nextRetryAt?.getTime()).toBeGreaterThan(drainAt.getTime());
+    });
+
+    it('gives up on an entry that has exhausted its retries', async () => {
+      const queued = await repos.interactionQueue.add({
+        interactionPayload: encodeQueuedDelivery({
+          kind: 'dm',
+          memberId: 'doomed-member',
+          slackUserId: 'U_DOOMED',
+          blocks: [],
+        }),
+        responseUrl: '',
+        failureReason: 'account_inactive',
+      });
+      for (let i = 0; i < 5; i++) {
+        await repos.interactionQueue.incrementRetry(queued.id, OPEN_TICK, 'Delivery failed');
+      }
+
+      let attempts = 0;
+      _setTickTestDeps({
+        notificationSink: sink,
+        now: () => OPEN_TICK,
+        queueDeliver: async () => {
+          attempts++;
+          return false;
+        },
+      });
+
+      await POST(tickRequest());
+
+      expect(attempts).toBe(0);
+      const entry = queueEntries().find(e => e.id === queued.id);
+      expect(entry?.status).toBe('failed');
+      expect(entry?.failureReason).toBe('Max retries exhausted');
+    });
   });
 
   it('does not repeat the closing reminder on subsequent ticks', async () => {

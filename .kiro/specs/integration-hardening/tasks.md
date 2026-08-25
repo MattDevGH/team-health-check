@@ -405,10 +405,21 @@ original checklist was marked done.
       in place with recorded scores shown inline remains available as a later refinement if
       24.5 shows the separate confirmations are too noisy.
 
-  - [ ] 24.4 Persist and process failed Slack deliveries with TDD
-    - Add/register a Prisma InteractionQueueRepository and store replayable destination/payload data
-    - Drain due entries on later scheduler ticks with backoff and terminal failure handling
-    - Prove persistence across route/service instances and remove request-local in-memory production wiring
+  - [x] 24.4 Persist and process failed Slack deliveries with TDD
+    - [x] Prisma `InteractionQueueRepository` added and registered in `Repositories`
+    - [x] Entries store a replayable `QueuedDelivery` descriptor — a `dm` carries the
+      resolved Slack user and built blocks, a `response_url` carries the URL and text —
+      because the retry runs in a process that has none of the original request's context
+    - [x] Due entries drain on later ticks through the existing `createInteractionQueue`
+      backoff and terminal-failure handling (5 attempts, then permanently failed)
+    - [x] Request-local `new InMemoryInteractionQueueRepository()` removed from the tick
+      route, which previously discarded every queued entry when the request ended
+    - [x] Persistence proven at route level: an entry queued before the tick is replayed
+      by it, a failed replay backs off instead of retrying within the same window, and an
+      exhausted entry is marked failed without another attempt
+    - Accepted limitation: an entry whose descriptor cannot be decoded is retried under
+      normal backoff and marked permanently failed after 5 attempts, rather than being
+      failed on first sight. It terminates either way.
     - _Requirements: 8.5_
 
   - [ ] 24.5 Complete disposable-workspace Slack acceptance

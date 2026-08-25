@@ -9,6 +9,7 @@ import type { InteractionQueueRepository } from '@/lib/slack/interaction-queue';
 import type { SlackIdentityLinkRepository, QuestionRepository, SessionLinkRepository } from '@/lib/repositories/types';
 import { deliverSlackMessage } from '@/lib/slack/delivery';
 import { buildPromptMessage } from '@/lib/slack/message-builder';
+import { encodeQueuedDelivery } from '@/lib/slack/queued-delivery';
 
 export interface ProductionNotificationSinkDeps {
   slackClient: SlackApiClient;
@@ -67,10 +68,17 @@ export function createProductionNotificationSink(deps: ProductionNotificationSin
         retryDelayMs,
       });
 
-      // 4. On failure → queue to SlackInteractionQueue for retry
+      // 4. On failure → queue a replayable descriptor for a later tick to retry.
+      // The blocks and resolved Slack user are stored, not the internal payload,
+      // because the retry runs in a different process with none of this context.
       if (!result.success) {
         await slackInteractionQueueRepo.add({
-          interactionPayload: JSON.stringify({ memberId, type, payload }),
+          interactionPayload: encodeQueuedDelivery({
+            kind: 'dm',
+            memberId,
+            slackUserId: link.slackUserId,
+            blocks: message.blocks,
+          }),
           responseUrl: '',
           failureReason: result.error ?? 'delivery_failed',
         });

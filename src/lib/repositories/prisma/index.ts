@@ -23,6 +23,7 @@ import { PrismaPendingGenesisRepository } from './pending-genesis.repository';
 import { PrismaTeamScheduleRepository } from './team-schedule.repository';
 import { PrismaSlackIdentityLinkRepository } from './slack-identity-link.repository';
 import { PrismaNotificationDeliveryRepository } from './notification-delivery.repository';
+import { PrismaInteractionQueueRepository } from './interaction-queue.repository';
 
 /**
  * Creates all Prisma-backed repository instances.
@@ -47,6 +48,7 @@ export function createPrismaRepositories(prisma: PrismaClient): Repositories {
     teamSchedule: new PrismaTeamScheduleRepository(prisma),
     slackIdentityLink: new PrismaSlackIdentityLinkRepository(prisma),
     notificationDelivery: new PrismaNotificationDeliveryRepository(prisma),
+    interactionQueue: new PrismaInteractionQueueRepository(prisma),
   };
 }
 
@@ -67,3 +69,4 @@ export { PrismaPendingGenesisRepository } from './pending-genesis.repository';
 export { PrismaTeamScheduleRepository } from './team-schedule.repository';
 export { PrismaSlackIdentityLinkRepository } from './slack-identity-link.repository';
 export { PrismaNotificationDeliveryRepository } from './notification-delivery.repository';
+export { PrismaInteractionQueueRepository } from './interaction-queue.repository';

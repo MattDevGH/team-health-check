@@ -19,7 +19,9 @@ import {
 import { createProductionNotificationSink } from '@/lib/slack/production-notification-sink';
 import { createProductionSlackLinkChecker } from '@/lib/slack/production-slack-link-checker';
 import { createSlackApiClient } from '@/lib/slack/delivery';
-import { InMemoryInteractionQueueRepository } from '@/lib/repositories/in-memory/interaction-queue.repository';
+import { createInteractionQueue } from '@/lib/slack/interaction-queue';
+import { createQueuedDeliveryDispatcher } from '@/lib/slack/queue-drain';
+import { createInteractionResponder } from '@/lib/slack/interaction-response';
 import type { NotificationSink } from '@/lib/services/notification.service';
 
 /**
@@ -29,6 +31,8 @@ import type { NotificationSink } from '@/lib/services/notification.service';
 interface TickTestDeps {
   notificationSink?: NotificationSink;
   now?: () => Date;
+  /** Replaces the Slack transports used when draining the retry queue. */
+  queueDeliver?: (responseUrl: string, payload: string) => Promise<boolean>;
 }
 
 let _testDeps: TickTestDeps = {};
@@ -97,7 +101,7 @@ export const POST = withErrorHandling(async (request: Request) => {
     ? createProductionNotificationSink({
         slackClient: createSlackApiClient(slackBotToken),
         slackIdentityLinkRepo: repos.slackIdentityLink,
-        slackInteractionQueueRepo: new InMemoryInteractionQueueRepository(),
+        slackInteractionQueueRepo: repos.interactionQueue,
         questionRepo: repos.question,
         sessionLinkRepo: repos.sessionLink,
       })
@@ -136,6 +140,17 @@ export const POST = withErrorHandling(async (request: Request) => {
     // Remind members whose session is approaching its close
     await notificationService.sendDueClosingReminders(openSession, reminderLeadMs());
   }
+
+  // 7. Retry Slack deliveries that failed on an earlier tick (Requirement 8.5).
+  // The queue is Prisma-backed, so entries survive the request that created them.
+  const queue = createInteractionQueue({ repo: repos.interactionQueue });
+  const deliver =
+    _testDeps.queueDeliver ??
+    createQueuedDeliveryDispatcher({
+      slackClient: slackBotToken ? createSlackApiClient(slackBotToken) : undefined,
+      responder: createInteractionResponder(),
+    });
+  await queue.processPending(deliver, now);
 
   return Response.json({ ok: true });
 });

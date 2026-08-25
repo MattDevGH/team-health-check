@@ -53,8 +53,8 @@ remaining merge blockers are tracked as Tasks 23–26 in
 2. **Slack production behavior:** secure pairing, real unlink, the actionable
    on-demand `/healthcheck` prompt, and bot-initiated prompt eligibility
    (Slack link, availability, delivery window), member-visible interaction
-   replies, and closing reminders are complete; remaining work is persistent
-   retry processing and disposable-workspace acceptance.
+   replies, closing reminders, and persistent retry processing are complete;
+   remaining work is disposable-workspace acceptance.
 3. **Automated evidence:** isolated/seeded E2E data, secure test-email capture,
    non-skipping browser-first Playwright flows, broader axe coverage, corrected
    MSW identity contracts, executable local libSQL repository evidence, and CI
@@ -310,6 +310,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 - **Gated bot prompts** — `NotificationService` sends scheduler-initiated prompts only to Slack-linked, available members inside the team's delivery window, evaluated in the team timezone
 - **Answered interactions** — score button clicks reply through Slack's `response_url` with a confirmation, validation error, or session-ended message, without breaking the 3-second acknowledgement Slack requires
 - **Closing reminders** — sessions store a DST-safe scheduled close when they open; the scheduler reminds eligible members inside the lead window (default 24h, set `CLOSING_REMINDER_LEAD_HOURS`), at most once per member per session via a unique-constrained `NotificationDelivery` claim
+- **Durable Slack retries** — a failed delivery is persisted with a replayable descriptor and drained by later scheduler ticks with exponential backoff, up to 5 attempts before it is marked permanently failed
 - **Authorized team exports** — `/api/teams/[teamId]/export` authenticates from the session cookie and returns aggregate CSV data only when the member belongs to the requested team
 - **Protected session details** — session-detail GET permits ordinary members of the requested team and returns the same 404 for missing or cross-team sessions
 - **Protected participation** — participation GET derives identity only from the session cookie, binds the session to the URL team, and preserves privacy-aware counts without exposing response details
@@ -328,7 +329,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (1130 tests across 136 Vitest files)
+npm test            # unit + property tests (1150 tests across 139 Vitest files)
 npm run test:watch  # watch mode for TDD (unit only)
 npm run test:e2e    # Playwright browser tests
 npm run test:a11y   # Playwright axe tests
