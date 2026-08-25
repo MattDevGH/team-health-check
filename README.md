@@ -363,6 +363,11 @@ GitHub Actions defines three PR gates:
 2. **`e2e`** — Install → Prisma setup → Build → Chromium install → Playwright, after `ci`
 3. **`requirement-coverage`** — Require requirement references in the PR body
 
+These jobs currently trigger only on pushes to `master` and pull requests
+targeting `master`, so pushing a `feat/*` branch runs nothing and the branch has
+no remote validation until a PR is opened. Task 25.6 covers widening the trigger
+to feature-branch pushes with a `concurrency` group.
+
 The closure audit found that `DATABASE_URL=file:./test.db` is not yet honored by
 all Prisma runtime/config paths and the E2E job does not seed canonical
 questions. The current happy paths can call `test.skip` when a nonexistent token

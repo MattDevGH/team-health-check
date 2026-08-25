@@ -457,6 +457,17 @@ original checklist was marked done.
   - [ ] 25.6 Harden CI semantics
     - Initialize/seed the isolated E2E database and ensure `DATABASE_URL` is genuinely consumed
     - Fail the job if required Playwright scenarios are skipped; retain reports/traces as artifacts
+    - Run CI on feature-branch pushes, not only `master`. `.github/workflows/ci.yml`
+      currently triggers on `push: branches: [master]` and `pull_request: branches: [master]`,
+      so pushing `feat/*` runs nothing and a branch can accumulate work with no remote
+      validation until a PR is opened. Observed 2026-08-25: nine commits pushed, zero
+      workflow runs; the last run on the repository was 2026-06-20.
+      Recommended shape:
+      - trigger `ci` and `e2e` on `push` to all branches plus `pull_request` to `master`
+      - add `concurrency: { group: "${{ github.workflow }}-${{ github.ref }}",
+        cancel-in-progress: true }` so a new push supersedes an in-flight run and
+        push/PR duplicates do not both consume minutes
+      - keep `requirement-coverage` on `pull_request` only, since it reads the PR body
     - _Requirements: 10.5, 10.6_
 
 - [ ] 26. Reconcile and close the branch
