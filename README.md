@@ -203,7 +203,22 @@ For testing Slack locally:
 2. Start the app: `npm run dev`
 3. Start the tunnel: `ngrok http 3000`
 4. Use the ngrok HTTPS URL as the base for all Slack endpoint configurations
-5. Remember to update the Slack app URLs when your ngrok session changes
+5. Set `NEXT_PUBLIC_APP_URL` to the same HTTPS URL and restart, so Slack messages
+   carry publicly reachable session links rather than `localhost`
+6. Remember to update the Slack app URLs when your ngrok session changes. A
+   reserved ngrok domain avoids this entirely — the free tier includes one
+
+**Pages hanging on "Loading" through the tunnel:** Next.js blocks cross-origin
+requests to dev-only assets, so the page HTML serves fine over the tunnel host
+while the client bundle is blocked, React never hydrates, and the page sits on
+its loading state forever. The dev server log shows
+`Blocked cross-origin request to Next.js dev resource`. `next.config.ts` sets
+`allowedDevOrigins` for ngrok hosts to permit this. It is a development-only
+setting with no effect on a production build.
+
+**ngrok free tier interstitial:** human visitors see a warning page once per
+browser before reaching the app. Slack's own POST requests are unaffected, so
+endpoints work normally.
 
 ## Email Setup (Resend)
 
