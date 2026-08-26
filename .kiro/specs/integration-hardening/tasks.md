@@ -472,33 +472,33 @@ original checklist was marked done.
     and bot token remain disposable and revocable.
 
 - [ ] 25. Close automated acceptance and deployment evidence
-  - [ ] 25.1 Create deterministic, isolated E2E infrastructure with TDD
+  - [x] 25.1 Create deterministic, isolated E2E infrastructure with TDD
     - Make Prisma CLI and runtime honor a disposable E2E SQLite path, never `prisma/dev.db`
     - Reset/push schema and seed canonical questions for each run; serialize or isolate workers/retries
     - Add a test-only email capture seam guarded by `TEST_MODE=true`; missing capture must fail, not skip
     - _Requirements: 10.2, 10.5, 10.6_
 
-  - [ ] 25.2 Replace permissive Playwright flows with real browser acceptance
+  - [x] 25.2 Replace permissive Playwright flows with real browser acceptance
     - Drive login/genesis and assert the server-set cookie without `addCookies` or manual Cookie headers
     - Exercise accepted settings behavior and two complete generated-session-link feedback lifecycles
     - Close/materialise sessions and assert insufficient/populated dashboard UI, values, distributions, and drill-downs
     - Fail on required skips, page errors, unexpected console errors, and failed first-party requests
     - _Requirements: 10.1–10.5_
 
-  - [ ] 25.3 Expand Playwright accessibility coverage
+  - [x] 25.3 Expand Playwright accessibility coverage
     - Run axe against genesis, settings, active feedback, confirmation, ended session, insufficient dashboard, and populated dashboard states
     - _Requirements: 10.1, 10.4; Original NFR accessibility criteria_
 
-  - [ ] 25.4 Correct MSW response-submission identity contracts
+  - [x] 25.4 Correct MSW response-submission identity contracts
     - Remove body `memberId` from handlers and UI expectations
     - Require `{ sessionId, responses }`; model identity through cookie/AuthContext behavior
     - _Requirements: 5.1–5.3, 12.1–12.4_
 
-  - [ ] 25.5 Add executable local libSQL repository evidence
+  - [x] 25.5 Add executable local libSQL repository evidence
     - Run representative repository create/read/update behavior through Prisma's libSQL adapter without an external Turso account
     - _Requirements: 13.1, 13.2, 13.3, 13.5_
 
-  - [ ] 25.6 Harden CI semantics
+  - [x] 25.6 Harden CI semantics
     - Initialize/seed the isolated E2E database and ensure `DATABASE_URL` is genuinely consumed
     - Fail the job if required Playwright scenarios are skipped; retain reports/traces as artifacts
     - Run CI on feature-branch pushes, not only `master`. `.github/workflows/ci.yml`

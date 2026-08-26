@@ -404,17 +404,20 @@ GitHub Actions defines three PR gates:
 2. **`e2e`** — Install → Prisma setup → Build → Chromium install → Playwright, after `ci`
 3. **`requirement-coverage`** — Require requirement references in the PR body
 
-These jobs currently trigger only on pushes to `master` and pull requests
-targeting `master`, so pushing a `feat/*` branch runs nothing and the branch has
-no remote validation until a PR is opened. Task 25.6 covers widening the trigger
-to feature-branch pushes with a `concurrency` group.
+Jobs run on pushes to **any** branch as well as pull requests targeting
+`master`, so a feature branch is validated before review rather than only once a
+PR exists. A branch with an open PR triggers both events; a `concurrency` group
+keyed on the ref cancels superseded runs.
 
-The closure audit found that `DATABASE_URL=file:./test.db` is not yet honored by
-all Prisma runtime/config paths and the E2E job does not seed canonical
-questions. The current happy paths can call `test.skip` when a nonexistent token
-capture endpoint is unavailable. A green job is therefore not sufficient until
-Tasks 25.1, 25.2, and 25.6 make isolation, seeding, and zero required skips
-enforceable.
+The E2E job provisions its own database: `e2e/global-setup.ts` deletes
+`prisma/e2e.db`, applies the committed migrations, and seeds the canonical
+questions, and `playwright.config.ts` passes that `DATABASE_URL` to the web
+server. `prisma/dev.db` is never opened.
+
+A skipped test fails the run. `e2e/no-skips-reporter.ts` overrides an otherwise
+passing result if any test skipped, because Playwright treats a skip as a pass —
+which is how the old happy path reported green for months while proving nothing.
+Traces, screenshots, and the seeded database are uploaded on failure.
 
 All three jobs and the uploaded Playwright evidence must pass before merge to
 `master`.

@@ -39,8 +39,7 @@ availability/delivery-window eligibility for bot-initiated prompts), Task 24.3a
 (member-visible interaction replies), and Task 24.3 (closing reminders, nudge
 eligibility, and route-level tick tests), Task 24.4 (persistent Slack retry queue
 with draining), and Task 24.5/24.5a (disposable-workspace acceptance) are
-complete. **Task 24 is closed.** Resume with Task 25 (automated acceptance and
-deployment evidence), starting with 25.1, 25.4, and 25.5.
+complete. **Task 24 is closed.** **Task 25 is closed.** Resume with Task 26 (reconciliation and merge).
 
 ### Accepted live state
 
@@ -192,6 +191,39 @@ a workspace; what remains unproven is `action_id`/`value` round-tripping and the
 ephemeral response wrapper, both of which need Task 24.5. Do not repeat this
 Block Kit check unless `buildPromptMessage` changes.
 
+### Task 25 — automated evidence (completed 2026-08-26)
+
+- **Database isolation (25.1):** `resolveSqliteFileUrl` is shared by the runtime
+  and `prisma.config.ts`, so the CLI and app cannot target different files.
+  Writing the test proved the old defect live — a stray team landed in
+  `prisma/dev.db` despite `DATABASE_URL` pointing elsewhere; it was removed and
+  the accepted data verified intact. `e2e/global-setup.ts` provisions
+  `prisma/e2e.db` per run (wipe, migrate, seed) and refuses to run against
+  `dev.db`. Node 24 will not spawn Windows `.cmd` shims without a shell, so the
+  setup seeds in process and runs the Prisma CLI entry point under the current
+  Node binary.
+- **TEST_MODE capture (25.1):** magic-link tokens are captured in process and
+  read through `/api/test/magic-link`, replacing a token endpoint that never
+  existed and let required scenarios skip. Inert unless `TEST_MODE=true`;
+  returns a bare 404 otherwise, even when a token for that address is in memory.
+- **Real browser journey (25.2):** eleven serial stages — login, genesis,
+  settings, member addition, two full feedback lifecycles, close, materialise,
+  dashboard transition. One shared page carries a server-set cookie; no
+  `addCookies` anywhere. Values are cross-checked against the database.
+- **Accessibility (25.3):** axe across all seven states plus the expanded
+  drill-down. Found and fixed real WCAG AA contrast failures: `text-gray-400`
+  at 2.48–2.6, `bg-green-600` at 3.21, `text-green-600` at 3.21.
+- **MSW contract (25.4):** the response mock no longer requires a body
+  `memberId` the real route ignores; the session page no longer sends one.
+- **CI (25.6):** runs on pushes to any branch with a concurrency group,
+  provisions its own database, uploads traces on failure, and fails on any
+  skipped test via `e2e/no-skips-reporter.ts` — verified by a temporary probe
+  that exits 1 when a test skips and 0 otherwise.
+
+Known weakness recorded rather than hidden: the drill-down detail region is
+located by CSS class because the disclosure has no `aria-controls`. Adding it is
+item 3 on the deferred dashboard UX list and would give a durable handle.
+
 ### Changes and validation already completed
 
 - Failed Slack deliveries now survive the request that produced them. A Prisma
@@ -334,7 +366,7 @@ Block Kit check unless `buildPromptMessage` changes.
   failing test's identity was lost to truncated output. Not diagnosed. If it
   recurs, capture full output — a nondeterministic test undermines the CI
   skip/isolation enforcement Task 25.6 depends on.
-- Latest validation: **147 test files / 1193 tests passed**,
+- Latest validation: **147 Vitest files / 1193 tests, plus 27 Playwright tests with zero skips, all passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
@@ -562,7 +594,7 @@ All stages must pass. Branch protection requires CI green before merge.
 - **Slack identity**: Pairing derives memberId from AuthContext (never the request body) and `createContainer` wires `slackIdentityLinkRepo` into `AuthService`, so a verified code persists/upserts the link. `DELETE /api/me/slack-link` deletes the record before reporting success, and `GET /api/me` returns the persisted `slackLink`, so status survives reload/restart. The `/me` page's `SlackSection` has a pairing-code input for the unlinked state. Task 24.1 is complete
 - **On-demand prompts**: `/healthcheck` delegates to `HealthCheckPromptService`, which resolves the linked member, the team's open session, the outstanding questions for their cadence preference, and a reused-or-minted session link; the route returns interactive score blocks with a browser fallback. An explicit command is never refused for away/reminders-off/outside-window state
 - **Notification wiring**: Newly-opened prompts reach NotificationService and the production Slack sink, which now gates delivery on Slack link, availability, and the team's delivery window in the team timezone; closing reminders, persistent retry storage, and later-tick draining remain Task 24 blockers
-- **Turso**: Environment-aware Prisma client selection exists (better-sqlite3 locally, @libsql/client in production); executable repository behavior through local libSQL remains Task 25.5
+- **Turso**: Environment-aware Prisma client selection, now with execution evidence. Task 25.5 found the production path was broken — `PrismaLibSql` takes the libSQL *config* and builds its own client, but `prisma.ts` passed an already-constructed client, so `config.url` was undefined and every query would have failed with `URL_INVALID`. Fixed, and covered by `src/tests/integration/libsql-repository.test.ts`, which runs real repository work through the adapter against a local file (no Turso account needed)
 
 ---
 
@@ -578,7 +610,7 @@ All stages must pass. Branch protection requires CI green before merge.
 
 - Task 23: complete; run final reconciliation before Task 24
 - Task 24: **complete** (24.1, 24.2, 24.3, 24.3a, 24.4, 24.5, 24.5a)
-- Task 25: deterministic non-skipping E2E/MSW/libSQL evidence
+- Task 25: complete (isolated seeded E2E database, real browser journey, expanded axe coverage, corrected MSW contract, executable libSQL evidence, CI enforcement)
 - Task 26: documentation, full gates, commit/push/PR/merge
 
 ### Deferred follow-up milestones

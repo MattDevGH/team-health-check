@@ -30,11 +30,20 @@ export default defineConfig({
 
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  reporter: process.env.CI ? [['html'], ['list']] : 'html',
+
+  // The no-skips reporter fails a run containing any skipped test: Playwright
+  // otherwise treats a skip as a pass, which is how a suite reports green while
+  // proving nothing.
+  reporter: process.env.CI
+    ? [['html'], ['list'], ['./e2e/no-skips-reporter.ts']]
+    : [['html', { open: 'never' }], ['./e2e/no-skips-reporter.ts']],
 
   use: {
     baseURL: 'http://localhost:3000',
-    trace: 'on-first-retry',
+    // Keep a trace for every failure in CI, not only retried ones, so a
+    // first-attempt failure can still be diagnosed from the artifact
+    trace: process.env.CI ? 'retain-on-failure' : 'on-first-retry',
+    screenshot: 'only-on-failure',
   },
 
   projects: [
