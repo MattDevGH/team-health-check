@@ -33,40 +33,48 @@ Commits follow one green, testable vertical slice: write the failing test, make
 the minimal implementation pass, update README/AI context when behavior,
 structure, coverage, or conventions change, validate, and commit before starting
 the next slice. A small handful of focused files and usually fewer than 200–300
-changed lines is a reviewability guideline, not a quota. The current browser
-acceptance checkpoint is an explicitly approved one-off consolidation exception;
-one-behavior cadence resumes with Task 23.
+changed lines is a reviewability guideline, not a quota.
 
-Integration hardening remains open on `feat/integration-hardening`; do not
-start the lifecycle-management milestone or merge directly to `master` yet.
-Manual browser acceptance through two complete health-check sessions has passed,
-including validated/audited settings persistence, editable feedback,
-authenticated close, materialisation, closed-link enforcement, and two-session
-dashboard data. The accepted fixes are preserved in the approved one-off
-consolidation checkpoint.
+CI runs on pushes to any branch, so a feature branch is validated before review
+rather than only once a pull request exists.
 
-A 2026-08-23 closure audit corrected the earlier “all implemented” status. The
-remaining merge blockers are tracked as Tasks 23–26 in
-`.kiro/specs/integration-hardening/tasks.md`:
+### Project status
 
-1. **Auth/session and audit contracts:** Task 23 is complete: browser identity is AuthContext-bound, team resources are ownership-protected, weighted session-link cadence and expiry scoping are enforced, and schedule/member-addition audits commit atomically.
-2. **Slack production behavior:** complete. Secure pairing, real unlink, the
-   actionable on-demand `/healthcheck` prompt, bot-initiated prompt eligibility
-   (Slack link, availability, delivery window), member-visible interaction
-   replies, closing reminders, and persistent retry processing are implemented
-   and were verified against a disposable Slack workspace on 2026-08-26.
-3. **Automated evidence:** isolated/seeded E2E data, secure test-email capture,
-   non-skipping browser-first Playwright flows, broader axe coverage, corrected
-   MSW identity contracts, executable local libSQL repository evidence, and CI
-   skip/isolation enforcement.
-4. **Final closure:** synchronize requirements/design/tasks/docs, run all local
-   and remote gates, commit/push the accepted work, and merge through a green PR.
+Both specs in `.kiro/specs/` are complete. The application supports the full
+loop: magic-link and genesis sign-in, team and schedule configuration, scheduled
+sessions, feedback through the web interface or Slack, close and materialisation,
+and a trends dashboard.
 
-Session lifecycle management and the dashboard UX observations are explicitly
-deferred follow-up milestones, not integration-hardening merge blockers. Real
-Slack evidence is now recorded (Task 24.5); the branch stays open until the
-remaining Task 25 automated evidence, the non-skipping Playwright suite, CI
-enforcement, and Task 26 documentation and merge gates are all complete.
+Integration hardening passed its final verification gate on 2026-08-26 — lint,
+type check, 1193 Vitest tests, build, 27 Playwright tests with zero skips, and a
+real Slack workspace pass. Its 2026-08-23 closure
+audit is worth knowing about, because it shaped how this project treats
+evidence: a set of tasks had been marked complete before the behaviour existed,
+and re-verification found that several "done" features did not work. Among the
+defects that a fully green test suite did not catch:
+
+- the Turso production database path would have failed on its first query
+- the runtime ignored `DATABASE_URL`, so test runs wrote to the development database
+- closing reminders were indistinguishable from opening prompts
+- the Slack retry queue was discarded at the end of every request
+- four pages carried WCAG AA contrast failures
+
+The lesson is recorded as Testing Rules in `AGENTS.md`: assert observable
+outcomes rather than the calls you just made, and run the real thing before
+claiming it works.
+
+### Next milestones (not started)
+
+- **Session lifecycle management:** a manager UI for opening, closing and
+  monitoring sessions. The API supports these; there is no interface for them,
+  so E2E tests drive that part through the API.
+- **Dashboard UX:** chart title, explanation and legend; clarify or remove the
+  Latest Session panel; question disclosure affordances with
+  `aria-expanded`/`aria-controls`; fix `1 responses` pluralisation.
+- **Slack Socket Mode:** evaluate as a development-only convenience to remove
+  the tunnel requirement, keeping HTTP endpoints for production.
+- **Broader work:** design system, dark mode, shared navigation, CSRF,
+  generalised rate limiting, load testing, telemetry.
 
 ## Environment Variables
 
@@ -436,11 +444,11 @@ Feature specifications at `.kiro/specs/`:
 - Technical design (architecture, data models, 34 correctness properties)
 - Task list (28 groups, ~120 sub-tasks)
 
-**`integration-hardening/`** — Integration wiring spec (**open**):
+**`integration-hardening/`** — Integration wiring spec (**complete**, 2026-08-26):
 - Requirements (13 covering auth, notification wiring, Turso, E2E, and contracts)
 - Technical design (12 correctness properties and integration patterns)
-- Tasks 1–21 record the original implementation pass; Task 22 records completed browser regressions
-- Tasks 23–26 are the authoritative closure plan for auth/session, Slack, automated evidence, documentation, CI, and PR completion
+- Tasks 1–21 record the original implementation pass; Task 22 records browser regressions
+- Tasks 23–26 closed auth/session, Slack production behaviour, automated evidence, documentation, CI, and merge. Their evidence tables record what was verified and how
 
 ## Known Issues & Future Work
 
@@ -452,7 +460,7 @@ Feature specifications at `.kiro/specs/`:
 
 ### Accessibility
 
-- **Colour contrast partially addressed** — global input/placeholder contrast fixed, Playwright axe tests added. But individual pages haven't all been audited in a real browser with axe DevTools.
+- **Colour contrast audited and fixed** — Playwright axe runs against seven states (genesis, settings, active feedback, confirmation, ended session, and both dashboard states) plus the expanded question drill-down. That audit found and fixed real WCAG AA failures: `text-gray-400` at 2.48–2.6 against white, and `bg-green-600`/`text-green-600` at 3.21. Pages outside those states are still unaudited.
 - **No skip-to-content links** — keyboard users can't bypass repeated navigation (once navigation exists).
 - **No focus management on route transitions** — screen readers aren't notified when the page changes.
 - **No reduced-motion support** — no `prefers-reduced-motion` media query handling.
@@ -465,17 +473,21 @@ Feature specifications at `.kiro/specs/`:
 
 ### Testing gaps
 
-- **Playwright closure is incomplete** — required happy paths can skip, use stale
-  contracts/manual cookies, and share non-isolated unseeded data. Tasks 25.1–25.3
-  replace them with deterministic browser-first and accessibility evidence.
 - **Real-workspace Slack acceptance completed** (2026-08-26) — pairing, unlink,
   `/healthcheck`, interaction replies, browser fallback, closing reminder, and a
   forced durable retry were all exercised against a disposable workspace. The
   pass found three defects invisible to the unit suite: a tunnel-origin hydration
   hang, scaffolding metadata in Slack link unfurls, and a closing reminder that
-  read as an opening prompt. All three are fixed.
-- **No executable libSQL repository proof** — client selection exists, but Task
-  25.5 must execute representative repository behavior through the local libSQL
-  adapter.
-- **No load/performance testing** — explicitly deferred beyond integration
-  hardening; SQLite/Turso remains untested under concurrent load.
+  read as an opening prompt. All three are fixed. Repeat it only if Slack
+  behaviour changes.
+- **Only Chromium is covered** — `playwright.config.ts` defines a single
+  project. Firefox and WebKit are untested.
+- **The dashboard drill-down is located by CSS class in tests** because the
+  disclosure has no `aria-controls`. Adding it (a deferred UX item) would give
+  tests a durable handle and improve screen-reader behaviour at the same time.
+- **One unreproduced Vitest flake** (2026-08-25) — a single failure across six
+  full runs, never seen since, and its identity was lost to truncated output.
+  Recorded because a nondeterministic test undermines the skip and isolation
+  enforcement the suite now relies on.
+- **No load or performance testing** — SQLite and Turso remain untested under
+  concurrent load.
