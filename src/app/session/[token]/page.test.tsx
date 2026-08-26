@@ -54,7 +54,8 @@ describe('Session Link Page — Response Submission', () => {
       server.use(
         http.post('/api/responses', async ({ request }) => {
           const body = await request.json() as Record<string, unknown>;
-          expect(body).toHaveProperty('memberId', 'member-1');
+          // Identity comes from the session cookie, never the body (Req 12.4)
+          expect(body).not.toHaveProperty('memberId');
           expect(body).toHaveProperty('sessionId', 'session-1');
           return HttpResponse.json({
             responses: [
@@ -248,7 +249,7 @@ describe('Session Link Page — Response Submission', () => {
   });
 
   describe('POST body structure', () => {
-    it('sends memberId, sessionId, and responses array in correct format', async () => {
+    it('sends only sessionId and responses, leaving identity to the cookie', async () => {
       const user = userEvent.setup();
       let capturedBody: Record<string, unknown> | null = null;
 
@@ -284,8 +285,10 @@ describe('Session Link Page — Response Submission', () => {
         expect(capturedBody).not.toBeNull();
       });
 
+      // Requirement 12.4: the server derives the member from the session cookie,
+      // so sending an identity in the body would be ignored at best and
+      // misleading at worst
       expect(capturedBody).toEqual({
-        memberId: 'member-1',
         sessionId: 'session-1',
         responses: [
           { questionId: 'q-delivering-value', score: 4 },

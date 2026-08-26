@@ -101,10 +101,13 @@ export const handlers = [
   /**
    * POST /api/responses
    *
-   * Accepts response submissions. Auth is cookie-based (withAuth wrapper);
-   * no x-member-id or x-session-id headers required per Requirement 12.4.
-   * Body contains: { memberId, sessionId, responses: [{ questionId, score, trendIndicator? }] }
+   * Mirrors the real route: identity comes from the session cookie via the
+   * withAuth wrapper, and the body carries only { sessionId, responses }.
+   * The route reads `auth.memberId` and ignores any identity in the body, so a
+   * mock that required one would let a UI regression pass unnoticed.
+   *
    * Returns: { responses: [{ questionId, score, trendIndicator, rollingAverage }] }
+   * Requirements: 5.1, 5.2, 5.3, 12.1, 12.4
    */
   http.post('/api/responses', async ({ request }) => {
     const body = await request.json() as {
@@ -113,10 +116,22 @@ export const handlers = [
       responses?: Array<{ questionId: string; score: number; trendIndicator?: string }>;
     };
 
-    // Validate required body fields (no header-based auth)
-    if (!body.memberId || !body.sessionId || !body.responses) {
+    // A caller-supplied identity is a contract violation, not an alternative
+    if (body.memberId !== undefined) {
       return HttpResponse.json(
-        { error: { code: 'VALIDATION_ERROR', message: 'Missing required fields: memberId, sessionId, responses' } },
+        {
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'memberId is not accepted in the body; identity comes from the session cookie',
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!body.sessionId || !body.responses) {
+      return HttpResponse.json(
+        { error: { code: 'VALIDATION_ERROR', message: 'Missing required fields: sessionId, responses' } },
         { status: 400 },
       );
     }

@@ -98,9 +98,10 @@ export default function SessionLinkPage({ params }: PageProps) {
 
     setIsSubmitting(true);
 
-    // Build the POST body
+    // Build the POST body. Identity is not included: the server derives the
+    // member from the session cookie (Requirement 12.4), so a body memberId
+    // would be ignored and could imply the client controls who is answering.
     const body = {
-      memberId: context.memberId,
       sessionId: context.sessionId,
       responses: responses
         .filter((r) => r.score !== null)
