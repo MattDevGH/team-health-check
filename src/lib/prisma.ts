@@ -1,12 +1,18 @@
 import { PrismaClient } from "@/generated/prisma";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import path from "path";
+
+import { resolveSqliteFileUrl } from "@/lib/database-url";
 
 /**
  * Environment-aware Prisma client factory.
  *
- * - When TURSO_DATABASE_URL is set: uses @libsql/client + @prisma/adapter-libsql (production/Turso)
- * - Otherwise: uses @prisma/adapter-better-sqlite3 with local prisma/dev.db (development)
+ * - When TURSO_DATABASE_URL is set: uses @prisma/adapter-libsql (production/Turso)
+ * - Otherwise: uses @prisma/adapter-better-sqlite3 against the file named by
+ *   DATABASE_URL, falling back to prisma/dev.db
+ *
+ * DATABASE_URL must be honoured here, not just by the CLI: an E2E run that
+ * points at a disposable database has to be certain the app writes there and
+ * never touches the development database.
  *
  * Note: The Turso path uses require() for dynamic loading so that the libSQL packages
  * are only resolved when actually needed (production). This prevents build errors in dev
@@ -31,9 +37,8 @@ export function createPrismaClient(): PrismaClient {
     return new PrismaClient({ adapter });
   }
 
-  // Development: local SQLite file via better-sqlite3
-  const dbPath = path.resolve(process.cwd(), "prisma", "dev.db");
-  const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
+  // Local SQLite via better-sqlite3, at the configured path
+  const adapter = new PrismaBetterSqlite3({ url: resolveSqliteFileUrl() });
   return new PrismaClient({ adapter });
 }
 
