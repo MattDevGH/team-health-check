@@ -422,6 +422,22 @@ original checklist was marked done.
       failed on first sight. It terminates either way.
     - _Requirements: 8.5_
 
+  - [ ] 24.5a Differentiate the closing reminder from an opening prompt
+    - Found during 24.5 acceptance on 2026-08-26: the closing reminder DM is byte-identical
+      to a `/healthcheck` prompt — same ":hospital: Health Check Time!" header, same five
+      questions. `createProductionNotificationSink` accepts a `type` but only uses it when
+      queueing a failure; delivery always calls `buildPromptMessage`
+    - Requirement 13.4 is therefore unimplemented: the reminder never indicates the feedback
+      window is closing soon. The Session_Link half of 13.4 is present
+    - The sink also calls `questionRepo.findAll()`, so scheduler-sent prompts and reminders
+      show every question including already-answered ones. `/healthcheck` narrows to
+      outstanding questions (Task 24.2), so the two paths disagree
+    - Fix: branch on `type` in the sink, add a reminder message with closing-soon wording,
+      the close time, and only outstanding questions
+    - Not caught by unit tests because they assert the sink was *called* with
+      `'closing_reminder'` and never inspect the rendered Slack payload
+    - _Requirements: Original 13.2, 13.4; Integration 8.2_
+
   - [ ] 24.5 Complete disposable-workspace Slack acceptance
     - Verify endpoint registration/signatures, pairing persistence, unlink, `/healthcheck`, opening prompt, interactive update, browser fallback, closing reminder, and one forced durable retry
     - Use disposable users/data, redact codes/tokens, record observable results, and clean up
@@ -492,6 +508,14 @@ original checklist was marked done.
 - **Session lifecycle management:** dedicated manager UI, explicit materialisation state, resilient lifecycle operations, delivery/progress controls, and recent-session history.
 - **Dashboard UX:** chart title/explanation/legend and accessible data-point detail; clarify or remove Latest Session; add question disclosure affordances and pluralisation fixes.
 - **Slack enhancements beyond Requirements 7–8:** implement `app_mention`/`message.im` behavior or keep those subscriptions undocumented; richer interaction confirmations, observability, and admin history.
+- **Slack Socket Mode (evaluate):** Slack can deliver commands, interactions, and events
+  over an outbound WebSocket instead of public HTTP request URLs, removing the need for a
+  tunnel in development entirely. Raised 2026-08-25 while setting up ngrok for Task 24.5.
+  Not adopted now because the three endpoints are Next.js route handlers that verify
+  inbound signatures, and Socket Mode needs a persistent WebSocket client — a different
+  receive path, plus an app-level token and a long-running process that does not fit
+  Vercel's serverless model. Worth evaluating as a **development-only** convenience
+  (Socket Mode locally, HTTP endpoints in production) rather than a replacement.
 - **Broader product work:** design system, dark mode, shared navigation, CSRF, generalized rate limiting, load/performance testing, and operational telemetry.
 
 ## Notes
