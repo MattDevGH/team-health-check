@@ -50,11 +50,11 @@ remaining merge blockers are tracked as Tasks 23–26 in
 `.kiro/specs/integration-hardening/tasks.md`:
 
 1. **Auth/session and audit contracts:** Task 23 is complete: browser identity is AuthContext-bound, team resources are ownership-protected, weighted session-link cadence and expiry scoping are enforced, and schedule/member-addition audits commit atomically.
-2. **Slack production behavior:** secure pairing, real unlink, the actionable
-   on-demand `/healthcheck` prompt, and bot-initiated prompt eligibility
+2. **Slack production behavior:** complete. Secure pairing, real unlink, the
+   actionable on-demand `/healthcheck` prompt, bot-initiated prompt eligibility
    (Slack link, availability, delivery window), member-visible interaction
-   replies, closing reminders, and persistent retry processing are complete;
-   remaining work is disposable-workspace acceptance.
+   replies, closing reminders, and persistent retry processing are implemented
+   and were verified against a disposable Slack workspace on 2026-08-26.
 3. **Automated evidence:** isolated/seeded E2E data, secure test-email capture,
    non-skipping browser-first Playwright flows, broader axe coverage, corrected
    MSW identity contracts, executable local libSQL repository evidence, and CI
@@ -63,9 +63,10 @@ remaining merge blockers are tracked as Tasks 23–26 in
    and remote gates, commit/push the accepted work, and merge through a green PR.
 
 Session lifecycle management and the dashboard UX observations are explicitly
-deferred follow-up milestones, not integration-hardening merge blockers. The
-branch stays open until the closure tasks, real Slack evidence, non-skipping
-Playwright suite, build, CI, and documentation are all complete.
+deferred follow-up milestones, not integration-hardening merge blockers. Real
+Slack evidence is now recorded (Task 24.5); the branch stays open until the
+remaining Task 25 automated evidence, the non-skipping Playwright suite, CI
+enforcement, and Task 26 documentation and merge gates are all complete.
 
 ## Environment Variables
 
@@ -107,10 +108,14 @@ Under **OAuth & Permissions**, add these Bot Token Scopes:
 
 | Scope | Purpose |
 |-------|---------|
-| `chat:write` | Send health check prompts and confirmations to members |
+| `chat:write` | Send health check prompts and reminders — `chat.postMessage` is the only Slack Web API call the app makes |
 | `commands` | Handle the `/healthcheck` slash command |
-| `im:write` | Open DM conversations with team members |
-| `users:read` | Resolve Slack user display info |
+| `im:write` | Open the DM conversation when posting to a user ID |
+
+These three are sufficient. `users:read` was previously listed here but nothing
+calls `users.info`; the Task 24.5 acceptance pass ran with only the three scopes
+above and every flow worked, so it has been removed rather than granted
+speculatively.
 
 ### 3. Install to Workspace
 
@@ -159,7 +164,8 @@ Account linking is implemented end to end (integration-hardening Task 24.1):
    that member
 4. Unlink deletes the persisted mapping before the UI reports success
 
-Real-workspace acceptance of this flow is still outstanding (Task 24.5).
+Verified against a real Slack workspace on 2026-08-26 (Task 24.5), including that
+unlink deletes the persisted row rather than only reporting success.
 
 ### 7a. On-demand `/healthcheck`
 
@@ -344,7 +350,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (1150 tests across 139 Vitest files)
+npm test            # unit + property tests (1163 tests across 142 Vitest files)
 npm run test:watch  # watch mode for TDD (unit only)
 npm run test:e2e    # Playwright browser tests
 npm run test:a11y   # Playwright axe tests
@@ -439,10 +445,12 @@ Feature specifications at `.kiro/specs/`:
 - **Playwright closure is incomplete** — required happy paths can skip, use stale
   contracts/manual cookies, and share non-isolated unseeded data. Tasks 25.1–25.3
   replace them with deterministic browser-first and accessibility evidence.
-- **No real-workspace Slack acceptance** — account linking/unlink, the on-demand
-  `/healthcheck` prompt, and bot-initiated prompt eligibility are implemented and
-  unit/route tested, but closing reminders and durable retry still need
-  implementation closure, and all of it needs a disposable-workspace pass.
+- **Real-workspace Slack acceptance completed** (2026-08-26) — pairing, unlink,
+  `/healthcheck`, interaction replies, browser fallback, closing reminder, and a
+  forced durable retry were all exercised against a disposable workspace. The
+  pass found three defects invisible to the unit suite: a tunnel-origin hydration
+  hang, scaffolding metadata in Slack link unfurls, and a closing reminder that
+  read as an opening prompt. All three are fixed.
 - **No executable libSQL repository proof** — client selection exists, but Task
   25.5 must execute representative repository behavior through the local libSQL
   adapter.

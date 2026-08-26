@@ -37,9 +37,10 @@ reconciled, and Task 24.1 (secure authenticated Slack pairing and truthful
 unlink behavior), Task 24.2 (actionable cadence-aware `/healthcheck` plus
 availability/delivery-window eligibility for bot-initiated prompts), Task 24.3a
 (member-visible interaction replies), and Task 24.3 (closing reminders, nudge
-eligibility, and route-level tick tests), and Task 24.4 (persistent Slack retry
-queue with draining) are complete. Resume with Task 24.5 (disposable-workspace
-Slack acceptance) — the last piece of Task 24.
+eligibility, and route-level tick tests), Task 24.4 (persistent Slack retry queue
+with draining), and Task 24.5/24.5a (disposable-workspace acceptance) are
+complete. **Task 24 is closed.** Resume with Task 25 (automated acceptance and
+deployment evidence), starting with 25.1, 25.4, and 25.5.
 
 ### Accepted live state
 
@@ -154,6 +155,31 @@ Explicitly deferred non-blockers: session lifecycle management UI; dashboard
 chart/Latest Session/question-disclosure UX; `app_mention`/`message.im` behavior
 if those subscriptions remain undocumented; broader design-system, navigation,
 CSRF, generalized rate-limiting, performance, and telemetry work.
+
+### Slack workspace acceptance — completed 2026-08-26 (Task 24.5)
+
+A full disposable-workspace pass ran against a real Slack app over an ngrok
+tunnel, using a disposable team seeded alongside the accepted browser-acceptance
+data. All nine script items passed; the detailed evidence table lives in
+`.kiro/specs/integration-hardening/tasks.md` under Task 24.5. Do not repeat this
+pass unless Slack behavior changes.
+
+Three defects were found that the 1,150-test suite could not see, because each
+only manifests outside the app:
+
+1. Pages served over a tunnel host hung on "Loading" — Next.js blocks
+   cross-origin dev assets, so React never hydrated. Fixed by `allowedDevOrigins`
+   in `next.config.ts` (development-only).
+2. Slack link unfurls showed "App" and "Generated from nextjs-fullstack-starter";
+   Task 17.1 renamed `package.json` but left `src/app/layout.tsx` on template
+   defaults. Fixed, with a regression test over the exported metadata.
+3. The closing reminder was byte-identical to an opening prompt, leaving
+   Requirement 13.4 unimplemented. Fixed as Task 24.5a.
+
+Teardown removed the disposable team and every dependent row; the accepted data
+was verified unchanged afterwards at 1 team / 1 member / 2 sessions /
+10 responses / 10 aggregates. `.env` was restored to localhost with the reserved
+ngrok domain kept as a commented line. No tokens or pairing codes were recorded.
 
 ### Slack message rendering — verified 2026-08-24
 
@@ -308,7 +334,7 @@ Block Kit check unless `buildPromptMessage` changes.
   failing test's identity was lost to truncated output. Not diagnosed. If it
   recurs, capture full output — a nondeterministic test undermines the CI
   skip/isolation enforcement Task 25.6 depends on.
-- Latest validation: **139 test files / 1150 tests passed**,
+- Latest validation: **142 test files / 1163 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
@@ -444,7 +470,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1150 tests across 139 files**, including
+The Vitest suite now contains **1163 tests across 142 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
@@ -551,8 +577,7 @@ All stages must pass. Branch protection requires CI green before merge.
 ### Integration-hardening merge blockers
 
 - Task 23: complete; run final reconciliation before Task 24
-- Task 24: 24.1, 24.2, 24.3, 24.3a, and 24.4 are complete. Remaining: 24.5
-  disposable-workspace acceptance
+- Task 24: **complete** (24.1, 24.2, 24.3, 24.3a, 24.4, 24.5, 24.5a)
 - Task 25: deterministic non-skipping E2E/MSW/libSQL evidence
 - Task 26: documentation, full gates, commit/push/PR/merge
 
@@ -564,3 +589,9 @@ All stages must pass. Branch protection requires CI green before merge.
 - CSRF protection and generalized non-auth rate limiting
 - Load/performance testing and operational telemetry
 - Optional Slack conversational events and richer interaction feedback beyond Requirements 7–8
+- **Slack Socket Mode (evaluate, raised 2026-08-25):** deliver commands/interactions/events
+  over an outbound WebSocket instead of public request URLs, removing the ngrok tunnel from
+  local development. Not adopted now: our three endpoints are signature-verifying route
+  handlers, and Socket Mode needs a persistent WebSocket client plus an app-level token,
+  which does not fit Vercel serverless. Evaluate as development-only convenience with HTTP
+  endpoints retained for production

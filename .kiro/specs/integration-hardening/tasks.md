@@ -422,7 +422,7 @@ original checklist was marked done.
       failed on first sight. It terminates either way.
     - _Requirements: 8.5_
 
-  - [ ] 24.5a Differentiate the closing reminder from an opening prompt
+  - [x] 24.5a Differentiate the closing reminder from an opening prompt
     - Found during 24.5 acceptance on 2026-08-26: the closing reminder DM is byte-identical
       to a `/healthcheck` prompt — same ":hospital: Health Check Time!" header, same five
       questions. `createProductionNotificationSink` accepts a `type` but only uses it when
@@ -438,10 +438,38 @@ original checklist was marked done.
       `'closing_reminder'` and never inspect the rendered Slack payload
     - _Requirements: Original 13.2, 13.4; Integration 8.2_
 
-  - [ ] 24.5 Complete disposable-workspace Slack acceptance
+  - [x] 24.5 Complete disposable-workspace Slack acceptance
     - Verify endpoint registration/signatures, pairing persistence, unlink, `/healthcheck`, opening prompt, interactive update, browser fallback, closing reminder, and one forced durable retry
     - Use disposable users/data, redact codes/tokens, record observable results, and clean up
     - _Requirements: 7.1–7.4, 8.1–8.5_
+
+    **Completed 2026-08-26** against a disposable Slack workspace and a disposable
+    team seeded alongside the accepted browser-acceptance data. Observed results:
+
+    | Item | Evidence |
+    |---|---|
+    | Endpoint registration/signatures | `url_verification` challenge returned 200; unsigned POSTs to all three endpoints returned 403 |
+    | `/healthcheck connect` | Ephemeral pairing code issued from the workspace |
+    | Pairing persistence | `SlackIdentityLink` row written; survived page reload and repeated dev-server restarts; `GET /api/me` returned it |
+    | `/healthcheck` prompt | Five questions with 1–5 buttons; reused the member's existing session-link token rather than minting a duplicate |
+    | Interactive update | Click stored `q-delivering-value = 1` and replied via `response_url`; route ack took 276ms, of which 274ms was the awaited outbound reply |
+    | Browser fallback | Session link opened over the tunnel and showed the Slack-submitted score pre-selected |
+    | Closing reminder | Sent once from three consecutive ticks — the durable `NotificationDelivery` claim holding across separate requests |
+    | Forced durable retry | Invalid bot token produced `invalid_auth` after 3 inline attempts (~11s), persisted a replayable `dm` descriptor with 12 blocks, then drained to `delivered` on a later tick with the real token and arrived in Slack |
+    | Unlink | `SlackIdentityLink` row deleted; `GET /api/me` returned `slackLink: null` |
+    | Cleanup | Disposable team and all dependent rows removed; accepted data verified unchanged at 1 team / 1 member / 2 sessions / 10 responses / 10 aggregates |
+
+    Defects found and fixed during the pass: tunnel-origin hydration hang
+    (`allowedDevOrigins`), scaffolding metadata leaking into Slack link unfurls,
+    and Requirement 13.4 (Task 24.5a).
+
+    Caveat: the unlink confirmation was completed with a programmatic DOM click
+    after a real mouse click failed to register on that control. The behavior is
+    verified, but through a synthetic event — Task 25.2 should cover this control
+    with a real browser interaction.
+
+    No app-level tokens or pairing codes are recorded here. The workspace, app,
+    and bot token remain disposable and revocable.
 
 - [ ] 25. Close automated acceptance and deployment evidence
   - [ ] 25.1 Create deterministic, isolated E2E infrastructure with TDD
