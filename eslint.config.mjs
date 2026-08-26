@@ -12,7 +12,21 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated files (Prisma, etc.)
+    "src/generated/**",
+    // Agent worktrees are full copies of this repository. Linting them reports
+    // problems from another branch's working tree as if they were ours.
+    ".claude/**",
   ]),
+  {
+    rules: {
+      // Allow unused vars prefixed with _ (common convention for intentionally unused params)
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

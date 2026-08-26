@@ -1,0 +1,199 @@
+/**
+ * Session lifecycle service.
+ * Requirements: 3.2, 3.4, 3.9, 3.10, 6.1, 8.1
+ */
+
+import crypto from 'node:crypto';
+import type {
+  SessionRepository,
+  SessionLinkRepository,
+  TeamMemberRepository,
+  ResponseRepository,
+  SessionAggregateRepository,
+  TeamScheduleRepository,
+} from '@/lib/repositories/types';
+import type { HealthCheckSession } from '@/lib/repositories/entities';
+import { NotFoundError, ConflictError } from '@/lib/errors';
+import { nextOccurrenceUtc } from '@/lib/local-time';
+
+export interface SessionServiceDeps {
+  sessionRepo: SessionRepository;
+  sessionLinkRepo: SessionLinkRepository;
+  teamMemberRepo: TeamMemberRepository;
+  responseRepo: ResponseRepository;
+  sessionAggregateRepo: SessionAggregateRepository;
+  /**
+   * Supplies the team's configured close day/time. Omitted only by focused tests
+   * that do not exercise the scheduled window; production wiring always injects it.
+   */
+  teamScheduleRepo?: TeamScheduleRepository;
+  now?: () => Date;
+}
+
+export interface SessionService {
+  open(teamId: string, userId: string): Promise<HealthCheckSession>;
+  get(expectedTeamId: string, sessionId: string): Promise<HealthCheckSession>;
+  close(expectedTeamId: string, sessionId: string, userId?: string): Promise<void>;
+  generateSessionLinks(sessionId: string): Promise<void>;
+  materializeAggregates(sessionId: string): Promise<void>;
+}
+
+/**
+ * Factory function for creating the session service.
+ */
+export function createSessionService(deps: SessionServiceDeps): SessionService {
+  const {
+    sessionRepo,
+    sessionLinkRepo,
+    teamMemberRepo,
+    responseRepo,
+    sessionAggregateRepo,
+    teamScheduleRepo,
+  } = deps;
+  const now = deps.now ?? (() => new Date());
+
+  async function generateSessionLinks(sessionId: string): Promise<void> {
+    const session = await sessionRepo.findById(sessionId);
+    if (!session) {
+      throw new NotFoundError('Session not found');
+    }
+
+    const members = await teamMemberRepo.findByTeamId(session.teamId);
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+    // If session is closed, expiry is 7 days after close; otherwise 7 days from now
+    const baseTime = session.actualCloseAt ? session.actualCloseAt.getTime() : Date.now();
+    const expiresAt = new Date(baseTime + sevenDaysMs);
+
+    for (const member of members) {
+      const token = crypto.randomBytes(32).toString('hex');
+      await sessionLinkRepo.create({
+        token,
+        memberId: member.id,
+        sessionId: session.id,
+        expiresAt,
+      });
+    }
+  }
+
+  async function open(teamId: string, _userId: string): Promise<HealthCheckSession> {
+    // Enforce at-most-one open session: close existing open session
+    const existing = await sessionRepo.findOpenByTeamId(teamId);
+    if (existing) {
+      await sessionRepo.update(existing.id, {
+        status: 'closed',
+        actualCloseAt: new Date(),
+      });
+    }
+
+    // Record the cycle's scheduled window so closing reminders and micro-pulse
+    // bundling have a real close time to work from (design.md).
+    const openedAt = now();
+    const schedule = (await teamScheduleRepo?.findByTeamId(teamId)) ?? null;
+    const scheduledWindow = schedule
+      ? {
+          scheduledOpenAt: openedAt,
+          scheduledCloseAt: nextOccurrenceUtc(
+            openedAt,
+            schedule.closeDay,
+            schedule.closeTime,
+            schedule.timezone || 'UTC',
+          ),
+        }
+      : {};
+
+    // Create new open session
+    const session = await sessionRepo.create({
+      teamId,
+      status: 'open',
+      ...scheduledWindow,
+    });
+
+    // Generate session links for all team members
+    await generateSessionLinks(session.id);
+
+    return session;
+  }
+
+  async function get(
+    expectedTeamId: string,
+    sessionId: string,
+  ): Promise<HealthCheckSession> {
+    const session = await sessionRepo.findById(sessionId);
+    if (!session || session.teamId !== expectedTeamId) {
+      throw new NotFoundError('Session not found');
+    }
+    return session;
+  }
+
+  async function close(
+    expectedTeamId: string,
+    sessionId: string,
+    _userId?: string,
+  ): Promise<void> {
+    const session = await sessionRepo.findById(sessionId);
+    if (!session || session.teamId !== expectedTeamId) {
+      throw new NotFoundError('Session not found');
+    }
+    if (session.status === 'closed') {
+      throw new ConflictError('Session is already closed');
+    }
+    await sessionRepo.update(sessionId, {
+      status: 'closed',
+      actualCloseAt: new Date(),
+    });
+  }
+
+  /**
+   * Materialise aggregates for a closed session.
+   * Computes average score (1 decimal), response count, and trend indicator
+   * distribution per question.
+   * Requirement: 8.1, NFR 4.2
+   */
+  async function materializeAggregates(sessionId: string): Promise<void> {
+    const session = await sessionRepo.findById(sessionId);
+    if (!session) {
+      throw new NotFoundError('Session not found');
+    }
+
+    const responses = await responseRepo.findBySession(sessionId);
+
+    // Group responses by questionId
+    const byQuestion = new Map<string, typeof responses>();
+    for (const response of responses) {
+      const existing = byQuestion.get(response.questionId) ?? [];
+      existing.push(response);
+      byQuestion.set(response.questionId, existing);
+    }
+
+    // For each question with responses, compute and store aggregate
+    for (const [questionId, questionResponses] of byQuestion) {
+      if (questionResponses.length === 0) continue;
+
+      const sum = questionResponses.reduce((acc, r) => acc + r.score, 0);
+      const averageScore = Math.round((sum / questionResponses.length) * 10) / 10;
+      const responseCount = questionResponses.length;
+
+      let improvingCount = 0;
+      let stableCount = 0;
+      let decliningCount = 0;
+      for (const r of questionResponses) {
+        if (r.trendIndicator === 'improving') improvingCount++;
+        else if (r.trendIndicator === 'stable') stableCount++;
+        else if (r.trendIndicator === 'declining') decliningCount++;
+      }
+
+      await sessionAggregateRepo.create({
+        sessionId,
+        questionId,
+        averageScore,
+        responseCount,
+        improvingCount,
+        stableCount,
+        decliningCount,
+      });
+    }
+  }
+
+  return { open, get, close, generateSessionLinks, materializeAggregates };
+}
