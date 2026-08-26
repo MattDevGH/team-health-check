@@ -113,6 +113,97 @@ export function aggregatesForSession(sessionId: string): Array<{
   }>;
 }
 
+export interface SeededAggregate {
+  questionId: string;
+  averageScore: number;
+  responseCount: number;
+  improvingCount: number;
+  stableCount: number;
+  decliningCount: number;
+}
+
+/**
+ * Seeds a team, one member, and closed sessions with materialised aggregates.
+ *
+ * Used by specs whose subject is rendering rather than creation — the journey
+ * already proves the app can produce this state through its own flows. Seeding
+ * directly is what makes it possible to set response counts above the anonymity
+ * threshold, and distributions that a single respondent could never produce.
+ */
+export function seedClosedSessions(options: {
+  teamName: string;
+  memberEmail: string;
+  privacyMode: 'anonymous' | 'attributed';
+  sessions: Array<{ closedAt: Date; aggregates: SeededAggregate[] }>;
+}): { teamId: string; memberId: string } {
+  return write(db => {
+    // Ids derive from the names so they are readable, stable, and distinct for
+    // distinct inputs — a hash could collide and produce a confusing UNIQUE error
+    const teamId = `e2e-team-${slug(options.teamName)}`;
+    const memberId = `e2e-member-${slug(options.memberEmail)}`;
+    const now = new Date().toISOString();
+
+    // Idempotent: Playwright restarts its worker after a failure, which re-runs
+    // beforeAll hooks, and CI retries do the same. Seeding must tolerate that.
+    const sessionIds = db
+      .prepare('SELECT id FROM HealthCheckSession WHERE teamId = ?')
+      .all(teamId) as Array<{ id: string }>;
+    for (const { id } of sessionIds) {
+      db.prepare('DELETE FROM SessionAggregate WHERE sessionId = ?').run(id);
+    }
+    db.prepare('DELETE FROM HealthCheckSession WHERE teamId = ?').run(teamId);
+    db.prepare('DELETE FROM TeamMemberRole WHERE teamId = ?').run(teamId);
+    db.prepare('DELETE FROM UserSession WHERE memberId = ?').run(memberId);
+    db.prepare('DELETE FROM MagicLink WHERE memberId = ?').run(memberId);
+    db.prepare('DELETE FROM TeamMember WHERE teamId = ?').run(teamId);
+    db.prepare('DELETE FROM Team WHERE id = ?').run(teamId);
+
+    db.prepare(
+      'INSERT INTO Team (id, name, privacyMode, archived, timezone, preSessionRecipient, createdAt, updatedAt) VALUES (?, ?, ?, 0, ?, ?, ?, ?)',
+    ).run(teamId, options.teamName, options.privacyMode, 'Europe/London', 'delivery_manager', now, now);
+
+    db.prepare(
+      'INSERT INTO TeamMember (id, teamId, name, email, cadencePreference, remindersEnabled, currentStreak, bestStreak, createdAt) VALUES (?, ?, ?, ?, ?, 1, 0, 0, ?)',
+    ).run(memberId, teamId, 'Dashboard Owner', options.memberEmail, 'weekly', now);
+
+    db.prepare(
+      'INSERT INTO TeamMemberRole (id, memberId, teamId, role, assignedAt) VALUES (?, ?, ?, ?, ?)',
+    ).run(`${memberId}-role`, memberId, teamId, 'delivery_manager', now);
+
+    options.sessions.forEach((session, index) => {
+      const sessionId = `${teamId}-session-${index}`;
+      const closedAt = session.closedAt.toISOString();
+
+      db.prepare(
+        "INSERT INTO HealthCheckSession (id, teamId, status, actualOpenAt, actualCloseAt, createdAt) VALUES (?, ?, 'closed', ?, ?, ?)",
+      ).run(sessionId, teamId, closedAt, closedAt, closedAt);
+
+      for (const aggregate of session.aggregates) {
+        db.prepare(
+          'INSERT INTO SessionAggregate (id, sessionId, questionId, averageScore, responseCount, improvingCount, stableCount, decliningCount, materialisedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        ).run(
+          `${sessionId}-${aggregate.questionId}`,
+          sessionId,
+          aggregate.questionId,
+          aggregate.averageScore,
+          aggregate.responseCount,
+          aggregate.improvingCount,
+          aggregate.stableCount,
+          aggregate.decliningCount,
+          closedAt,
+        );
+      }
+    });
+
+    return { teamId, memberId };
+  });
+}
+
+/** Lowercase, hyphenated identifier fragment. */
+function slug(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
 /**
  * Backdates a closed session so the scheduler's quiet period has elapsed.
  *

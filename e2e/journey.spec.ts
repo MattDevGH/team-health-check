@@ -293,23 +293,28 @@ test.describe.serial('team lifecycle journey', () => {
     }
   });
 
-  test('shows two-session trend data whose values match the stored aggregates', async () => {
+  test('leaves insufficient-data mode once a second session closes', async () => {
     await page.goto(`/teams/${state.teamId}/dashboard`);
 
     await expect(page.getByText(/more data needed/i)).toHaveCount(0);
+  });
 
-    // Cross-check a rendered figure against the database rather than trusting
-    // that a number appearing on screen is the right number
+  test('suppresses per-session detail while responses stay below the anonymity threshold', async () => {
+    await page.goto(`/teams/${state.teamId}/dashboard`);
+
     const stored = aggregatesForSession(state.sessionIds[1]);
     const psychologicalSafety = stored.find(row => row.questionId === 'q-psychological-safety');
-    expect(psychologicalSafety).toBeTruthy();
+    expect(psychologicalSafety?.responseCount).toBe(1);
 
-    const detail = page.getByRole('button', { name: /psychological safety/i });
-    await expect(detail).toBeVisible();
-    await detail.click();
+    await page.getByRole('button', { name: /psychological safety/i }).click();
 
-    await expect(
-      page.getByText(String(psychologicalSafety!.averageScore), { exact: false }).first(),
-    ).toBeVisible();
+    // One respondent in an anonymous team is below the threshold of 3, so the
+    // score must not be shown. Scoped to the drill-down: the trend chart renders
+    // axis labels "1.0" to "5.0", so a page-wide search would match a tick and
+    // prove nothing. Exact per-value assertions live in dashboard.spec.ts, where
+    // counts are seeded high enough to display.
+    const detail = page.locator('div.border-l-2');
+    await expect(detail).toContainText(/insufficient data/i);
+    await expect(detail).not.toContainText(psychologicalSafety!.averageScore.toFixed(1));
   });
 });
