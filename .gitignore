@@ -48,6 +48,11 @@ next-env.d.ts
 # SQLite database file
 /prisma/dev.db
 /prisma/dev.db-journal
+# disposable E2E database, recreated by e2e/global-setup.ts on every run
+/prisma/e2e.db
+/prisma/e2e.db-journal
+/prisma/e2e.db-wal
+/prisma/e2e.db-shm
 
 # playwright
 /playwright-report/

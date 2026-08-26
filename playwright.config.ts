@@ -1,16 +1,36 @@
+import path from 'node:path';
+
 import { defineConfig, devices } from '@playwright/test';
+
+import { e2eDatabaseUrl } from './e2e/database';
 
 /**
  * Playwright configuration for e2e and accessibility tests.
- * Starts the Next.js dev server automatically, then runs tests against it.
+ *
+ * The suite runs against a disposable database provisioned by the global setup,
+ * never `prisma/dev.db`. The web server is given the same DATABASE_URL, so the
+ * app under test and the fixtures agree on where data lives.
+ *
+ * TEST_MODE enables the in-process email capture that lets the sign-in flow be
+ * driven without a real inbox. Without it the capture endpoint returns 404 and
+ * the affected tests fail rather than skipping.
+ *
+ * Requirements: 10.1-10.6
  */
+const DATABASE_URL = e2eDatabaseUrl();
+
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: true,
+  globalSetup: path.resolve(__dirname, 'e2e/global-setup.ts'),
+
+  // A single SQLite file is shared by the whole run, so tests are serialised
+  // rather than racing each other through it
+  fullyParallel: false,
+  workers: 1,
+
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  reporter: process.env.CI ? [['html'], ['list']] : 'html',
 
   use: {
     baseURL: 'http://localhost:3000',
@@ -27,7 +47,15 @@ export default defineConfig({
   webServer: {
     command: process.env.CI ? 'npm run start' : 'npm run dev',
     url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
+    // Always start a fresh server: a reused one may hold the previous
+    // DATABASE_URL and quietly read the wrong database
+    reuseExistingServer: false,
+    timeout: 60_000,
+    env: {
+      ...process.env,
+      DATABASE_URL,
+      TEST_MODE: 'true',
+      NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
+    },
   },
 });
