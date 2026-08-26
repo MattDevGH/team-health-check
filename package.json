@@ -9,8 +9,9 @@
         "lint": "eslint",
         "test": "vitest run",
         "test:watch": "vitest",
-        "test:e2e": "playwright test",
-        "test:a11y": "playwright test e2e/accessibility.spec.ts"
+        "test:e2e": "npm run build && playwright test",
+        "test:a11y": "npm run build && playwright test e2e/accessibility.spec.ts",
+        "test:e2e:nobuild": "playwright test"
     },
     "dependencies": {
         "@libsql/client": "^0.17.4",

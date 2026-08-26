@@ -45,12 +45,16 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: process.env.CI ? 'npm run start' : 'npm run dev',
+    // Always the production build, locally as well as in CI, so both exercise
+    // the same artifact. The dev server also emits HMR console errors that the
+    // strict fixture would (correctly) fail on. `npm run test:e2e` builds first;
+    // CI builds in a separate step.
+    command: 'npm run start',
     url: 'http://localhost:3000',
     // Always start a fresh server: a reused one may hold the previous
     // DATABASE_URL and quietly read the wrong database
     reuseExistingServer: false,
-    timeout: 60_000,
+    timeout: 120_000,
     env: {
       ...process.env,
       DATABASE_URL,
