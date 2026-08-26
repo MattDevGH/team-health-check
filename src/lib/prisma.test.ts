@@ -6,6 +6,14 @@
  * resulting PrismaClient instance. Rather than mocking internal require() calls
  * (which vitest struggles with for CJS packages), we verify the behavior by
  * checking the client is created without errors under each env configuration.
+ *
+ * LIMITATION: constructing a PrismaClient succeeds even when the adapter is
+ * misconfigured, because nothing connects until the first query. These tests
+ * passed throughout a period when the libSQL adapter was built from a client
+ * instead of a config, so every production query would have failed with
+ * URL_INVALID. Execution coverage of that path lives in
+ * `src/tests/integration/libsql-repository.test.ts`, which runs real queries
+ * through the adapter against a local file — keep it in step with this file.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 

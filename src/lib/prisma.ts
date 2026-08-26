@@ -14,18 +14,20 @@ import path from "path";
  */
 export function createPrismaClient(): PrismaClient {
   if (process.env.TURSO_DATABASE_URL) {
-    // Production: Turso via libSQL adapter
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createClient } = require("@libsql/client");
+    // Production: Turso via libSQL adapter.
+    //
+    // PrismaLibSql takes the libSQL *config* and constructs its own client.
+    // Passing an already-created client leaves its config.url undefined, and
+    // every query then fails with URL_INVALID — see the libSQL repository
+    // integration test, which executes this path against a local file.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { PrismaLibSql } = require("@prisma/adapter-libsql");
 
-    const libsql = createClient({
+    const adapter = new PrismaLibSql({
       url: process.env.TURSO_DATABASE_URL,
       authToken: process.env.TURSO_AUTH_TOKEN,
     });
 
-    const adapter = new PrismaLibSql(libsql);
     return new PrismaClient({ adapter });
   }
 
