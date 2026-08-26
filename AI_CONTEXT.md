@@ -17,14 +17,24 @@ Team Health Check — a lightweight feedback tool for delivery teams, inspired b
 `feat/<feature-name>` branches and merges through a pull request only after CI
 and relevant acceptance validation pass.
 
-**Current branch status:** Integration hardening remains open on
-`feat/integration-hardening`. This branch contains the approved one-off
-browser-acceptance consolidation checkpoint; preserve it and the persistent
-`prisma/dev.db`, and do not start the lifecycle-management milestone yet.
-Two-session browser acceptance is complete, but the 2026-08-23 closure audit
-found unsupported completion claims in auth, Slack production wiring,
-Playwright/isolation, MSW contracts, and libSQL evidence. Tasks 23–26 in the
-integration-hardening spec are now the authoritative merge plan.
+**Current branch status:** Integration hardening is on `feat/integration-hardening`,
+pushed and green in GitHub Actions (`ci` and `e2e`; `requirement-coverage` runs
+only on pull requests and has never executed). Preserve the persistent
+`prisma/dev.db` and do not start the lifecycle-management milestone yet.
+
+The 2026-08-23 closure audit found unsupported completion claims in auth, Slack
+production wiring, Playwright/isolation, MSW contracts, and libSQL evidence.
+**Tasks 23, 24, and 25 are now complete**, each closing the gap the audit named
+and several the audit did not:
+
+- the Turso production path was broken and would have failed on its first query
+- the runtime ignored `DATABASE_URL`, so E2E runs wrote to the development database
+- closing reminders arrived indistinguishable from opening prompts
+- Slack link unfurls advertised the starter template's name
+- pages hung on "Loading" over a tunnel because dev assets were blocked
+- four pages carried WCAG AA contrast failures
+
+**Task 26 (reconcile and merge) is the only work remaining.**
 
 ## Latest Manual Acceptance Checkpoint — 2026-08-23
 
@@ -93,30 +103,31 @@ rewrite. No production changes were made for these UX observations yet.
 3. Close/materialise and verify calculated + subjective data — complete.
 4. Validate the two-session dashboard and drill-downs — complete.
 
-### Integration-hardening closure audit — authoritative next work
+### Integration-hardening closure audit — outcome
 
-The original Tasks 1–21 were checked too early. Task 20.1 and the final
-checkpoint are reopened; Task 22 records the accepted regressions above. Complete
-these dependency-ordered waves before commit/merge or a new milestone:
+The original Tasks 1–21 were checked too early. Task 22 records the accepted
+regressions above. The audit's four waves are now resolved:
 
 1. **Task 23 — Auth/session and audit closure:** complete. Route authorization,
-direct AuthContext, weighted/scoped session-link behavior, and actor-bound atomic
-schedule/member-addition audits now have executable coverage. Run the Task 23
-final reconciliation, then continue with Task 24.
-2. **Task 24 — Slack production closure:** authenticated pairing UI and actual
-   unlink; actionable `/healthcheck`; cadence/delivery-window eligibility;
-   scheduler closing reminders; persistent retry queue/drain; then redacted
-   disposable-workspace acceptance covering signatures, prompts, interactions,
-   browser fallback, reminder, retry, persistence, and cleanup.
-3. **Task 25 — Automated/deployment evidence:** isolated seeded E2E database;
-   TEST_MODE-only email capture that fails rather than skips; browser-managed
-   auth and two complete Playwright lifecycles; expanded axe coverage; canonical
-   MSW response identity contract; executable local libSQL repository behavior;
-   CI enforcement of isolation/seeding/zero required skips.
-4. **Task 26 — Reconciliation and merge:** keep requirements/design/tasks,
-   README, and AI_CONTEXT synchronized; run clean lint/type/Vitest/build/E2E,
-   libSQL, Slack, and diff gates; commit/push this branch; obtain green `ci`,
-   `e2e`, and `requirement-coverage` PR jobs; merge before branching new work.
+   direct AuthContext, weighted/scoped session-link behavior, and actor-bound
+   atomic schedule/member-addition audits have executable coverage.
+2. **Task 24 — Slack production closure:** complete. Secure pairing and real
+   unlink, an actionable `/healthcheck`, availability and delivery-window
+   eligibility, member-visible interaction replies, closing reminders, a
+   persistent retry queue that actually drains, and a redacted
+   disposable-workspace acceptance pass on 2026-08-26.
+3. **Task 25 — Automated/deployment evidence:** complete. Isolated seeded E2E
+   database, TEST_MODE capture that fails rather than skips, a real browser
+   journey with no cookie injection, axe across seven states, corrected MSW
+   identity contract, executable libSQL repository evidence, and CI that runs on
+   feature branches and fails on any skipped test.
+4. **Task 26 — Reconciliation and merge:** in progress. Synchronize
+   requirements/design/tasks/README/AI_CONTEXT, run the full local gate set,
+   then merge through a green pull request before branching new work.
+
+Task 20.1 is closed by supersession: `e2e/happy-path.spec.ts` was deleted and
+replaced by `e2e/journey.spec.ts` under Task 25.2. Task 21's final verification
+is carried out as Task 26.2 rather than separately.
 
 ### Commit boundaries from Task 23 onward
 

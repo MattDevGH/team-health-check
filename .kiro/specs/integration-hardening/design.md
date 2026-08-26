@@ -588,25 +588,28 @@ export async function authorizeDeliveryManager(memberId: string, teamId: string)
 ### Environment-Aware Prisma Client (`src/lib/prisma.ts`)
 
 ```typescript
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@/generated/prisma';
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
+
+import { resolveSqliteFileUrl } from '@/lib/database-url';
 
 function createPrismaClient(): PrismaClient {
   if (process.env.TURSO_DATABASE_URL) {
-    // Production: Turso via libSQL adapter
-    const { createClient } = require('@libsql/client');
-    const { PrismaLibSQL } = require('@prisma/adapter-libsql');
+    // Production: Turso via libSQL adapter.
+    // PrismaLibSql takes the libSQL *config* and constructs its own client.
+    const { PrismaLibSql } = require('@prisma/adapter-libsql');
 
-    const libsql = createClient({
+    const adapter = new PrismaLibSql({
       url: process.env.TURSO_DATABASE_URL,
       authToken: process.env.TURSO_AUTH_TOKEN,
     });
 
-    const adapter = new PrismaLibSQL(libsql);
     return new PrismaClient({ adapter });
   }
 
-  // Development: local SQLite file via better-sqlite3 (default Prisma behavior)
-  return new PrismaClient();
+  // Local SQLite via better-sqlite3, at the file named by DATABASE_URL
+  const adapter = new PrismaBetterSqlite3({ url: resolveSqliteFileUrl() });
+  return new PrismaClient({ adapter });
 }
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
@@ -617,22 +620,82 @@ if (process.env.NODE_ENV !== 'production') {
 }
 ```
 
+**Two corrections this document previously got wrong**, both found by Task 25.5
+while writing execution evidence:
+
+1. The adapter takes the libSQL **config**, not a constructed client. An earlier
+   version of this design (and the implementation that followed it) created a
+   client with `createClient()` and passed that in, leaving `config.url`
+   undefined so every production query failed with `URL_INVALID`. Constructing a
+   `PrismaClient` succeeds either way — nothing connects until the first query —
+   so tests asserting the client was created could not catch it.
+2. The local branch must honour `DATABASE_URL` rather than hardcoding
+   `prisma/dev.db`, otherwise an E2E run configured against a disposable
+   database still reads and writes the development one.
+   `resolveSqliteFileUrl` is shared with `prisma.config.ts` so the CLI and the
+   runtime cannot disagree about the target file.
+
 ## Data Models
 
-No new Prisma models are required. The existing `UserSession`, `SlackIdentityLink`, and `SlackInteractionQueue` models already exist in the schema. The only data-layer change is adding the `SlackIdentityLinkRepository` interface and its implementations (Prisma + in-memory).
+The plan originally assumed no new Prisma models were required, since
+`UserSession`, `SlackIdentityLink`, and `SlackInteractionQueue` already existed.
+Task 24.3 disproved that: preventing repeat closing reminders needs durable
+state, and the in-process `Map` it relied on cannot survive a serverless
+invocation boundary, so the guarantee never held in production.
+
+### NotificationDelivery (added by migration `20260824233723_add_notification_delivery`)
+
+```prisma
+model NotificationDelivery {
+  id        String   @id @default(cuid())
+  memberId  String
+  sessionId String
+  /// 'closing_reminder' | 'mid_session_nudge'
+  type      String
+  sentAt    DateTime @default(now())
+
+  @@unique([memberId, sessionId, type])
+  @@index([sessionId, type])
+}
+```
+
+The unique index is the mechanism, not an optimisation: `claim()` inserts and
+treats a unique violation as "already sent", so two scheduler ticks racing on
+the same member cannot both decide to notify. A read-then-write check would not
+be safe. The in-memory fake mirrors first-caller-wins, and
+`src/tests/integration/libsql-repository.test.ts` proves the constraint holds on
+libSQL as well as better-sqlite3, since production runs on the former.
+
+The claim is taken *after* every eligibility gate, so an ineligible member does
+not consume their single slot and can still be notified on a later tick.
 
 ### Repository Addition Summary
 
 ```
 Repositories interface gains:
-  slackIdentityLink: SlackIdentityLinkRepository
+  slackIdentityLink:    SlackIdentityLinkRepository
+  notificationDelivery: NotificationDeliveryRepository
+  interactionQueue:     InteractionQueueRepository
 
-Methods:
+SlackIdentityLinkRepository:
   create(memberId, slackUserId) → record
   findByMemberId(memberId) → record | null
   findBySlackUserId(slackUserId) → record | null
   upsertByMemberId(memberId, slackUserId) → record
   delete(memberId) → void
+
+NotificationDeliveryRepository:
+  claim({ memberId, sessionId, type }) → boolean   // false when already claimed
+  hasDelivered(memberId, sessionId, type) → boolean
+
+InteractionQueueRepository (Prisma implementation added by Task 24.4; the
+production wiring previously constructed an in-memory instance per request, so
+queued entries were discarded when the request ended):
+  add({ interactionPayload, responseUrl, failureReason }) → entry
+  findPending(now) → entry[]
+  markDelivered(id) → void
+  markFailed(id, failureReason) → void
+  incrementRetry(id, nextRetryAt, failureReason) → void
 ```
 
 ## Correctness Properties

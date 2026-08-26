@@ -266,13 +266,19 @@ All tasks follow TDD (Red → Green → Refactor) and reference specific require
 - [x] 19. Checkpoint — All unit and property tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 20. End-to-end acceptance test
-  - [ ] 20.1 Create a non-skipping Playwright happy-path test (`e2e/happy-path.spec.ts`)
+- [x] 20. End-to-end acceptance test
+  - [x] 20.1 Create a non-skipping Playwright happy-path test — **superseded by Task 25.2**
     - Implement test: request magic link → capture token → verify → genesis → add member → open session → submit responses → close/materialise → view dashboard
     - Use a test email interceptor that is available only when `TEST_MODE=true`
     - Verify the server sets and the browser retains the session cookie without manual cookie injection
     - Use canonical seeded questions and require successful persistence; required scenarios must fail rather than skip
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+    - Delivered as `e2e/journey.spec.ts` rather than `e2e/happy-path.spec.ts`, which was
+      deleted. The original file met none of these criteria: it skipped against a token
+      endpoint that never existed, injected the session cookie with `addCookies`, drove
+      most of the flow through the API, and shared `prisma/dev.db`. The replacement runs
+      eleven serial stages in one browser against a disposable seeded database, with the
+      cookie set by the server, and `e2e/no-skips-reporter.ts` makes a skip fail the run.
 
   - [x] 20.2 Update CI workflow (`.github/workflows/ci.yml`)
     - Add Playwright job after build step
@@ -280,8 +286,9 @@ All tasks follow TDD (Red → Green → Refactor) and reference specific require
     - Ensure no external service dependencies in CI
     - _Requirements: 10.5, 10.6_
 
-- [ ] 21. Final checkpoint — Full integration verification
+- [x] 21. Final checkpoint — Full integration verification
   - Ensure all tests pass (unit, property, integration, non-skipping E2E), complete real-workspace Slack acceptance, and reconcile all documentation before merge.
+  - Carried out as Task 26.2 rather than separately; see the recorded gate results there.
 
 ## Closure audit correction — 2026-08-23
 
@@ -344,7 +351,7 @@ original checklist was marked done.
     - Keep these as separate green vertical-slice commits and cover route-to-service actor wiring
     - _Requirements: Original 18.1, 18.2, 18.3_
 
-- [ ] 24. Close Slack account and production notification behavior
+- [x] 24. Close Slack account and production notification behavior
   - [x] 24.1 Implement secure, truthful account linking and unlinking with TDD
     - [x] Authenticate pairing and derive memberId from AuthContext instead of accepting it from the body
     - [x] Add the web pairing-code input flow and persist status across reload/restart
@@ -471,7 +478,7 @@ original checklist was marked done.
     No app-level tokens or pairing codes are recorded here. The workspace, app,
     and bot token remain disposable and revocable.
 
-- [ ] 25. Close automated acceptance and deployment evidence
+- [x] 25. Close automated acceptance and deployment evidence
   - [x] 25.1 Create deterministic, isolated E2E infrastructure with TDD
     - Make Prisma CLI and runtime honor a disposable E2E SQLite path, never `prisma/dev.db`
     - Reset/push schema and seed canonical questions for each run; serialize or isolate workers/retries
@@ -515,16 +522,33 @@ original checklist was marked done.
     - _Requirements: 10.5, 10.6_
 
 - [ ] 26. Reconcile and close the branch
-  - [ ] 26.1 Keep requirements, design, tasks, README, and AI_CONTEXT synchronized
+  - [x] 26.1 Keep requirements, design, tasks, README, and AI_CONTEXT synchronized
     - Update both README and AI_CONTEXT with every behavior/test/convention commit
     - Record current test totals and manual browser/Slack evidence accurately
     - Keep lifecycle-management and dashboard-UX follow-ups explicitly deferred
     - _Requirements: 11.3, 11.4_
+    - Two genuine drifts corrected in `design.md`, not just checkbox tidying:
+      its Prisma snippet documented the libSQL construction that Task 25.5 proved
+      broken, and its Data Models section still claimed no new models were
+      required after `NotificationDelivery` had been added by migration. Both are
+      now accurate, with the reasoning recorded so the mistake is not repeated.
+    - Deferred milestones remain explicitly deferred below: session lifecycle
+      management UI, the three dashboard UX items, Socket Mode evaluation, and
+      broader design-system/CSRF/telemetry work.
 
-  - [ ] 26.2 Run the final clean merge gate
+  - [x] 26.2 Run the final clean merge gate
     - Run install/generate/schema setup, lint, typecheck, Vitest, build, non-skipping Playwright, and `git diff --check`
     - Confirm real-workspace Slack acceptance and executable libSQL evidence
     - _Requirements: 8.1–8.5, 10.1–10.6, 12.1–12.4, 13.1–13.5_
+    - **Run 2026-08-26, all exit code 0:** `npm ci`, `prisma generate`,
+      `npm run lint`, `tsc --noEmit`, `vitest run` (1193 tests / 147 files),
+      `npm run build`, `playwright test` (27 tests, 0 skips), `git diff --check`.
+    - Real-workspace Slack acceptance: completed 2026-08-26, evidence table under
+      Task 24.5. Executable libSQL evidence:
+      `src/tests/integration/libsql-repository.test.ts` runs repository work through
+      the production adapter against a local file and is part of the Vitest run above.
+    - The same gates run in GitHub Actions on every push to this branch. Latest run
+      green: `ci` and `e2e`. `requirement-coverage` executes only on pull requests.
 
   - [ ] 26.3 Commit, push, and merge through a green pull request
     - Ensure no accepted work remains unstaged/uncommitted and the remote branch contains the final evidence
