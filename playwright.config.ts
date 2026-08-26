@@ -2,7 +2,7 @@ import path from 'node:path';
 
 import { defineConfig, devices } from '@playwright/test';
 
-import { e2eDatabaseUrl } from './e2e/database';
+import { E2E_CRON_SECRET, e2eDatabaseUrl } from './e2e/database';
 
 /**
  * Playwright configuration for e2e and accessibility tests.
@@ -60,6 +60,7 @@ export default defineConfig({
       DATABASE_URL,
       TEST_MODE: 'true',
       NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
+      CRON_SECRET: E2E_CRON_SECRET,
     },
   },
 });

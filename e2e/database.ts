@@ -18,3 +18,12 @@ export function e2eDatabaseUrl(): string {
   const absolute = path.resolve(__dirname, '..', E2E_DATABASE_FILE);
   return `file:${absolute.replace(/\\/g, '/')}`;
 }
+
+/**
+ * Scheduler secret for the run.
+ *
+ * Fixed and passed explicitly to the web server so the tests and the app agree.
+ * Reading it from `.env` would make the suite depend on local configuration —
+ * and CI has no `.env` at all.
+ */
+export const E2E_CRON_SECRET = 'e2e-cron-secret';
