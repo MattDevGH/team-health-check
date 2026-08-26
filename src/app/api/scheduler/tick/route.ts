@@ -104,6 +104,8 @@ export const POST = withErrorHandling(async (request: Request) => {
         slackInteractionQueueRepo: repos.interactionQueue,
         questionRepo: repos.question,
         sessionLinkRepo: repos.sessionLink,
+        responseRepo: repos.response,
+        sessionRepo: repos.session,
       })
       : { send: async () => {} }); // No-op sink if no Slack token configured
 

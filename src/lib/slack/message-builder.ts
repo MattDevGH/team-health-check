@@ -14,6 +14,82 @@ export interface SlackMessage {
   blocks: SlackBlock[];
 }
 
+/** Question section plus its row of score buttons. */
+function questionBlocks(question: Question): SlackBlock[] {
+  return [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*${question.title}*\n${question.description}`,
+      },
+    },
+    {
+      type: 'actions',
+      block_id: `score_${question.id}`,
+      elements: [1, 2, 3, 4, 5].map(score => ({
+        type: 'button',
+        text: { type: 'plain_text', text: String(score) },
+        value: `${question.id}:${score}`,
+        action_id: `score_${question.id}_${score}`,
+      })),
+    },
+  ];
+}
+
+/** Browser fallback context block (Requirement 5.5). */
+function fallbackBlock(sessionLinkUrl: string): SlackBlock {
+  return {
+    type: 'context',
+    elements: [
+      {
+        type: 'mrkdwn',
+        text: `_Prefer the web? <${sessionLinkUrl}|Submit via browser>_`,
+      },
+    ],
+  };
+}
+
+/**
+ * Builds the closing reminder message.
+ *
+ * Requirement 13.4: indicate that the feedback window is closing soon and
+ * provide a direct session link. Deliberately worded and headed differently from
+ * the opening prompt — a reminder that reads like a fresh invitation tells the
+ * member nothing about urgency.
+ *
+ * Only outstanding questions are included; the member has already answered the
+ * rest, and re-listing them obscures what is actually left to do.
+ */
+export function buildClosingReminderMessage(params: {
+  questions: Question[];
+  sessionLinkUrl: string;
+  closesAt: Date | null;
+}): SlackMessage {
+  const closing = params.closesAt
+    ? ` It closes on *${params.closesAt.toISOString().slice(0, 10)}*.`
+    : '';
+  const remaining = params.questions.length;
+  const outstanding =
+    remaining > 0
+      ? `\nYou have *${remaining}* question${remaining === 1 ? '' : 's'} left.`
+      : '';
+
+  const blocks: SlackBlock[] = [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*:hourglass_flowing_sand: Your health check is closing soon.*${closing}${outstanding}`,
+      },
+    },
+    ...params.questions.flatMap(questionBlocks),
+    fallbackBlock(params.sessionLinkUrl),
+  ];
+
+  return { blocks };
+}
+
 /**
  * Builds a Slack interactive message for health check prompts.
  * Each question gets: title text, 5 score buttons, optional trend indicator menu.
@@ -44,37 +120,10 @@ export function buildPromptMessage(params: {
   }
 
   // One section + actions per question with score buttons
-  for (const question of params.questions) {
-    blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*${question.title}*\n${question.description}`,
-      },
-    });
-
-    blocks.push({
-      type: 'actions',
-      block_id: `score_${question.id}`,
-      elements: [1, 2, 3, 4, 5].map(score => ({
-        type: 'button',
-        text: { type: 'plain_text', text: String(score) },
-        value: `${question.id}:${score}`,
-        action_id: `score_${question.id}_${score}`,
-      })),
-    });
-  }
+  blocks.push(...params.questions.flatMap(questionBlocks));
 
   // Session link fallback (Requirement 5.5)
-  blocks.push({
-    type: 'context',
-    elements: [
-      {
-        type: 'mrkdwn',
-        text: `_Prefer the web? <${params.sessionLinkUrl}|Submit via browser>_`,
-      },
-    ],
-  });
+  blocks.push(fallbackBlock(params.sessionLinkUrl));
 
   return { blocks };
 }
