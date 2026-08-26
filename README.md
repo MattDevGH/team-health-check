@@ -350,19 +350,39 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (1163 tests across 142 Vitest files)
+npm test            # unit + property tests (1193 tests across 147 Vitest files)
 npm run test:watch  # watch mode for TDD (unit only)
 npm run test:e2e    # Playwright browser tests
 npm run test:a11y   # Playwright axe tests
 ```
 
-| Layer | Purpose |
-|-------|---------|
-| Unit tests | Service logic with in-memory repository fakes |
-| Property tests | 12 formal correctness invariants (fast-check) |
-| Integration tests | Focused service/route flows; closure work adds executable libSQL repository evidence |
-| Accessibility tests | WCAG checks through jest-axe and Playwright axe-core |
-| E2E tests | Browser user flows; required happy paths are currently non-credible because missing test-token capture can skip them |
+| Layer | What only this layer catches |
+|-------|------------------------------|
+| Unit tests | Business rules, over in-memory repository fakes |
+| Property tests | Invariants across generated inputs (fast-check) |
+| Route tests | HTTP contract, auth, status codes |
+| Real-file integration | Adapter and query behaviour — the libSQL and database-path tests run against actual SQLite files |
+| Accessibility tests | WCAG violations, through jest-axe and Playwright axe-core |
+| E2E tests | Hydration, cookies, navigation — invisible below this tier |
+
+### When each runs
+
+The tiers are separated by speed and external dependencies, not ceremony. The
+whole Vitest suite runs in under a minute, so there is no reason to defer any of
+it.
+
+| Cadence | What runs |
+|---------|-----------|
+| Every change | `npm test` — the full Vitest suite |
+| Every push and PR | The above, plus `npm run build` and the Playwright suite |
+| Merge to `master` | The above, plus anything unautomatable — currently the Slack disposable-workspace pass |
+
+E2E runs against a disposable database provisioned per run
+(`e2e/global-setup.ts`), never `prisma/dev.db`, which is what makes it cheap
+enough to run on every pull request rather than only at merge.
+
+See the Testing Rules in `AGENTS.md` for how these tests must be written — in
+particular, why asserting that a collaborator was called is not evidence.
 
 Manual browser acceptance has passed for team settings, editable feedback,
 optional trend clearing, two complete session lifecycles, close/materialisation,

@@ -29,6 +29,45 @@ Read AI_CONTEXT.md at the start of every session.
 - **File size**: Prefer <200 lines. Extract at 300.
 - **Vertical slices**: Each task implements one testable behaviour, not an entire service.
 
+# Testing Rules
+
+A passing test is not evidence. These rules exist because tests in this
+repository have been green while the behaviour they named was broken.
+
+- **Assert the observable outcome, not the call you just made.** Verifying that a
+  collaborator was invoked proves your wiring, not the result. Three real
+  examples from this project, all green at the time:
+  - the notification sink was asserted to be *called* with `'closing_reminder'`,
+    so a reminder that rendered identically to an opening prompt passed
+    (Requirement 13.4 was unimplemented)
+  - `prisma.test.ts` asserted a `PrismaClient` was *constructed*, so a Turso
+    adapter built from the wrong argument passed six tests while every
+    production query would have failed with `URL_INVALID`
+  - the MSW handler *required* a body `memberId` the real route ignores, so the
+    mock enforced a contract no server implemented
+- **Construction is not execution.** Building a client, adapter, or service
+  usually succeeds regardless of configuration. If a code path talks to a
+  database, a browser, or an API, some test must actually run a query, a render,
+  or a request through it.
+- **Mocks mirror the real contract.** A mock is a claim about how the system
+  behaves. When it drifts from the route it imitates, passing UI tests mean
+  nothing. Update the mock in the same commit as the contract.
+- **Cross-check computed values against an independent source.** "The page shows
+  3.5" proves rendering, not correctness. For aggregates, averages, counts, and
+  distributions, read the value back from the database directly.
+- **Never skip a required scenario.** A test that calls `skip` when its fixture
+  is unavailable reports success for work it did not do. Missing setup must fail.
+- **Flaky tests are defects.** A nondeterministic test destroys the signal the
+  rest of the suite provides. Fix it or delete it; do not re-run until green.
+- **Choose the tier by what only it can catch**, not by habit. Unit tests for
+  business rules; property tests for invariants; integration tests over a real
+  SQLite file for adapter and query behaviour; browser tests for hydration,
+  cookies, and navigation. Hydration failures and unfurl metadata are invisible
+  below the top tier.
+- **Run the real thing before claiming it works.** Start the app, click the
+  button, read the message that arrived. Every significant defect found in this
+  project was found by execution, never by adding assertions to a green suite.
+
 # Code Quality
 
 - ESLint errors fail CI. No warnings allowed to accumulate.

@@ -334,7 +334,7 @@ Block Kit check unless `buildPromptMessage` changes.
   failing test's identity was lost to truncated output. Not diagnosed. If it
   recurs, capture full output — a nondeterministic test undermines the CI
   skip/isolation enforcement Task 25.6 depends on.
-- Latest validation: **142 test files / 1163 tests passed**,
+- Latest validation: **147 test files / 1193 tests passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
 - Temporary local execution scripts were deleted. The approved consolidation
@@ -470,7 +470,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1163 tests across 142 files**, including
+The Vitest suite now contains **1193 tests across 147 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
