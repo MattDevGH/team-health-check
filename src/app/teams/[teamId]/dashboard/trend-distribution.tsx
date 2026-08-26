@@ -26,7 +26,7 @@ export function TrendDistribution({ distribution }: TrendDistributionProps) {
             {formatQuestionId(item.questionId)}
           </p>
           <div className="flex gap-4 text-xs">
-            <span className="text-green-600">
+            <span className="text-green-700">
               Improving: {item.improving}
             </span>
             <span className="text-gray-600">

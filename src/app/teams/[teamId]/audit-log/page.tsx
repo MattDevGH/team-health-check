@@ -168,7 +168,7 @@ export default function AuditLogPage({ params }: PageProps) {
                   <span className="mx-2" aria-label="changed to">→</span>
                   <span>{entry.newValue}</span>
                 </div>
-                <div className="mt-1 text-xs text-gray-400">
+                <div className="mt-1 text-xs text-gray-600">
                   Changed by: {entry.userId}
                 </div>
               </article>

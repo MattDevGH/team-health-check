@@ -211,7 +211,7 @@ export default function SessionLinkPage({ params }: PageProps) {
                         Recent team average: {result.rollingAverage}
                       </span>
                     ) : (
-                      <span className="text-sm text-gray-400 italic">
+                      <span className="text-sm text-gray-600 italic">
                         More responses needed
                       </span>
                     )}

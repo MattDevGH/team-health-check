@@ -158,7 +158,7 @@ export function FeedbackForm({
                 className="mb-2"
               >
                 <span className="text-sm font-medium text-gray-700 block mb-2">
-                  Trend <span className="text-gray-400 font-normal">(optional)</span>
+                  Trend <span className="text-gray-600 font-normal">(optional)</span>
                 </span>
                 <div className="flex flex-wrap gap-2">
                   {(['improving', 'stable', 'declining'] as const).map((trend) => {

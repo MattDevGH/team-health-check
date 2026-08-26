@@ -118,7 +118,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
             <p className="text-gray-500 text-lg">
               More data needed
             </p>
-            <p className="text-gray-400 text-sm mt-2">
+            <p className="text-gray-600 text-sm mt-2">
               At least 2 closed sessions are required to display trends.
             </p>
           </div>

@@ -95,7 +95,7 @@ export default function ProfilePage() {
         <section className="bg-white rounded-lg shadow p-4">
           <p className="text-lg font-medium text-gray-900">{profile.name}</p>
           <p className="text-sm text-gray-500">{profile.email}</p>
-          <p className="mt-2 text-xs text-gray-400">
+          <p className="mt-2 text-xs text-gray-600">
             Privacy mode: <span className="font-medium">{profile.privacyMode}</span>
           </p>
         </section>

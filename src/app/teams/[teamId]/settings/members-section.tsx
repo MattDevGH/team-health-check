@@ -158,7 +158,7 @@ export function MembersSection({ teamId, members, onMembersChanged }: MembersSec
             <label htmlFor="member-email" className="sr-only">Member email</label>
             <input id="member-email" type="email" placeholder="Email (optional)" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 placeholder:text-gray-500" />
           </div>
-          <button type="button" onClick={handleAddMember} className="px-4 py-2 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 text-sm">
+          <button type="button" onClick={handleAddMember} className="px-4 py-2 bg-green-700 text-white font-medium rounded-md hover:bg-green-800 text-sm">
             Add member
           </button>
         </div>
