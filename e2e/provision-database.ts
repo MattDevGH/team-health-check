@@ -6,6 +6,12 @@
  * `prisma/dev.db` is never opened, so E2E tests cannot depend on — or damage —
  * development data.
  *
+ * Runs as the first half of the `webServer` command rather than as Playwright's
+ * `globalSetup`, because Playwright starts the web server *before* globalSetup.
+ * As a globalSetup this deleted and recreated the database underneath a server
+ * that had already opened it, which on Windows left the server with a stale
+ * handle and killed it mid-run.
+ *
  * Failures here are fatal on purpose. A run against an unmigrated or unseeded
  * database would otherwise surface as confusing assertion failures, or worse,
  * as tests that skip themselves.
@@ -39,7 +45,7 @@ function migrate(databaseUrl: string): void {
   });
 }
 
-export default async function globalSetup(): Promise<void> {
+export async function provisionDatabase(): Promise<void> {
   const databaseUrl = e2eDatabaseUrl();
   const file = path.resolve(ROOT, E2E_DATABASE_FILE);
 
@@ -64,3 +70,8 @@ export default async function globalSetup(): Promise<void> {
     await client.$disconnect();
   }
 }
+
+provisionDatabase().catch(error => {
+  console.error('[e2e] provisioning failed:', error);
+  process.exit(1);
+});
