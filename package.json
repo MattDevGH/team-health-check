@@ -15,13 +15,12 @@
     },
     "dependencies": {
         "@libsql/client": "^0.17.4",
-        "@prisma/adapter-better-sqlite3": "^7.8.0",
-        "@prisma/adapter-libsql": "^7.8.0",
-        "@prisma/client": "^7.8.0",
+        "@prisma/adapter-better-sqlite3": "7.10.0",
+        "@prisma/adapter-libsql": "7.10.0",
+        "@prisma/client": "7.10.0",
         "better-sqlite3": "^12.9.0",
         "date-fns-tz": "^3.2.0",
-        "next": "16.2.6",
-        "prisma": "^7.8.0",
+        "next": "16.3.3",
         "react": "19.2.4",
         "react-dom": "19.2.4",
         "resend": "^6.14.0",
@@ -45,15 +44,20 @@
         "@types/react-dom": "^19",
         "@vitejs/plugin-react": "^6.0.1",
         "eslint": "^9",
-        "eslint-config-next": "16.2.6",
+        "eslint-config-next": "16.3.3",
         "fast-check": "^4.8.0",
         "jest-axe": "^10.0.0",
         "jsdom": "^29.1.1",
         "msw": "^2.14.5",
+        "prisma": "7.10.0",
         "tailwindcss": "^4",
         "tsx": "^4.22.4",
         "typescript": "^5",
         "vite-tsconfig-paths": "^6.1.1",
         "vitest": "^4.1.5"
+    },
+    "_overrides_note": "deepmerge-ts is forced to 8.x because @prisma/config pins 7.1.5, which has a stack-exhaustion advisory (GHSA, deepmerge-ts <8.0.0). npm's only suggested fix was downgrading Prisma to 6.12.0, a major downgrade. The override is exercised by the E2E suite, which runs `prisma migrate deploy` through @prisma/config. Remove it once @prisma/config depends on 8.x itself.",
+    "overrides": {
+        "deepmerge-ts": "^8.0.0"
     }
 }

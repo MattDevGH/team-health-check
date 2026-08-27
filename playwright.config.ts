@@ -1,5 +1,3 @@
-import path from 'node:path';
-
 import { defineConfig, devices } from '@playwright/test';
 
 import { E2E_CRON_SECRET, e2eDatabaseUrl } from './e2e/database';
@@ -21,7 +19,6 @@ const DATABASE_URL = e2eDatabaseUrl();
 
 export default defineConfig({
   testDir: './e2e',
-  globalSetup: path.resolve(__dirname, 'e2e/global-setup.ts'),
 
   // A single SQLite file is shared by the whole run, so tests are serialised
   // rather than racing each other through it
@@ -54,11 +51,16 @@ export default defineConfig({
   ],
 
   webServer: {
+    // Provision the database, then serve. Playwright starts the web server
+    // before globalSetup, so provisioning there deleted and recreated the
+    // database underneath a server that had already opened it. Chaining it into
+    // the server command guarantees the ordering.
+    //
     // Always the production build, locally as well as in CI, so both exercise
     // the same artifact. The dev server also emits HMR console errors that the
     // strict fixture would (correctly) fail on. `npm run test:e2e` builds first;
     // CI builds in a separate step.
-    command: 'npm run start',
+    command: 'npx tsx e2e/provision-database.ts && npm run start',
     url: 'http://localhost:3000',
     // Always start a fresh server: a reused one may hold the previous
     // DATABASE_URL and quietly read the wrong database

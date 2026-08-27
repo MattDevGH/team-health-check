@@ -10,6 +10,11 @@
  *
  * WCAG 2.1 AA: 4.5:1 for normal text, 3:1 for large text.
  *
+ * These checks are necessary but not sufficient for an AA conformance claim.
+ * Axe detects roughly a third to a half of WCAG issues; it cannot judge whether
+ * alt text is meaningful, whether focus order makes sense, or whether a custom
+ * widget traps keyboard users. Those need a manual pass.
+ *
  * Requirements: 10.1, 10.4; Original NFR accessibility criteria
  */
 
@@ -21,13 +26,23 @@ import { seedSession, seedTeam, type SeededAggregate } from './db';
 import { signIn } from './sign-in';
 
 /**
+ * WCAG 2.1 Level A and AA.
+ *
+ * The 2.1 tags matter: they carry every criterion added after 2.0, including
+ * reflow (1.4.10), non-text contrast (1.4.11), text spacing (1.4.12), content
+ * on hover or focus (1.4.13), and status messages (4.1.3). Asserting only the
+ * `wcag2*` tags checks WCAG 2.0 while claiming 2.1.
+ */
+const WCAG_AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+
+/**
  * Asserts a page has no WCAG 2.1 A/AA violations.
  *
  * Failures name the offending element and axe's explanation, because a bare
  * rule id ("color-contrast") tells you nothing about which element to fix.
  */
 async function expectNoViolations(page: Page, context: string): Promise<void> {
-  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  const results = await new AxeBuilder({ page }).withTags(WCAG_AA_TAGS).analyze();
 
   const findings = results.violations.flatMap(violation =>
     violation.nodes.map(node =>

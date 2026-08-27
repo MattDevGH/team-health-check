@@ -617,12 +617,63 @@ All stages must pass. Branch protection requires CI green before merge.
 
 ## Outstanding Work
 
-### Integration-hardening merge blockers
+### Integration hardening — closed
 
-- Task 23: complete; run final reconciliation before Task 24
-- Task 24: **complete** (24.1, 24.2, 24.3, 24.3a, 24.4, 24.5, 24.5a)
-- Task 25: complete (isolated seeded E2E database, real browser journey, expanded axe coverage, corrected MSW contract, executable libSQL evidence, CI enforcement)
-- Task 26: documentation, full gates, commit/push/PR/merge
+Tasks 1–26 complete. Merged to `master` as `7eba5f6` on 2026-08-26, with `ci`
+and `e2e` green on master afterwards.
+
+### Non-functional baseline — agreed plan (2026-08-26)
+
+Current branch: `feat/security-accessibility-baseline`. Assessment of where the
+suite actually stands, and the agreed order of work.
+
+**Security coverage today.** 67 assertions of 401/403 across 25 route test
+files, plus Slack signature verification, rate limiting, privacy suppression,
+session expiry and scoping, anti-enumeration, and a contract test that scans
+production sources for reintroduced identity headers. That covers *our
+authorisation rules*. It covers no *vulnerability classes* at all — nothing
+tests for injection, XSS, SSRF, or dependency CVEs.
+
+**Measured gaps:**
+
+- `npm audit`: 12 production-dependency vulnerabilities (8 high, 4 moderate),
+  15 including dev. Nothing in CI checks this.
+- Axe runs with `withTags(['wcag2a', 'wcag2aa'])` — **WCAG 2.0 only**, despite
+  the file claiming 2.1 AA. Every criterion added in 2.1 is unchecked: reflow
+  (1.4.10), non-text contrast (1.4.11), text spacing (1.4.12), content on
+  hover/focus (1.4.13), status messages (4.1.3), input purpose (1.3.5).
+- No Dependabot, no SAST, no `SECURITY.md`, no CSRF on dashboard forms.
+- `TEST_MODE` remains a genuine footgun: set in a deployed environment it would
+  expose live sign-in tokens through `/api/test/magic-link`.
+
+**Agreed order:**
+
+1. Fix the axe tags to include `wcag21a`/`wcag21aa` and repair what that surfaces
+2. Dependabot configuration
+3. CodeQL workflow (free on this public repo; real taint analysis ESLint cannot do)
+4. Triage the 12 audit findings
+5. `SECURITY.md`
+6. Decide on Sonar afterwards — its additive value is coverage trends and
+   security hotspots, which overlaps existing ESLint and test discipline, so it
+   ranks below the free native tooling
+
+**Accessibility position to be honest about:** automated passes detect roughly a
+third to a half of WCAG issues. Fixing the tags is necessary but does not let us
+claim AA conformance. That needs a keyboard-only pass, a screen reader smoke
+test, 400% zoom/reflow, and closing the known gaps — no skip links, no focus
+management on route change, no `prefers-reduced-motion`, Chromium-only.
+
+**Agreed cadence:** fast and deterministic checks (axe, lint, `npm audit`,
+CodeQL) run on every PR; a weekly scheduled sweep catches newly-disclosed CVEs
+in unchanged code, which a PR trigger structurally cannot; manual accessibility
+audits and threat-model review happen per milestone.
+
+**Documentation decision:** a delivery-manager user guide is wanted, but in-app
+guidance comes first — there is no shared navigation, so the app is currently
+navigated by knowing URLs, and a guide would paper over that. Docs belong in a
+`docs/` folder in-repo, not the GitHub wiki: the wiki is a separate repository,
+is not reviewed through pull requests, and drifts silently from the code, which
+is the exact failure mode the closure audit existed to correct.
 
 ### Deferred follow-up milestones
 
