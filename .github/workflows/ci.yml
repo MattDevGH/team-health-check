@@ -44,6 +44,12 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
+      # Scoped to production dependencies and high severity. Dev-only advisories
+      # are reported by Dependabot but do not block a pull request, since they
+      # cannot be reached by a deployed application.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Lint
         run: npm run lint
 
