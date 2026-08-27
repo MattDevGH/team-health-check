@@ -1,0 +1,48 @@
+# Dependency updates.
+#
+# Added after `npm audit` reported 12 production-dependency vulnerabilities that
+# no CI job was looking at, and after the GitHub Actions pins were found three
+# major versions behind with a deprecated runtime. Both classes of drift are
+# invisible to a test suite: the code does not change, so nothing fails until
+# something is exploited or a runtime is switched off.
+#
+# Updates are grouped so a weekly run produces a few reviewable pull requests
+# rather than a dozen single-package ones.
+
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Patch and minor bumps are usually safe together and are the bulk of the
+      # noise; majors stay separate so each gets its own review.
+      production-minor-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      development-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+
+  # Keeps workflow action pins current. The checkout, setup-node and
+  # upload-artifact pins had drifted from v4 to a deprecated Node 20 runtime
+  # before anyone noticed.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - ci

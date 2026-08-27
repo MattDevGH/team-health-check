@@ -1,0 +1,60 @@
+# Static application security testing.
+#
+# The existing suite covers this project's authorisation rules thoroughly - 67
+# assertions of 401/403 across 25 route test files - but covers no vulnerability
+# classes. Nothing tests for injection, unsafe deserialisation, or tainted data
+# reaching a sink. CodeQL performs the taint tracking that ESLint structurally
+# cannot, and is free on this public repository.
+#
+# Runs on pull requests for fast feedback, on pushes to master, and weekly. The
+# schedule matters independently: newly disclosed patterns are found in code
+# that has not changed, which a push or PR trigger can never catch.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    # Mondays 04:17 UTC. Off the hour deliberately: scheduled jobs on the hour
+    # queue behind everyone else's.
+    - cron: "17 4 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Required to upload results to the Security tab
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          language: ${{ matrix.language }}
+          # security-extended adds rules beyond the default set; the additional
+          # noise is worth it on a codebase this size.
+          queries: security-extended
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
