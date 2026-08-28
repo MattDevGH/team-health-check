@@ -581,11 +581,17 @@ All stages must pass. Branch protection requires CI green before merge.
 - `design.md` — Architecture, data models, 34 correctness properties, testing strategy, SOLID, TDD, SlackInteractionQueue, documentation-as-code CI (complete)
 - `tasks.md` — 28 task groups, ~120 sub-tasks including property tests (complete)
 
-### Open spec: `.kiro/specs/integration-hardening/`
+### Closed spec: `.kiro/specs/integration-hardening/`
 - `requirements.md` — 13 requirements covering auth/cookie foundation, session-link enrichment, response submission, protected routes, notification wiring, Slack identity, Turso production DB, E2E tests, MSW alignment, and repo hygiene
 - `design.md` — Integration architecture, 12 correctness properties, direct-AuthContext auth design, cookie scoping, notification sink pattern
-- `tasks.md` — Tasks 1–21 record the original pass, Task 22 records completed acceptance regressions, and open Tasks 23–26 define auth/session, Slack, automated evidence, and final merge closure
-- Do not mark this spec complete or create the lifecycle-management spec until Tasks 23–26 and the final PR gates pass
+- `tasks.md` — Tasks 1–21 record the original pass, Task 22 records completed acceptance regressions, Tasks 23–26 covered auth/session, Slack, automated evidence, and final merge closure
+- Complete: merged to `master` as `7eba5f6` on 2026-08-26
+
+### Open spec: `.kiro/specs/manager-experience/` (written 2026-08-28)
+- `requirements.md` — 5 requirements plus 2 NFRs: shared navigation, session lifecycle control, dashboard comprehension, first-run guidance, ambiguous-identity guard
+- `design.md` — 9 key decisions, 6 correctness properties, per-tier testing strategy, explicit out-of-scope list
+- `tasks.md` — 9 task groups across 5 phases with three checkpoints; phase 5 (the identity guard) may be pulled forward if a colleague hits the conflict first
+- **Scope decision (2026-08-28):** multi-team membership is *not* in scope. `TeamMember` is unique on `(teamId, name, email)`, so one email can exist in several teams, while `auth.service.ts:158` resolves it with `findFirst` — an arbitrary row. The agreed approach is to guard and document: reject the member addition that would create the collision, refuse to issue a magic link for an already-ambiguous email, and state the one-team constraint in the README. Proper multi-team support needs an identity model above `TeamMember` and is its own future spec
 
 ---
 
@@ -622,10 +628,17 @@ All stages must pass. Branch protection requires CI green before merge.
 Tasks 1–26 complete. Merged to `master` as `7eba5f6` on 2026-08-26, with `ci`
 and `e2e` green on master afterwards.
 
-### Non-functional baseline — agreed plan (2026-08-26)
+### Manager experience — in progress (2026-08-28)
 
-Current branch: `feat/security-accessibility-baseline`. Assessment of where the
-suite actually stands, and the agreed order of work.
+Current branch: `feat/manager-experience`. Spec written; no implementation yet.
+Agreed as the milestone before deployment, because the tool is about to be
+trialled with a real team and then shared with other delivery managers, and it
+currently has no navigation and no UI for its central action.
+
+### Non-functional baseline — completed 2026-08-26
+
+Merged to `master` as `67e16d5`. Assessment of where the suite stood, and the
+order of work that was carried out.
 
 **Security coverage today.** 67 assertions of 401/403 across 25 route test
 files, plus Slack signature verification, rate limiting, privacy suppression,
@@ -677,9 +690,13 @@ is the exact failure mode the closure audit existed to correct.
 
 ### Deferred follow-up milestones
 
-- Session lifecycle management UI and explicit materialisation state
-- Dashboard chart clarity, Latest Session redesign, and question affordances
-- Design system / component library, dark mode, responsive shared navigation
+Session lifecycle UI, dashboard clarity, and shared navigation moved out of this
+list on 2026-08-28 into `.kiro/specs/manager-experience/`.
+
+- Multi-team membership (guarded against, not supported — see the spec status above)
+- Deployment: Vercel, Turso, and the production cron trigger. Explicitly after the manager experience
+- Delivery-manager user guide in `docs/`, once in-app guidance exists
+- Design system / component library and dark mode
 - CSRF protection and generalized non-auth rate limiting
 - Load/performance testing and operational telemetry
 - Optional Slack conversational events and richer interaction feedback beyond Requirements 7–8
