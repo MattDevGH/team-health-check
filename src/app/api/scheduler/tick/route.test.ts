@@ -178,6 +178,46 @@ describe('POST /api/scheduler/tick', () => {
     expect(sink.calls).toContainEqual({ memberId: member.id, type: 'closing_reminder' });
   });
 
+  it('reminds on the tick clock, not the wall clock', async () => {
+    // A tick must run on one clock. The session service used to compute
+    // scheduledCloseAt from the real clock while the scheduler and the
+    // notification service ran on the injected one, so whether this scenario
+    // passed depended on the day and hour the suite happened to run: before
+    // Friday 17:00 UTC the close was hours away and the reminder fired; after
+    // it, the close rolled a week forward and it did not.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-10-05T08:00:00.000Z'));
+
+    try {
+      const team = await seedScheduledTeam('Tick Wall Clock Team');
+      const member = await repos.teamMember.create({
+        teamId: team.id,
+        name: 'Wall Clock',
+        email: 'wall-clock@tick.test',
+      });
+      await repos.slackIdentityLink.create({
+        memberId: member.id,
+        slackUserId: 'U_TICK_WALL_CLOCK',
+      });
+
+      await POST(tickRequest());
+
+      const session = await repos.session.findOpenByTeamId(team.id);
+      // The Friday after the tick clock's Monday, not the Friday after today
+      expect(session?.scheduledCloseAt).toEqual(new Date('2026-08-28T17:00:00.000Z'));
+
+      _setTickTestDeps({
+        notificationSink: sink,
+        now: () => new Date('2026-08-27T18:00:00.000Z'),
+      });
+      await POST(tickRequest());
+
+      expect(sink.calls).toContainEqual({ memberId: member.id, type: 'closing_reminder' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   describe('Slack retry queue draining (Requirement 8.5)', () => {
     it('replays a queued delivery on a later tick and marks it delivered', async () => {
       const queued = await repos.interactionQueue.add({
