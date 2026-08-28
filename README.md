@@ -483,12 +483,12 @@ Feature specifications at `.kiro/specs/`:
 
 - **No design system** — components use ad-hoc Tailwind classes. A consistent design language (spacing scale, colour palette, component library) would improve cohesion. Consider adopting something like shadcn/ui or Radix primitives.
 - **Dark mode not supported** — the CSS has custom property scaffolding ready for it, but pages use hardcoded light-mode Tailwind classes (`bg-gray-50`, `text-gray-800`, etc.). Dark mode would need a proper theme toggle and a pass across all pages.
-- **No responsive navigation** — there's no shared layout, nav bar, or sidebar. Each page is standalone. A logged-in user has no way to navigate between dashboard, settings, and profile without knowing the URLs. Addressed by the manager-experience spec.
+- ~~**No responsive navigation**~~ — fixed. A shared shell is mounted by the `/teams/[teamId]` and `/me` segment layouts, offering Dashboard, Settings, Profile, sign out, and — for a delivery manager — the Audit log. It is deliberately absent from the home page, sign-in, and the session-link feedback form.
 
 ### Accessibility
 
 - **Colour contrast audited and fixed** — Playwright axe runs against seven states (genesis, settings, active feedback, confirmation, ended session, and both dashboard states) plus the expanded question drill-down. That audit found and fixed real WCAG AA failures: `text-gray-400` at 2.48–2.6 against white, and `bg-green-600`/`text-green-600` at 3.21. Pages outside those states are still unaudited.
-- **No skip-to-content links** — keyboard users can't bypass repeated navigation. Specified as part of the navigation shell (manager-experience Requirement 1.5).
+- ~~**No skip-to-content links**~~ — fixed on authenticated pages. The shell's skip link is first in tab order and its target carries `tabindex="-1"`, so activating it moves focus rather than only shifting the sequential start point. Verified end-to-end by asserting where focus lands, not that the URL gained a fragment.
 - **No focus management on route transitions** — screen readers aren't notified when the page changes.
 - **No reduced-motion support** — no `prefers-reduced-motion` media query handling.
 

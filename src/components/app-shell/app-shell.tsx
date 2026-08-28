@@ -202,7 +202,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </>
       )}
 
-      <main id="main">{children}</main>
+      {/*
+        tabIndex -1 makes the skip link's target focusable programmatically
+        without adding it to the tab sequence. Without it, browsers only move
+        the sequential navigation start point, so focus stays on the link and a
+        screen reader is never told it arrived.
+      */}
+      <main id="main" tabIndex={-1}>
+        {children}
+      </main>
     </>
   );
 }

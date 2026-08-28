@@ -71,24 +71,24 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <p className="text-gray-600">Loading...</p>
-      </main>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <p className="text-red-600 font-medium">{error}</p>
-      </main>
+      </div>
     );
   }
 
   if (!profile) return null;
 
   return (
-    <main className="min-h-screen bg-gray-50 py-6 px-4">
+    <div className="min-h-screen bg-gray-50 py-6 px-4">
       <div className="max-w-lg mx-auto space-y-6">
         <h1 className="text-2xl font-bold text-gray-800">Profile</h1>
 
@@ -121,6 +121,6 @@ export default function ProfilePage() {
 
         <DeleteDataSection />
       </div>
-    </main>
+    </div>
   );
 }

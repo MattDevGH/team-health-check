@@ -91,11 +91,44 @@ a colleague hits the conflict before the UI work lands.
       destination. The skip-link tab-order test still passes with it present.
     - 1219 Vitest tests, `tsc --noEmit`, and lint all green.
 
-  - [ ] 1.5 Mount the shell on authenticated segments
+  - [x] 1.5 Mount the shell on authenticated segments
     - Add `src/app/teams/[teamId]/layout.tsx` and `src/app/me/layout.tsx`
     - Confirm by test that `/auth/login`, `/`, and `/session/[token]` render no nav landmark
     - Verify narrow-viewport usability with Playwright at 375px: no horizontal scroll
     - _Requirements: 1.6, 1.7_
+    - **Done.** Four authenticated pages rendered their own `<main>`, so
+      mounting the shell nested one landmark inside another. The shell now owns
+      the single `main`; the dashboard, settings, audit-log and profile pages
+      wrap their content in a `div`. Axe's `landmark-one-main` is a
+      best-practice rule outside the WCAG A/AA tag set the suite asserts, so
+      the E2E spec asserts `main` count directly rather than relying on it.
+    - **"This route has no navigation" is unprovable in jsdom.** Rendering a
+      page component never composes its layouts, so such a test passes whether
+      or not a shell wraps the route in production. Two things cover it
+      instead: `src/tests/contracts/app-shell-mounting.test.ts` scans the route
+      tree and pins the exact set of layouts that mount the shell, and
+      `e2e/navigation.spec.ts` visits the real routes.
+    - `<main>` carries `tabindex="-1"`. Without it a browser only moves the
+      sequential navigation start point, so focus stays on the skip link and a
+      screen reader is never told it arrived. The E2E test asserts where focus
+      lands, not that the URL gained a fragment.
+    - Sign-out is now proven end-to-end: `countUserSessions` reads the
+      `UserSession` row back from the E2E database after the click. A cleared
+      cookie alone would pass even if the server had done nothing.
+    - **Found by running it:** magic links are rate-limited to five per email
+      per hour, process-wide (`auth.service.ts:61`). A spec signing the same
+      member in from eight tests silently stopped receiving tokens partway
+      through and hung on the verification page, nowhere near the cause. Fixed
+      with a `seedMember` helper and one member per test, which also leaves
+      three of the five for CI retries.
+    - Live check against the production build on the E2E database: the
+      accessibility tree is skip link → banner → `navigation "Main"` → sign out
+      → one `main`; computed styles give the current destination
+      `font-weight: 600` plus `text-decoration: underline` against `400` and
+      `none`, so Requirement 1.2's non-colour indicator is confirmed with real
+      CSS rather than asserted class names.
+    - 1226 Vitest tests, 38 Playwright tests with zero skips, `tsc --noEmit`,
+      lint, and build all green.
 
   - [ ] 1.6 Accessibility pass over the shell
     - Extend `e2e/accessibility.spec.ts` to cover the shell on the dashboard, settings, and profile

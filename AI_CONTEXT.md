@@ -632,10 +632,26 @@ and `e2e` green on master afterwards.
 ### Manager experience — in progress (2026-08-28)
 
 Current branch: `feat/manager-experience`. Spec written. Phase 1 in progress:
-tasks 1.1 (session context on `GET /api/me`), 1.2 (the shell component),
-1.3 (role gating and the loading state) and 1.4 (sign out) are complete. The
-shell is not mounted by any layout yet — that is task 1.5, so nothing renders
-it in the browser.
+tasks 1.1–1.5 are complete. The shell is mounted and live: only 1.6 (the
+accessibility and manual keyboard pass) remains before the phase-1 checkpoint.
+
+**Mounting.** `src/app/teams/[teamId]/layout.tsx` and `src/app/me/layout.tsx`
+render `<AppShell>`. Mounting per segment rather than by a runtime check means
+`/`, `/auth/*` and `/session/[token]` cannot render it — they are not in those
+trees. The shell owns the page's single `main` landmark, so the four
+authenticated pages had their own `<main>` wrappers converted to `div`.
+
+**Requirement 1.7 cannot be tested in jsdom.** Rendering a page component never
+composes its layouts, so "this route has no navigation" passes there whether or
+not a layout wraps it in production. It is covered by
+`src/tests/contracts/app-shell-mounting.test.ts`, which scans the route tree and
+pins which layouts mount the shell, plus `e2e/navigation.spec.ts`.
+
+**E2E rate-limit trap.** Magic links are limited to five per email per hour,
+process-wide. A spec that signs the same member in from many tests stops
+receiving tokens partway through and hangs on the verification page, far from
+the cause. `seedMember` in `e2e/db.ts` exists so each test can use its own
+member; leave headroom for CI's two retries.
 
 The shell holds three states: `loading` keeps the navigation landmark and
 offers only Profile, because a guessed team id produces links that 404;

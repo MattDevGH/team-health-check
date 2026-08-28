@@ -83,22 +83,22 @@ export default function TeamSettingsPage({ params }: PageProps) {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <p className="text-gray-600">Loading...</p>
-      </main>
+      </div>
     );
   }
 
   if (error || !team) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <p className="text-red-600 font-medium">{error ?? 'Team not found'}</p>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 py-6 px-4">
+    <div className="min-h-screen bg-gray-50 py-6 px-4">
       <div className="max-w-2xl mx-auto space-y-8">
         <h1 className="text-2xl font-bold text-gray-800">Team Settings</h1>
 
@@ -138,6 +138,6 @@ export default function TeamSettingsPage({ params }: PageProps) {
           }
         />
       </div>
-    </main>
+    </div>
   );
 }
