@@ -632,8 +632,16 @@ and `e2e` green on master afterwards.
 ### Manager experience — in progress (2026-08-28)
 
 Current branch: `feat/manager-experience`. Spec written. Phase 1 in progress:
-tasks 1.1 (session context on `GET /api/me`) and 1.2 (the shell component) are
-complete. The shell is not mounted by any layout yet — that is task 1.5.
+tasks 1.1 (session context on `GET /api/me`), 1.2 (the shell component) and
+1.3 (role gating and the loading state) are complete. The shell is not mounted
+by any layout yet — that is task 1.5, so nothing renders it in the browser.
+
+The shell holds three states: `loading` keeps the navigation landmark and
+offers only Profile, because a guessed team id produces links that 404;
+`ready` offers Dashboard, Settings, Profile and — for a delivery manager —
+the audit log; `anonymous` (401 or unreachable) removes the shell entirely and
+leaves the page to explain itself. The audit log is the only
+Delivery-Manager-only *read* in the API, so it is the only role-gated nav entry.
 Agreed as the milestone before deployment, because the tool is about to be
 trialled with a real team and then shared with other delivery managers, and it
 currently has no navigation and no UI for its central action.

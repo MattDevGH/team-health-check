@@ -28,6 +28,20 @@ interface Destination {
 }
 
 /**
+ * Loading is distinct from unauthenticated. While `/api/me` is in flight the
+ * landmark stays put and offers only what is knowable without a team id;
+ * an unauthenticated or unreachable response removes the shell entirely and
+ * leaves the page to explain itself.
+ */
+type ShellState =
+  | { status: 'loading' }
+  | { status: 'ready'; context: SessionContext }
+  | { status: 'anonymous' };
+
+/** The role that gates destinations a member would otherwise be refused. */
+const DELIVERY_MANAGER = 'delivery_manager';
+
+/**
  * Compares two paths ignoring a trailing slash. Next.js normalises these, but
  * a pathname arriving with one must not leave every destination unmarked.
  */
@@ -36,14 +50,27 @@ function samePath(a: string, b: string): boolean {
   return strip(a) === strip(b);
 }
 
-function destinationsFor(context: SessionContext): Destination[] {
+/**
+ * The destinations this member can actually reach.
+ *
+ * A null context is the in-flight state: the team id is not yet known, and a
+ * guessed one would produce links that 404. The audit log is the only
+ * Delivery-Manager-only read in the API, so it is the only role-gated entry
+ * here; every other manager-gated route is a write behind a control on a page
+ * both roles can open.
+ */
+function destinationsFor(context: SessionContext | null): Destination[] {
   const destinations: Destination[] = [];
 
-  if (context.team) {
+  if (context?.team) {
     destinations.push(
       { href: `/teams/${context.team.id}/dashboard`, label: 'Dashboard' },
       { href: `/teams/${context.team.id}/settings`, label: 'Settings' },
     );
+
+    if (context.roles.includes(DELIVERY_MANAGER)) {
+      destinations.push({ href: `/teams/${context.team.id}/audit-log`, label: 'Audit log' });
+    }
   }
 
   destinations.push({ href: '/me', label: 'Profile' });
@@ -53,7 +80,7 @@ function destinationsFor(context: SessionContext): Destination[] {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [context, setContext] = useState<SessionContext | null>(null);
+  const [state, setState] = useState<ShellState>({ status: 'loading' });
 
   useEffect(() => {
     let cancelled = false;
@@ -61,13 +88,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     async function loadContext() {
       try {
         const res = await fetch('/api/me');
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (!cancelled) setState({ status: 'anonymous' });
+          return;
+        }
 
-        const body: SessionContext = await res.json();
-        if (!cancelled) setContext(body);
+        const context: SessionContext = await res.json();
+        if (!cancelled) setState({ status: 'ready', context });
       } catch {
         // An unreachable /api/me leaves the page to handle its own error state.
         // A navigation bar is not worth a second error message about.
+        if (!cancelled) setState({ status: 'anonymous' });
       }
     }
 
@@ -77,9 +108,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const context = state.status === 'ready' ? state.context : null;
+
   return (
     <>
-      {context && (
+      {state.status !== 'anonymous' && (
         <>
           <a
             href="#main"
@@ -90,7 +123,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <header className="border-b border-gray-200 bg-white">
             <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-              {context.team && (
+              {context?.team && (
                 <span className="font-semibold text-gray-900">{context.team.name}</span>
               )}
 

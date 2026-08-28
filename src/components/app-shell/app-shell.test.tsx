@@ -13,9 +13,9 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 
 import { server } from '@/tests/mocks/server';
 import { AppShell } from './app-shell';
@@ -142,5 +142,109 @@ describe('AppShell', () => {
     renderShell('/teams/team-1/dashboard');
 
     expect(await screen.findByRole('heading', { name: 'Page content' })).toBeInTheDocument();
+  });
+
+  // Requirement 1.3: destinations a member would be refused are not offered.
+  // The audit log is the only Delivery-Manager-only *read* in the API — every
+  // other manager-gated route is a write behind a control on a page both roles
+  // can open.
+
+  it('offers the audit log to a delivery manager', async () => {
+    renderShell('/teams/team-1/dashboard');
+
+    expect(await screen.findByRole('link', { name: /audit log/i })).toHaveAttribute(
+      'href',
+      '/teams/team-1/audit-log',
+    );
+  });
+
+  it('omits the audit log from a member who would be refused it', async () => {
+    server.use(
+      http.get('/api/me', () =>
+        HttpResponse.json({
+          id: 'member-2',
+          teamId: 'team-1',
+          name: 'Bo',
+          slackLink: null,
+          team: { id: 'team-1', name: 'Platform Squad' },
+          roles: [],
+        }),
+      ),
+    );
+
+    renderShell('/teams/team-1/dashboard');
+
+    // Wait for the loaded state before asserting an absence, or this passes
+    // against a shell that has not finished rendering anything at all
+    await screen.findByRole('link', { name: /dashboard/i });
+
+    expect(screen.queryByRole('link', { name: /audit log/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /settings/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /profile/i })).toBeInTheDocument();
+  });
+
+  // Requirement 1.7 and the in-flight state
+
+  it('keeps the navigation landmark while /api/me is in flight', async () => {
+    server.use(
+      http.get('/api/me', async () => {
+        await delay('infinite');
+        return HttpResponse.json({});
+      }),
+    );
+
+    renderShell('/teams/team-1/dashboard');
+
+    expect(await screen.findByRole('navigation', { name: /main/i })).toBeInTheDocument();
+  });
+
+  it('does not guess a team id before the team is known', async () => {
+    server.use(
+      http.get('/api/me', async () => {
+        await delay('infinite');
+        return HttpResponse.json({});
+      }),
+    );
+
+    renderShell('/teams/team-1/dashboard');
+
+    await screen.findByRole('navigation', { name: /main/i });
+
+    expect(screen.queryByRole('link', { name: /dashboard/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /settings/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /audit log/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /profile/i })).toBeInTheDocument();
+  });
+
+  it('renders no navigation at all when the request is unauthenticated', async () => {
+    server.use(
+      http.get('/api/me', () =>
+        HttpResponse.json(
+          { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+          { status: 401 },
+        ),
+      ),
+    );
+
+    renderShell('/teams/team-1/dashboard');
+
+    await screen.findByRole('heading', { name: 'Page content' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole('link', { name: /skip to main content/i })).not.toBeInTheDocument();
+  });
+
+  it('renders no navigation when /api/me cannot be reached', async () => {
+    server.use(http.get('/api/me', () => HttpResponse.error()));
+
+    renderShell('/teams/team-1/dashboard');
+
+    await screen.findByRole('heading', { name: 'Page content' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    });
   });
 });

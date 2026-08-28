@@ -47,10 +47,27 @@ a colleague hits the conflict before the UI work lands.
       here: pinning Tailwind classes in a unit test asserts what was just typed.
       It is covered by the manual pass in 1.6.
 
-  - [ ] 1.3 Role-conditional links and the loading state
+  - [x] 1.3 Role-conditional links and the loading state
     - Write failing tests: a member without `delivery_manager` gets no audit-log link; during the in-flight fetch no team-scoped link is rendered; a 401 renders no nav at all
     - **Property 1: a Delivery-Manager-only link renders iff the fetched roles contain `delivery_manager`** — generate random role sets
     - _Requirements: 1.3, 1.7_
+    - **Done.** The shell now distinguishes three states: loading keeps the
+      landmark and offers only Profile, ready offers everything the member can
+      reach, and anonymous — a 401 or an unreachable endpoint — removes the
+      shell entirely.
+    - The audit log is the only Delivery-Manager-only *read* in the API
+      (`api/teams/[teamId]/audit-log/route.ts:43`). Every other manager-gated
+      route is a write behind a control on a page both roles can open, so it is
+      the only role-gated entry in the nav. Lifecycle controls are gated
+      separately in phase 3.
+    - Every absence is asserted only after a destination every member gets has
+      rendered. `queryByRole(...).not.toBeInTheDocument()` against a shell that
+      has not finished rendering passes for the wrong reason.
+    - **Property 1 was mutation-checked.** Replacing `roles.includes` with
+      `roles.some(r => r.includes(...))` failed after one run and shrank to
+      `["deputy_delivery_manager"]`. Every example-based test in the file still
+      passed under that mutation.
+    - 1215 Vitest tests, `tsc --noEmit`, and lint all green.
 
   - [ ] 1.4 Sign out
     - Write a failing test: activating sign out posts to `/api/auth/logout` and navigates to `/`
