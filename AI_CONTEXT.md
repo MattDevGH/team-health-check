@@ -632,9 +632,10 @@ and `e2e` green on master afterwards.
 ### Manager experience — in progress (2026-08-28)
 
 Current branch: `feat/manager-experience`. Spec written. Phase 1 in progress:
-tasks 1.1 (session context on `GET /api/me`), 1.2 (the shell component) and
-1.3 (role gating and the loading state) are complete. The shell is not mounted
-by any layout yet — that is task 1.5, so nothing renders it in the browser.
+tasks 1.1 (session context on `GET /api/me`), 1.2 (the shell component),
+1.3 (role gating and the loading state) and 1.4 (sign out) are complete. The
+shell is not mounted by any layout yet — that is task 1.5, so nothing renders
+it in the browser.
 
 The shell holds three states: `loading` keeps the navigation landmark and
 offers only Profile, because a guessed team id produces links that 404;
@@ -642,6 +643,11 @@ offers only Profile, because a guessed team id produces links that 404;
 the audit log; `anonymous` (401 or unreachable) removes the shell entirely and
 leaves the page to explain itself. The audit log is the only
 Delivery-Manager-only *read* in the API, so it is the only role-gated nav entry.
+
+Sign out is the shell's one action, and the first caller of
+`POST /api/auth/logout` in the product. It navigates only after the server has
+answered: clearing the cookie without a successful revoke would leave a working
+`UserSession` row while telling the member they are signed out.
 Agreed as the milestone before deployment, because the tool is about to be
 trialled with a real team and then shared with other delivery managers, and it
 currently has no navigation and no UI for its central action.

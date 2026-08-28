@@ -12,7 +12,7 @@
  * announced as current.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { delay, http, HttpResponse } from 'msw';
@@ -21,11 +21,17 @@ import { server } from '@/tests/mocks/server';
 import { AppShell } from './app-shell';
 
 const mockPathname = vi.hoisted(() => ({ current: '/teams/team-1/dashboard' }));
+const mockRouter = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname.current,
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => mockRouter,
 }));
+
+beforeEach(() => {
+  mockRouter.push.mockClear();
+  mockRouter.refresh.mockClear();
+});
 
 function renderShell(pathname: string) {
   mockPathname.current = pathname;
@@ -245,6 +251,74 @@ describe('AppShell', () => {
 
     await waitFor(() => {
       expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    });
+  });
+
+  // Requirement 1.4: sign out revokes the session server-side. Clearing the
+  // cookie in the browser alone would leave a working session token on record.
+
+  describe('sign out', () => {
+    /** Counts real POSTs crossing the network boundary, not calls to our own code. */
+    function countLogoutRequests(status = 204): () => number {
+      let count = 0;
+      server.use(
+        http.post('/api/auth/logout', () => {
+          count += 1;
+          return new HttpResponse(null, { status });
+        }),
+      );
+      return () => count;
+    }
+
+    it('revokes the session server-side and returns the member to the home page', async () => {
+      const user = userEvent.setup();
+      const logoutCount = countLogoutRequests();
+      renderShell('/teams/team-1/dashboard');
+
+      await user.click(await screen.findByRole('button', { name: /sign out/i }));
+
+      await waitFor(() => expect(logoutCount()).toBe(1));
+      await waitFor(() => expect(mockRouter.push).toHaveBeenCalledWith('/'));
+    });
+
+    it('discards the cached authenticated pages behind it', async () => {
+      // Without this, going Back after signing out re-renders a cached
+      // authenticated page from the client router cache
+      const user = userEvent.setup();
+      countLogoutRequests();
+      renderShell('/teams/team-1/dashboard');
+
+      await user.click(await screen.findByRole('button', { name: /sign out/i }));
+
+      await waitFor(() => expect(mockRouter.refresh).toHaveBeenCalled());
+    });
+
+    it('keeps the member where they are when the session could not be revoked', async () => {
+      const user = userEvent.setup();
+      countLogoutRequests(500);
+      renderShell('/teams/team-1/dashboard');
+
+      await user.click(await screen.findByRole('button', { name: /sign out/i }));
+
+      expect(await screen.findByRole('status')).toHaveTextContent(/could not sign you out/i);
+      expect(mockRouter.push).not.toHaveBeenCalled();
+    });
+
+    it('does not navigate before the server has answered', async () => {
+      const user = userEvent.setup();
+      server.use(
+        http.post('/api/auth/logout', async () => {
+          await delay('infinite');
+          return new HttpResponse(null, { status: 204 });
+        }),
+      );
+      renderShell('/teams/team-1/dashboard');
+
+      await user.click(await screen.findByRole('button', { name: /sign out/i }));
+
+      // A shell that navigates optimistically would tell the member they are
+      // signed out while their session token is still valid
+      expect(mockRouter.push).not.toHaveBeenCalled();
     });
   });
 });

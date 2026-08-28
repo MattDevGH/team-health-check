@@ -13,7 +13,7 @@
  */
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 /** The subset of GET /api/me the shell depends on. */
@@ -80,7 +80,10 @@ function destinationsFor(context: SessionContext | null): Destination[] {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [state, setState] = useState<ShellState>({ status: 'loading' });
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,6 +110,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  /**
+   * Revokes the session on the server before leaving. Clearing the cookie in
+   * the browser alone would leave a working token on record, so the member is
+   * kept where they are if the request fails rather than being told they are
+   * signed out when they are not.
+   */
+  async function signOut(): Promise<void> {
+    setSigningOut(true);
+    setSignOutError(null);
+
+    try {
+      const res = await fetch('/api/auth/logout', { method: 'POST' });
+      if (!res.ok) {
+        setSignOutError('We could not sign you out. Please try again.');
+        setSigningOut(false);
+        return;
+      }
+    } catch {
+      setSignOutError('We could not sign you out. Please try again.');
+      setSigningOut(false);
+      return;
+    }
+
+    router.push('/');
+    // Discard the client router cache, or going Back re-renders a cached
+    // authenticated page after the session behind it has been revoked
+    router.refresh();
+  }
 
   const context = state.status === 'ready' ? state.context : null;
 
@@ -149,7 +181,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   })}
                 </ul>
               </nav>
+
+              {/* An action, not a destination, so it sits outside the nav list */}
+              <button
+                type="button"
+                onClick={signOut}
+                disabled={signingOut}
+                className="ml-auto rounded border border-gray-300 px-3 py-1 text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              >
+                {signingOut ? 'Signing out…' : 'Sign out'}
+              </button>
             </div>
+
+            {signOutError && (
+              <p role="status" className="mx-auto max-w-3xl px-4 pb-3 text-sm text-red-700">
+                {signOutError}
+              </p>
+            )}
           </header>
         </>
       )}

@@ -69,10 +69,27 @@ a colleague hits the conflict before the UI work lands.
       passed under that mutation.
     - 1215 Vitest tests, `tsc --noEmit`, and lint all green.
 
-  - [ ] 1.4 Sign out
+  - [x] 1.4 Sign out
     - Write a failing test: activating sign out posts to `/api/auth/logout` and navigates to `/`
     - Assert the resulting location, not that a handler fired
     - _Requirements: 1.4_
+    - **Done.** The first sign-out control in the product — nothing anywhere
+      called `/api/auth/logout` before this.
+    - The POST is counted inside the MSW handler, so the assertion is that a
+      request crossed the network boundary, not that our own function ran.
+    - Navigation happens only after the server answers, and a failed revoke
+      keeps the member where they are with a `role="status"` message. Telling
+      someone they are signed out while their token is still valid is the
+      failure worth designing against, since `POST /api/auth/logout` is what
+      revokes the `UserSession` row — clearing the cookie alone leaves a
+      working token on record.
+    - **Mutation-checked:** moving `router.push('/')` above the fetch failed
+      both the failure-path test and the in-flight test.
+    - `router.refresh()` follows the push so a Back navigation cannot re-render
+      a cached authenticated page after its session was revoked.
+    - Sign out is a `<button>` outside the nav list: it is an action, not a
+      destination. The skip-link tab-order test still passes with it present.
+    - 1219 Vitest tests, `tsc --noEmit`, and lint all green.
 
   - [ ] 1.5 Mount the shell on authenticated segments
     - Add `src/app/teams/[teamId]/layout.tsx` and `src/app/me/layout.tsx`
