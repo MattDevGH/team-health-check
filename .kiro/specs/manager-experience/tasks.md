@@ -30,11 +30,22 @@ a colleague hits the conflict before the UI work lands.
       treats it exactly as it treats a team it has not loaded yet.
       1198 Vitest tests, `tsc --noEmit`, and lint all green.
 
-  - [ ] 1.2 Implement the shell component
+  - [x] 1.2 Implement the shell component
     - Write failing component tests: nav landmark labelled "Main"; Dashboard, Settings and Profile links present; skip link is the first focusable element and targets `#main`; active destination carries `aria-current="page"`
     - Implement `src/components/app-shell/app-shell.tsx` fetching `/api/me` on mount
     - Active state uses `usePathname()`, matched by segment
     - _Requirements: 1.1, 1.2, 1.5_
+    - **Done.** Ten component tests. Tab order is asserted by actually pressing
+      Tab and checking focus, not by reading the DOM order, and the skip link's
+      target is asserted to exist — a skip link pointing at nothing passes every
+      other check. `samePath` ignores a trailing slash, so a pathname arriving
+      with one cannot leave every destination unmarked.
+    - A default `GET /api/me` handler was added to `src/tests/mocks/handlers.ts`
+      in the same commit as the route change of 1.1, carrying `team` and
+      `roles`. Tests needing another role set or a 401 override it.
+    - The non-colour active treatment (weight plus underline) is not asserted
+      here: pinning Tailwind classes in a unit test asserts what was just typed.
+      It is covered by the manual pass in 1.6.
 
   - [ ] 1.3 Role-conditional links and the loading state
     - Write failing tests: a member without `delivery_manager` gets no audit-log link; during the in-flight fetch no team-scoped link is rendered; a 401 renders no nav at all

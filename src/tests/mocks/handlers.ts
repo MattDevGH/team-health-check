@@ -21,6 +21,35 @@ const DEFAULT_QUESTIONS = [
 
 export const handlers = [
   /**
+   * GET /api/me
+   *
+   * Mirrors the real route: the member profile, the persisted Slack link, and
+   * the session context the navigation shell needs — `team` and `roles`.
+   * `team` is null only when the team record cannot be resolved, which the
+   * Prisma foreign key makes unreachable in production.
+   *
+   * Tests that care about a different role set or an unauthenticated response
+   * override this with server.use(...).
+   *
+   * Requirements: Manager Experience 1.1, 1.3
+   */
+  http.get('/api/me', () => {
+    return HttpResponse.json({
+      id: 'member-1',
+      teamId: 'team-1',
+      name: 'Alice',
+      email: 'alice@example.com',
+      cadencePreference: 'session',
+      remindersEnabled: true,
+      currentStreak: 0,
+      bestStreak: 0,
+      slackLink: null,
+      team: { id: 'team-1', name: 'Platform Squad' },
+      roles: ['delivery_manager'],
+    });
+  }),
+
+  /**
    * GET /api/auth/session-link/[token]
    *
    * Returns enriched session context with cookie-based auth.

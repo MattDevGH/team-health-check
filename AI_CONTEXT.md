@@ -632,7 +632,8 @@ and `e2e` green on master afterwards.
 ### Manager experience — in progress (2026-08-28)
 
 Current branch: `feat/manager-experience`. Spec written. Phase 1 in progress:
-task 1.1 (session context on `GET /api/me`) complete.
+tasks 1.1 (session context on `GET /api/me`) and 1.2 (the shell component) are
+complete. The shell is not mounted by any layout yet — that is task 1.5.
 Agreed as the milestone before deployment, because the tool is about to be
 trialled with a real team and then shared with other delivery managers, and it
 currently has no navigation and no UI for its central action.
