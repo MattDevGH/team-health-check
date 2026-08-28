@@ -124,6 +124,104 @@ describe('GET /api/me', () => {
     const body = await res.json();
     expect(body.slackLink).toBeNull();
   });
+
+  // The navigation shell reads team and roles from here to decide which
+  // destinations to offer. Requirement 1.1, 1.3.
+
+  it('returns the member\'s team identity so the shell can build team-scoped links', async () => {
+    const team = await meRepos.team.create({ name: 'Platform Squad' });
+    const member = await meRepos.teamMember.create({
+      teamId: team.id,
+      name: 'Nadia',
+      email: 'nadia@example.com',
+    });
+    const token = await createSession(meRepos, member.id);
+
+    const req = makeAuthRequest('GET', { cookie: token });
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.team).toEqual({ id: team.id, name: 'Platform Squad' });
+  });
+
+  it('returns the roles assigned to the member in their own team', async () => {
+    const team = await meRepos.team.create({ name: 'Role Team' });
+    const member = await meRepos.teamMember.create({
+      teamId: team.id,
+      name: 'Omar',
+      email: 'omar@example.com',
+    });
+    await meRepos.teamMemberRole.assign({
+      memberId: member.id,
+      teamId: team.id,
+      role: 'delivery_manager',
+    });
+    const token = await createSession(meRepos, member.id);
+
+    const req = makeAuthRequest('GET', { cookie: token });
+    const res = await GET(req);
+    const body = await res.json();
+    expect(body.roles).toEqual(['delivery_manager']);
+  });
+
+  it('returns an empty role list for a member with no assigned roles', async () => {
+    const team = await meRepos.team.create({ name: 'Roleless Team' });
+    const member = await meRepos.teamMember.create({
+      teamId: team.id,
+      name: 'Priya',
+      email: 'priya@example.com',
+    });
+    const token = await createSession(meRepos, member.id);
+
+    const req = makeAuthRequest('GET', { cookie: token });
+    const res = await GET(req);
+    const body = await res.json();
+    expect(body.roles).toEqual([]);
+  });
+
+  it('does not report roles another member holds in the same team', async () => {
+    const team = await meRepos.team.create({ name: 'Shared Team' });
+    const manager = await meRepos.teamMember.create({
+      teamId: team.id,
+      name: 'Quinn',
+      email: 'quinn@example.com',
+    });
+    await meRepos.teamMemberRole.assign({
+      memberId: manager.id,
+      teamId: team.id,
+      role: 'delivery_manager',
+    });
+    const contributor = await meRepos.teamMember.create({
+      teamId: team.id,
+      name: 'Rafa',
+      email: 'rafa@example.com',
+    });
+    const token = await createSession(meRepos, contributor.id);
+
+    const req = makeAuthRequest('GET', { cookie: token });
+    const res = await GET(req);
+    const body = await res.json();
+    expect(body.roles).toEqual([]);
+  });
+
+  it('returns a null team rather than failing when the team record is missing', async () => {
+    // Prisma enforces the foreign key, so this is unreachable in production.
+    // The shell treats a null team the same as a team it has not loaded yet:
+    // it renders no team-scoped links rather than guessing an id.
+    const member = await meRepos.teamMember.create({
+      teamId: 'team-that-does-not-exist',
+      name: 'Sasha',
+      email: 'sasha@example.com',
+    });
+    const token = await createSession(meRepos, member.id);
+
+    const req = makeAuthRequest('GET', { cookie: token });
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.team).toBeNull();
+    expect(body.roles).toEqual([]);
+  });
 });
 
 // ─── PATCH /api/me/preferences ─────────────────────────────────────────────────

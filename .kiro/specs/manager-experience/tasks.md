@@ -17,11 +17,18 @@ a colleague hits the conflict before the UI work lands.
 
 - [ ] 1. Navigation shell
 
-  - [ ] 1.1 Extend `/api/me` with team and roles
+  - [x] 1.1 Extend `/api/me` with team and roles
     - Write failing route tests: authenticated request returns `team: {id, name}` and `roles`; a member with no roles returns `[]`; 401 unchanged
     - Resolve via `repos.team.findById` and `repos.teamMemberRole.findByMemberAndTeam`
     - Keep the handler thin; assert the response body, not that the repositories were called
     - _Requirements: 1.1, 1.3_
+    - **Done.** Five route tests, all asserting the response body. One covers a
+      role held by a *different* member of the same team, because
+      `findByMemberAndTeam` scoped only by team would still pass every other
+      role assertion. `team` is `null` when the team record cannot be resolved —
+      unreachable in production behind the Prisma foreign key, and the shell
+      treats it exactly as it treats a team it has not loaded yet.
+      1198 Vitest tests, `tsc --noEmit`, and lint all green.
 
   - [ ] 1.2 Implement the shell component
     - Write failing component tests: nav landmark labelled "Main"; Dashboard, Settings and Profile links present; skip link is the first focusable element and targets `#main`; active destination carries `aria-current="page"`
