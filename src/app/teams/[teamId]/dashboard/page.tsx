@@ -85,19 +85,19 @@ export default function TrendDashboardPage({ params }: PageProps) {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <p className="text-gray-600">Loading...</p>
-      </main>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center">
           <p className="text-red-600 font-medium">{error}</p>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -109,7 +109,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
 
   if (!hasEnoughData) {
     return (
-      <main className="min-h-screen bg-gray-50 py-6 px-4">
+      <div className="min-h-screen bg-gray-50 py-6 px-4">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-2xl font-bold text-gray-800 mb-4">
             Trend Dashboard
@@ -123,7 +123,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
             </p>
           </div>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -131,7 +131,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
   const mostRecentSession = sessions[sessions.length - 1];
 
   return (
-    <main className="min-h-screen bg-gray-50 py-6 px-4">
+    <div className="min-h-screen bg-gray-50 py-6 px-4">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-800 mb-4">
           Trend Dashboard
@@ -175,7 +175,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
           <QuestionDetailView sessions={sessions} anonymousMode={anonymousMode} />
         </div>
       </div>
-    </main>
+    </div>
   );
 }
 

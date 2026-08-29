@@ -21,8 +21,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
-import { test, expect } from './fixtures';
-import { seedSession, seedTeam, type SeededAggregate } from './db';
+import { allowConsoleErrors, test, expect } from './fixtures';
+import { seedMember, seedSession, seedTeam, type SeededAggregate } from './db';
 import { signIn } from './sign-in';
 
 /**
@@ -166,8 +166,15 @@ test.describe('feedback states', () => {
 });
 
 test.describe('authenticated pages', () => {
+  /**
+   * One member per test that signs in. Magic links are rate-limited to five per
+   * email per hour, process-wide, and CI allows two retries — so a single
+   * member shared by three tests can exhaust the limit during a bad run and
+   * hang on the verification page instead of failing where the fault is.
+   */
+  const RICH_KEYS = ['settings', 'dashboard', 'profile', 'skip-link', 'sign-out', 'reflow'] as const;
   const SPARSE_EMAIL = 'a11y-sparse@e2e.invalid';
-  const RICH_EMAIL = 'a11y-rich@e2e.invalid';
+  const richEmail = (key: (typeof RICH_KEYS)[number]) => `a11y-rich-${key}@e2e.invalid`;
   let sparseTeamId = '';
   let richTeamId = '';
 
@@ -184,7 +191,7 @@ test.describe('authenticated pages', () => {
     });
     sparseTeamId = sparse.teamId;
 
-    const rich = seedTeam({ teamName: 'A11y Rich Team', memberEmail: RICH_EMAIL });
+    const rich = seedTeam({ teamName: 'A11y Rich Team', memberEmail: richEmail('settings') });
     [new Date('2026-08-10T17:00:00.000Z'), new Date('2026-08-17T17:00:00.000Z')].forEach(
       (closedAt, index) => {
         seedSession({
@@ -198,10 +205,15 @@ test.describe('authenticated pages', () => {
       },
     );
     richTeamId = rich.teamId;
+
+    for (const key of RICH_KEYS) {
+      if (key === 'settings') continue; // seeded as the team's own member above
+      seedMember({ teamId: rich.teamId, email: richEmail(key) });
+    }
   });
 
   test('team settings', async ({ page }) => {
-    await signIn(page, RICH_EMAIL);
+    await signIn(page, richEmail('settings'));
     await page.goto(`/teams/${richTeamId}/settings`);
     await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
 
@@ -217,7 +229,7 @@ test.describe('authenticated pages', () => {
   });
 
   test('populated dashboard, including an expanded question', async ({ page }) => {
-    await signIn(page, RICH_EMAIL);
+    await signIn(page, richEmail('dashboard'));
     await page.goto(`/teams/${richTeamId}/dashboard`);
     await expect(page.getByText(/more data needed/i)).toHaveCount(0);
 
@@ -227,5 +239,79 @@ test.describe('authenticated pages', () => {
     // dashboard never shows
     await page.getByRole('button', { name: /delivering value/i }).click();
     await expectNoViolations(page, 'populated dashboard with question expanded');
+  });
+
+  test('profile page', async ({ page }) => {
+    // Never audited before this milestone, and now the third page carrying the
+    // navigation shell
+    await signIn(page, richEmail('profile'));
+    await page.goto('/me');
+    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+
+    await expectNoViolations(page, 'profile page');
+  });
+});
+
+/**
+ * States the shell introduces that a page-level audit never reaches.
+ *
+ * Requirements: Manager Experience 1.2, 1.5, 1.6; NFR 1
+ */
+test.describe('navigation shell states', () => {
+  type ShellKey = 'skip-link' | 'sign-out' | 'reflow';
+  const shellEmail = (key: ShellKey) => `a11y-shell-${key}@e2e.invalid`;
+  let teamId = '';
+
+  test.beforeAll(() => {
+    const team = seedTeam({ teamName: 'A11y Shell Team', memberEmail: shellEmail('skip-link') });
+    teamId = team.teamId;
+    seedMember({ teamId: team.teamId, email: shellEmail('sign-out') });
+    seedMember({ teamId: team.teamId, email: shellEmail('reflow') });
+  });
+
+  test('the skip link, once focused and visible', async ({ page }) => {
+    await signIn(page, shellEmail('skip-link'));
+    await page.goto(`/teams/${teamId}/dashboard`);
+    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('link', { name: /skip to main content/i })).toBeVisible();
+
+    // Until it is focused the skip link is clipped to a 1×1 box, which axe
+    // treats as hidden and skips. Its contrast is only ever checked here.
+    await expectNoViolations(page, 'shell with the skip link focused');
+  });
+
+  test('the sign-out failure message', async ({ page }) => {
+    await signIn(page, shellEmail('sign-out'));
+    await page.goto(`/teams/${teamId}/dashboard`);
+
+    // The one shell state a real server will not produce on demand. Failing the
+    // revoke is the only way to render the status message at all, and an
+    // unaudited error state is exactly where contrast failures survive.
+    await page.route('**/api/auth/logout', route => route.fulfill({ status: 500, body: '{}' }));
+    allowConsoleErrors(page, /status of 500 \(Internal Server Error\)/);
+
+    await page.getByRole('button', { name: /sign out/i }).click();
+    await expect(page.getByRole('status')).toContainText(/could not sign you out/i);
+
+    await expectNoViolations(page, 'shell showing the sign-out failure');
+  });
+
+  test('reflows to 320px without a horizontal scrollbar', async ({ page }) => {
+    // WCAG 2.1 AA 1.4.10 (Reflow) is specified at 320 CSS pixels — the width a
+    // 1280px viewport reaches at 400% zoom. The 375px check in the navigation
+    // spec is a phone; this is the criterion.
+    await page.setViewportSize({ width: 320, height: 640 });
+    await signIn(page, shellEmail('reflow'));
+    await page.goto(`/teams/${teamId}/dashboard`);
+    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, 'horizontal overflow in CSS pixels at 320px').toBeLessThanOrEqual(0);
+
+    await expectNoViolations(page, 'dashboard at 320px');
   });
 });

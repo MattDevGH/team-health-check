@@ -21,13 +21,33 @@ const aggregateArb = fc.record({
 const aggregatesArb = fc.array(aggregateArb, { minLength: 1, maxLength: 5 });
 
 /**
+ * Text every anonymous export contains regardless of its members: the header,
+ * the suppression marker, and the question identifier.
+ *
+ * The leak check is a substring search over the whole CSV, so a generated name
+ * that is *part of this fixed text* is indistinguishable from it and reports a
+ * leak that did not happen. That is not hypothetical: a run failed on the name
+ * `e C`, which lives inside `Response Count` in the header, and `ing` would
+ * have done the same inside `q-delivering-value`.
+ *
+ * Excluding those names keeps the property at full strength — it still asserts
+ * that no member identifier appears anywhere in the export — while removing the
+ * cases where the assertion could not tell a leak from the format itself.
+ */
+const CSV_FIXED_TEXT = [
+  'Session Date,Question,Average Score,Response Count,Improving,Stable,Declining',
+  'insufficient data',
+  'q-delivering-value',
+].join('\n');
+
+/**
  * Arbitrary for generating team member identifiers (names and emails)
  * to verify they do NOT appear in anonymous mode CSV.
  * Names are constrained to alphanumeric + spaces to avoid matching CSV
  * structural characters (commas, newlines) or common CSV column values.
  */
 const memberNameArb = fc.stringMatching(/^[A-Za-z][A-Za-z ]{1,20}[A-Za-z]$/)
-  .filter(s => s.trim().length >= 3);
+  .filter(s => s.trim().length >= 3 && !CSV_FIXED_TEXT.includes(s));
 
 const memberArb = fc.record({
   name: memberNameArb,

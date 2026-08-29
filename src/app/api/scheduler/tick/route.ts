@@ -10,8 +10,9 @@
 
 import { withErrorHandling } from '@/lib/api-utils';
 import { ForbiddenError } from '@/lib/errors';
-import { container, repos } from '@/lib/container-production';
+import { repos } from '@/lib/container-production';
 import { createSchedulerService } from '@/lib/services/scheduler.service';
+import { createSessionService } from '@/lib/services/session.service';
 import {
   createNotificationService,
   DEFAULT_REMINDER_LEAD_MS,
@@ -66,17 +67,37 @@ export const POST = withErrorHandling(async (request: Request) => {
     throw new ForbiddenError('Invalid or missing CRON_SECRET');
   }
 
-  // 2. Wire the scheduler service (requires session service + repos not in container)
+  // 2. One tick, one clock.
+  //
+  // The session service is built here rather than taken from the container so
+  // that `open()` stamps scheduledCloseAt from the same instant the scheduler
+  // and the notification service work from. Using `container.session` meant a
+  // tick reconciled against the injected clock while stamping close times from
+  // the wall clock — harmless in production, where both are real, but it made
+  // the closing-reminder tests pass or fail according to the day and hour the
+  // suite ran.
+  const now = _testDeps.now?.() ?? new Date();
+  const tickClock = () => now;
+
+  const sessionService = createSessionService({
+    sessionRepo: repos.session,
+    sessionLinkRepo: repos.sessionLink,
+    teamMemberRepo: repos.teamMember,
+    responseRepo: repos.response,
+    sessionAggregateRepo: repos.sessionAggregate,
+    teamScheduleRepo: repos.teamSchedule,
+    now: tickClock,
+  });
+
   const scheduler = createSchedulerService({
     teamRepo: repos.team,
     teamScheduleRepo: repos.teamSchedule,
     sessionRepo: repos.session,
     sessionAggregateRepo: repos.sessionAggregate,
-    sessionService: container.session,
+    sessionService,
   });
 
   // 3. Snapshot open sessions before tick (to detect newly opened ones)
-  const now = _testDeps.now?.() ?? new Date();
   const teams = await repos.team.list();
   const openSessionsBefore = new Map<string, string>();
   for (const team of teams) {
@@ -119,7 +140,7 @@ export const POST = withErrorHandling(async (request: Request) => {
     notificationDeliveryRepo: repos.notificationDelivery,
     notificationSink,
     slackLinkChecker,
-    now: () => now,
+    now: tickClock,
   });
 
   // 6. Notify for open sessions (Requirements 8.1, 8.2).

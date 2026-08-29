@@ -31,18 +31,34 @@ const ALLOWED_CONSOLE_ERRORS: RegExp[] = [
 /** Aborted requests are usually navigation superseding an in-flight fetch. */
 const IGNORED_REQUEST_FAILURES = ['net::ERR_ABORTED'];
 
+/**
+ * Console errors a single test expects, registered by that test.
+ *
+ * A few states can only be reached by making a request fail — an error message
+ * has to be provoked before its contrast can be audited — and the browser logs
+ * the failed response either way. Adding those to the global allowlist would
+ * stop the whole suite noticing real 500s, so the exception is scoped to the
+ * page that asked for it and evaluated when the test ends.
+ */
+const perTestAllowances = new WeakMap<Page, RegExp[]>();
+
+export function allowConsoleErrors(page: Page, ...patterns: RegExp[]): void {
+  perTestAllowances.set(page, [...(perTestAllowances.get(page) ?? []), ...patterns]);
+}
+
 function isFirstParty(url: string): boolean {
   return url.startsWith(BASE_URL);
 }
 
 interface Collected {
+  page: Page;
   pageErrors: string[];
   consoleErrors: string[];
   failedRequests: string[];
 }
 
 function watch(page: Page): Collected {
-  const collected: Collected = { pageErrors: [], consoleErrors: [], failedRequests: [] };
+  const collected: Collected = { page, pageErrors: [], consoleErrors: [], failedRequests: [] };
 
   page.on('pageerror', error => {
     collected.pageErrors.push(error.message);
@@ -66,9 +82,19 @@ function watch(page: Page): Collected {
 }
 
 function assertClean(collected: Collected): void {
+  // Per-test allowances are applied here, not when the message arrives, so a
+  // test can register them at any point before it ends
+  const allowed = perTestAllowances.get(collected.page) ?? [];
+  const consoleErrors = collected.consoleErrors.filter(
+    text => !allowed.some(pattern => pattern.test(text)),
+  );
+  const failedRequests = collected.failedRequests.filter(
+    text => !allowed.some(pattern => pattern.test(text)),
+  );
+
   expect(collected.pageErrors, 'uncaught page errors').toEqual([]);
-  expect(collected.consoleErrors, 'unexpected console errors').toEqual([]);
-  expect(collected.failedRequests, 'failed first-party requests').toEqual([]);
+  expect(consoleErrors, 'unexpected console errors').toEqual([]);
+  expect(failedRequests, 'failed first-party requests').toEqual([]);
 }
 
 export const test = base.extend({

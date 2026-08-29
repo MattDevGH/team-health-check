@@ -80,6 +80,26 @@ export function findSessionLinkToken(memberId: string, sessionId: string): strin
   return row?.token;
 }
 
+/**
+ * Counts live browser sessions for the member with this email.
+ *
+ * Sign-out clears the cookie *and* deletes the UserSession row. Only the row
+ * proves the token can no longer authenticate; a cleared cookie alone would
+ * still pass if the server had done nothing.
+ */
+export function countUserSessions(email: string): number {
+  const row = read(db =>
+    db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM UserSession
+         WHERE memberId IN (SELECT id FROM TeamMember WHERE email = ?)`,
+      )
+      .get(email),
+  ) as { count: number };
+
+  return row.count;
+}
+
 export function responsesForSession(sessionId: string): Array<{ questionId: string; score: number; trendIndicator: string | null }> {
   return read(db =>
     db
@@ -140,8 +160,15 @@ export function seedTeam(options: {
     }
     db.prepare('DELETE FROM HealthCheckSession WHERE teamId = ?').run(teamId);
     db.prepare('DELETE FROM TeamMemberRole WHERE teamId = ?').run(teamId);
-    db.prepare('DELETE FROM UserSession WHERE memberId = ?').run(memberId);
-    db.prepare('DELETE FROM MagicLink WHERE memberId = ?').run(memberId);
+
+    // Clear rows that reference *any* member of the team, not just the one this
+    // helper creates. A team can also hold members added by `seedMember`, and
+    // deleting a member who has signed in since fails the foreign key.
+    const membersOfTeam = 'SELECT id FROM TeamMember WHERE teamId = ?';
+    for (const table of ['UserSession', 'MagicLink', 'SlackIdentityLink']) {
+      db.prepare(`DELETE FROM ${table} WHERE memberId IN (${membersOfTeam})`).run(teamId);
+    }
+
     db.prepare('DELETE FROM TeamMember WHERE teamId = ?').run(teamId);
     db.prepare('DELETE FROM Team WHERE id = ?').run(teamId);
 
@@ -158,6 +185,45 @@ export function seedTeam(options: {
     ).run(`${memberId}-role`, memberId, teamId, 'delivery_manager', now);
 
     return { teamId, memberId };
+  });
+}
+
+/**
+ * Seeds one extra member of an existing team.
+ *
+ * Magic links are rate-limited to five per email per hour, and that limit is
+ * process-wide, so a spec that signs the same member in from every test starts
+ * silently issuing no token partway through the run — the sign-in then hangs on
+ * the verification page rather than failing anywhere near the cause. Give each
+ * test its own member instead.
+ *
+ * Must run after `seedTeam` for the same team: that helper clears the team's
+ * members before recreating its own.
+ */
+export function seedMember(options: {
+  teamId: string;
+  email: string;
+  name?: string;
+  role?: 'delivery_manager' | 'contributor';
+}): { memberId: string } {
+  return write(db => {
+    const memberId = `e2e-member-${slug(options.email)}`;
+    const now = new Date().toISOString();
+
+    for (const table of ['UserSession', 'MagicLink', 'SlackIdentityLink', 'TeamMemberRole']) {
+      db.prepare(`DELETE FROM ${table} WHERE memberId = ?`).run(memberId);
+    }
+    db.prepare('DELETE FROM TeamMember WHERE id = ?').run(memberId);
+
+    db.prepare(
+      'INSERT INTO TeamMember (id, teamId, name, email, cadencePreference, remindersEnabled, currentStreak, bestStreak, createdAt) VALUES (?, ?, ?, ?, ?, 1, 0, 0, ?)',
+    ).run(memberId, options.teamId, options.name ?? 'Fixture Member', options.email, 'weekly', now);
+
+    db.prepare(
+      'INSERT INTO TeamMemberRole (id, memberId, teamId, role, assignedAt) VALUES (?, ?, ?, ?, ?)',
+    ).run(`${memberId}-role`, memberId, options.teamId, options.role ?? 'delivery_manager', now);
+
+    return { memberId };
   });
 }
 

@@ -109,35 +109,35 @@ export default function AuditLogPage({ params }: PageProps) {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <p className="text-gray-600">Loading...</p>
-      </main>
+      </div>
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center">
           <p className="text-red-600 font-medium">Access denied</p>
           <p className="text-gray-500 text-sm mt-2">
             Only delivery managers can view the audit log.
           </p>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <p className="text-red-600 font-medium">{error}</p>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 py-6 px-4">
+    <div className="min-h-screen bg-gray-50 py-6 px-4">
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-800 mb-6">Audit Log</h1>
 
@@ -188,7 +188,7 @@ export default function AuditLogPage({ params }: PageProps) {
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }
 

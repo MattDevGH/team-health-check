@@ -40,8 +40,9 @@ rather than only once a pull request exists.
 
 ### Project status
 
-Both specs in `.kiro/specs/` are complete. The application supports the full
-loop: magic-link and genesis sign-in, team and schedule configuration, scheduled
+The two build specs in `.kiro/specs/` are complete, and a third
+(`manager-experience/`) is open. The application supports the full loop:
+magic-link and genesis sign-in, team and schedule configuration, scheduled
 sessions, feedback through the web interface or Slack, close and materialisation,
 and a trends dashboard.
 
@@ -63,18 +64,39 @@ The lesson is recorded as Testing Rules in `AGENTS.md`: assert observable
 outcomes rather than the calls you just made, and run the real thing before
 claiming it works.
 
-### Next milestones (not started)
+### Current milestone
 
+**Manager experience** (`.kiro/specs/manager-experience/`) — spec written
+2026-08-28, implementation not started. It covers the gap between "the system
+works" and "a delivery manager can run it unaided":
+
+- **Shared navigation:** the app is currently navigated by knowing URLs.
 - **Session lifecycle management:** a manager UI for opening, closing and
   monitoring sessions. The API supports these; there is no interface for them,
   so E2E tests drive that part through the API.
-- **Dashboard UX:** chart title, explanation and legend; clarify or remove the
-  Latest Session panel; question disclosure affordances with
-  `aria-expanded`/`aria-controls`; fix `1 responses` pluralisation.
+- **Dashboard comprehension:** chart caption and legend, an accessible data
+  table, a rebuilt Latest Session panel, question disclosure affordances with
+  `aria-expanded`/`aria-controls`, and `1 response` pluralisation.
+- **First-run guidance:** empty and single-session states that say what to do next.
+- **Ambiguous-identity guard:** see the limitation below.
+
+### Known limitation: one team per person
+
+A person can belong to only one team. The schema allows the same email address in
+several teams, but sign-in resolves an email to a single member and would
+otherwise pick an arbitrary one. Colleagues sharing this tool should each run
+their own team. The manager-experience milestone adds a guard that rejects a
+member addition which would create the conflict, rather than letting it produce a
+wrong-team sign-in later. Full multi-team membership is a separate future spec.
+
+### Later milestones (not started)
+
+- **Deployment:** Vercel, Turso, and the production cron trigger.
+- **Delivery-manager user guide** in `docs/`, once in-app guidance exists.
 - **Slack Socket Mode:** evaluate as a development-only convenience to remove
   the tunnel requirement, keeping HTTP endpoints for production.
-- **Broader work:** design system, dark mode, shared navigation, CSRF,
-  generalised rate limiting, load testing, telemetry.
+- **Broader work:** design system, dark mode, CSRF, generalised rate limiting,
+  load testing, telemetry.
 
 ## Environment Variables
 
@@ -450,18 +472,25 @@ Feature specifications at `.kiro/specs/`:
 - Tasks 1–21 record the original implementation pass; Task 22 records browser regressions
 - Tasks 23–26 closed auth/session, Slack production behaviour, automated evidence, documentation, CI, and merge. Their evidence tables record what was verified and how
 
+**`manager-experience/`** — Manager-facing UI spec (**open**, written 2026-08-28):
+- Requirements (5 functional + 2 non-functional): navigation, session lifecycle, dashboard comprehension, first-run guidance, ambiguous-identity guard
+- Technical design (9 decisions, 6 correctness properties, per-tier testing strategy)
+- Tasks (9 groups across 5 phases, 3 checkpoints)
+
 ## Known Issues & Future Work
 
 ### Design & UI
 
 - **No design system** — components use ad-hoc Tailwind classes. A consistent design language (spacing scale, colour palette, component library) would improve cohesion. Consider adopting something like shadcn/ui or Radix primitives.
 - **Dark mode not supported** — the CSS has custom property scaffolding ready for it, but pages use hardcoded light-mode Tailwind classes (`bg-gray-50`, `text-gray-800`, etc.). Dark mode would need a proper theme toggle and a pass across all pages.
-- **No responsive navigation** — there's no shared layout, nav bar, or sidebar. Each page is standalone. A logged-in user has no way to navigate between dashboard, settings, and profile without knowing the URLs.
+- ~~**No responsive navigation**~~ — fixed. A shared shell is mounted by the `/teams/[teamId]` and `/me` segment layouts, offering Dashboard, Settings, Profile, sign out, and — for a delivery manager — the Audit log. It is deliberately absent from the home page, sign-in, and the session-link feedback form.
 
 ### Accessibility
 
-- **Colour contrast audited and fixed** — Playwright axe runs against seven states (genesis, settings, active feedback, confirmation, ended session, and both dashboard states) plus the expanded question drill-down. That audit found and fixed real WCAG AA failures: `text-gray-400` at 2.48–2.6 against white, and `bg-green-600`/`text-green-600` at 3.21. Pages outside those states are still unaudited.
-- **No skip-to-content links** — keyboard users can't bypass repeated navigation (once navigation exists).
+- **Colour contrast audited and fixed** — Playwright axe runs against the unauthenticated pages (home, sign-in, genesis), the feedback states (active, confirmation, ended), settings, both dashboard states plus the expanded question drill-down, the profile page, and three states the navigation shell adds: the skip link once focused, the sign-out failure message, and the dashboard at 320px. That audit found and fixed real WCAG AA failures: `text-gray-400` at 2.48–2.6 against white, and `bg-green-600`/`text-green-600` at 3.21.
+- **Reflow is checked at 320px** — the width WCAG 2.1 AA 1.4.10 specifies, being a 1280px viewport at 400% zoom. The 375px check in the navigation spec is a phone, not the criterion.
+- **No screen-reader pass yet** — axe finds roughly a third to a half of WCAG issues and cannot judge whether announced labels and order make sense. Focus order through the shell is asserted end-to-end, but AA conformance should not be claimed until a human has used the app with NVDA or VoiceOver.
+- ~~**No skip-to-content links**~~ — fixed on authenticated pages. The shell's skip link is first in tab order and its target carries `tabindex="-1"`, so activating it moves focus rather than only shifting the sequential start point. Verified end-to-end by asserting where focus lands, not that the URL gained a fragment.
 - **No focus management on route transitions** — screen readers aren't notified when the page changes.
 - **No reduced-motion support** — no `prefers-reduced-motion` media query handling.
 

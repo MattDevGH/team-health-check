@@ -20,6 +20,57 @@ function makeContext(token: string) {
   return { params: Promise.resolve({ token }) };
 }
 
+/** The wall-clock window a request was observed to occupy. */
+interface RequestWindow {
+  requestStartedAt: number;
+  requestFinishedAt: number;
+}
+
+/**
+ * Asserts a cookie lifetime respects its cap without asserting machine speed.
+ *
+ * The route sets `expiresAt` inside `establishSessionLinkAuth` and computes
+ * Max-Age from a later `Date.now()`, so any pause between the two shortens
+ * Max-Age. The cap itself is the security-relevant direction and is asserted
+ * exactly; the lower bound only has to rule out an absurdly short cookie, so it
+ * allows for however long the request actually took. A fixed tolerance here is
+ * a claim about the runner, not about the code — CI failed a docs-only commit
+ * on exactly that.
+ */
+function expectCappedMaxAge(maxAge: number, capSeconds: number, window: RequestWindow): void {
+  const elapsedSeconds = Math.ceil((window.requestFinishedAt - window.requestStartedAt) / 1000);
+
+  expect(maxAge, 'Max-Age must never exceed its cap').toBeLessThanOrEqual(capSeconds);
+  expect(maxAge, 'Max-Age should be within a request of its cap').toBeGreaterThanOrEqual(
+    capSeconds - elapsedSeconds - 1,
+  );
+}
+
+/**
+ * Asserts the cookie and the persisted row describe the same session lifetime.
+ *
+ * Reconstructs the instant the cookie was issued from the stored expiry and
+ * Max-Age, and requires it to fall inside the observed request window.
+ *
+ * Max-Age is floored to whole seconds, which makes it shorter than the true
+ * remaining lifetime, so subtracting it back off the expiry lands up to 999ms
+ * *after* the real issue instant — never before it.
+ */
+function expectCookieAndRowAgree(
+  persistedExpiry: Date,
+  maxAge: number,
+  window: RequestWindow,
+): void {
+  const impliedIssuedAt = persistedExpiry.getTime() - maxAge * 1000;
+
+  expect(impliedIssuedAt, 'cookie and row disagree: implied issue predates the request').toBeGreaterThanOrEqual(
+    window.requestStartedAt,
+  );
+  expect(impliedIssuedAt, 'cookie and row disagree: implied issue outlasts the request').toBeLessThanOrEqual(
+    window.requestFinishedAt + 1000,
+  );
+}
+
 let seedCounter = 0;
 
 /**
@@ -356,19 +407,21 @@ describe('GET /api/auth/session-link/[token]', () => {
       });
 
       const response = await GET(makeRequest(token), makeContext(token));
+      const requestFinishedAt = Date.now();
 
       expect(response.status).toBe(200);
       const setCookie = response.headers.get('Set-Cookie');
       expect(setCookie).toContain(`session=${existingSession.token}`);
       const maxAge = Number(setCookie?.match(/Max-Age=(\d+)/)?.[1]);
       const persisted = await repos.userSession.findByToken(existingSession.token);
-      expect(maxAge).toBeGreaterThanOrEqual(2 * 60 * 60 - 1);
-      expect(maxAge).toBeLessThanOrEqual(2 * 60 * 60);
+
+      expectCappedMaxAge(maxAge, 2 * 60 * 60, { requestStartedAt, requestFinishedAt });
       expect(persisted?.expiresAt.getTime()).toBeLessThanOrEqual(closesAt.getTime());
       expect(persisted?.expiresAt.getTime()).toBeGreaterThanOrEqual(closesAt.getTime() - 1000);
-      expect(Math.abs(
-        persisted!.expiresAt.getTime() - requestStartedAt - maxAge * 1000,
-      )).toBeLessThanOrEqual(1000);
+      expectCookieAndRowAgree(persisted!.expiresAt, maxAge, {
+        requestStartedAt,
+        requestFinishedAt,
+      });
     });
 
     it('never extends an existing earlier UserSession expiry', async () => {
@@ -384,13 +437,13 @@ describe('GET /api/auth/session-link/[token]', () => {
       });
 
       const response = await GET(makeRequest(token), makeContext(token));
+      const requestFinishedAt = Date.now();
 
       const setCookie = response.headers.get('Set-Cookie');
       const maxAge = Number(setCookie?.match(/Max-Age=(\d+)/)?.[1]);
       const persisted = await repos.userSession.findByToken(existingSession.token);
       expect(setCookie).toContain(`session=${existingSession.token}`);
-      expect(maxAge).toBeGreaterThanOrEqual(60 * 60 - 1);
-      expect(maxAge).toBeLessThanOrEqual(60 * 60);
+      expectCappedMaxAge(maxAge, 60 * 60, { requestStartedAt, requestFinishedAt });
       expect(persisted?.expiresAt.getTime()).toBeLessThanOrEqual(originalExpiry.getTime());
       expect(persisted?.expiresAt.getTime()).toBeGreaterThanOrEqual(originalExpiry.getTime() - 1000);
     });
@@ -409,16 +462,18 @@ describe('GET /api/auth/session-link/[token]', () => {
       });
 
       const response = await GET(makeRequest(token), makeContext(token));
+      const requestFinishedAt = Date.now();
 
       const setCookie = response.headers.get('Set-Cookie');
       const maxAge = Number(setCookie?.match(/Max-Age=(\d+)/)?.[1]);
       const sessionToken = setCookie?.match(/session=([^;]+)/)?.[1];
       const persisted = await repos.userSession.findByToken(sessionToken!);
-      expect(maxAge).toBeGreaterThanOrEqual(7 * 24 * 60 * 60 - 1);
-      expect(maxAge).toBeLessThanOrEqual(7 * 24 * 60 * 60);
-      expect(Math.abs(
-        persisted!.expiresAt.getTime() - requestStartedAt - maxAge * 1000,
-      )).toBeLessThanOrEqual(1000);
+
+      expectCappedMaxAge(maxAge, 7 * 24 * 60 * 60, { requestStartedAt, requestFinishedAt });
+      expectCookieAndRowAgree(persisted!.expiresAt, maxAge, {
+        requestStartedAt,
+        requestFinishedAt,
+      });
     });
 
     it('uses Max-Age=0 and immediate persisted expiry when the close is past', async () => {

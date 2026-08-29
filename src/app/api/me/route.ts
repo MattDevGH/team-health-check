@@ -1,9 +1,13 @@
 /**
  * GET /api/me — Current user profile
  *
- * Requirements: 13.1, 15.1, 2.1, 2.4
+ * Requirements: 13.1, 15.1, 2.1, 2.4; Manager Experience 1.1, 1.3
  * Thin route handler: extract member ID from auth context, return profile.
  * Uses getAuthContext for cookie-based authentication (no x-member-id header).
+ *
+ * Also returns the member's team and roles, which the navigation shell uses to
+ * build team-scoped links and to decide whether to offer Delivery-Manager-only
+ * destinations. Sending them here avoids a second round trip on every page.
  */
 
 import { NextRequest } from 'next/server';
@@ -36,5 +40,15 @@ export const GET = withErrorHandling(async (request: Request) => {
   const slackIdentityLink = await repos.slackIdentityLink.findByMemberId(auth.memberId);
   const slackLink = slackIdentityLink ? { slackUserId: slackIdentityLink.slackUserId } : null;
 
-  return Response.json({ ...member, slackLink });
+  // Prisma enforces the team foreign key, so an unresolvable team is
+  // unreachable in production. When it cannot be resolved the shell is told
+  // nothing rather than being handed an id it cannot name.
+  const teamRecord = await repos.team.findById(member.teamId);
+  const team = teamRecord ? { id: teamRecord.id, name: teamRecord.name } : null;
+
+  const roles = team
+    ? (await repos.teamMemberRole.findByMemberAndTeam(member.id, team.id)).map((r) => r.role)
+    : [];
+
+  return Response.json({ ...member, slackLink, team, roles });
 });

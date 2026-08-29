@@ -372,11 +372,41 @@ item 3 on the deferred dashboard UX list and would give a durable handle.
 - Both live closes and scheduler ticks returned 200, all ten expected
   aggregates were verified, and the trends API correctly transitioned from the
   one-session threshold response to two-session data.
-- **Suite flake to watch (2026-08-25):** one full run reported a single test
-  failure that did not reproduce across four subsequent full runs, and the
-  failing test's identity was lost to truncated output. Not diagnosed. If it
-  recurs, capture full output — a nondeterministic test undermines the CI
-  skip/isolation enforcement Task 25.6 depends on.
+- **Suite flake (2026-08-25) — probably explained on 2026-08-28.** One full run
+  reported a single failure that did not reproduce, and the failing test's
+  identity was lost to truncated output. The scheduler tick was later found to
+  run on two clocks: it reconciled against its injected clock but stamped
+  `scheduledCloseAt` from the wall clock, so the closing-reminder tests passed
+  or failed according to whether the run happened before or after Friday 17:00
+  UTC. Fixed in `7648e21`; the tick now builds its own session service bound to
+  the tick instant. Treat the 2026-08-25 flake as likely the same defect, but
+  it was never confirmed.
+- **Two further flakes, both identified and fixed on 2026-08-29.** An earlier
+  note here speculated about a day-boundary effect; that was wrong, and neither
+  cause was time-of-day related.
+
+  1. **Fixed timing tolerances in `session-link/[token]/route.test.ts`.** CI
+     failed a *docs-only* commit with `expected 1001 to be less than or equal to
+     1000`. The route sets `expiresAt` inside `establishSessionLinkAuth` and
+     computes `Max-Age` from a later `Date.now()`, so any pause between the two
+     shortens `Max-Age`. Three assertions compared the drift against constants,
+     which is a claim about how fast the machine is, not about the code. They
+     now bound by the measured request window: the cap is asserted exactly
+     (the security-relevant direction), the lower bound allows for however long
+     the request took. `expectCappedMaxAge` and `expectCookieAndRowAgree` in
+     that file are the shared helpers.
+  2. **Substring collisions in `csv-export.property.test.ts` Property 19.** The
+     leak check searches the whole CSV for each generated member name. A name of
+     `e C` lives inside `Response Count` in the header, so fast-check eventually
+     generated one and reported a leak that had not happened. `ing` inside
+     `q-delivering-value` would have done the same. Names that are part of the
+     export's own fixed text are now excluded, which leaves the property at full
+     strength.
+
+  **Lesson worth keeping:** both were found only because a run's full output was
+  captured rather than filtered to a summary line. When a flake appears, capture
+  the failure block *before* re-running — the identity is the whole difficulty,
+  and a lost occurrence costs days of guessing.
 - Latest validation: **147 Vitest files / 1193 tests, plus 27 Playwright tests with zero skips, all passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
@@ -581,11 +611,17 @@ All stages must pass. Branch protection requires CI green before merge.
 - `design.md` — Architecture, data models, 34 correctness properties, testing strategy, SOLID, TDD, SlackInteractionQueue, documentation-as-code CI (complete)
 - `tasks.md` — 28 task groups, ~120 sub-tasks including property tests (complete)
 
-### Open spec: `.kiro/specs/integration-hardening/`
+### Closed spec: `.kiro/specs/integration-hardening/`
 - `requirements.md` — 13 requirements covering auth/cookie foundation, session-link enrichment, response submission, protected routes, notification wiring, Slack identity, Turso production DB, E2E tests, MSW alignment, and repo hygiene
 - `design.md` — Integration architecture, 12 correctness properties, direct-AuthContext auth design, cookie scoping, notification sink pattern
-- `tasks.md` — Tasks 1–21 record the original pass, Task 22 records completed acceptance regressions, and open Tasks 23–26 define auth/session, Slack, automated evidence, and final merge closure
-- Do not mark this spec complete or create the lifecycle-management spec until Tasks 23–26 and the final PR gates pass
+- `tasks.md` — Tasks 1–21 record the original pass, Task 22 records completed acceptance regressions, Tasks 23–26 covered auth/session, Slack, automated evidence, and final merge closure
+- Complete: merged to `master` as `7eba5f6` on 2026-08-26
+
+### Open spec: `.kiro/specs/manager-experience/` (written 2026-08-28)
+- `requirements.md` — 5 requirements plus 2 NFRs: shared navigation, session lifecycle control, dashboard comprehension, first-run guidance, ambiguous-identity guard
+- `design.md` — 9 key decisions, 6 correctness properties, per-tier testing strategy, explicit out-of-scope list
+- `tasks.md` — 9 task groups across 5 phases with three checkpoints; phase 5 (the identity guard) may be pulled forward if a colleague hits the conflict first
+- **Scope decision (2026-08-28):** multi-team membership is *not* in scope. `TeamMember` is unique on `(teamId, name, email)`, so one email can exist in several teams, while `auth.service.ts:158` resolves it with `findFirst` — an arbitrary row. The agreed approach is to guard and document: reject the member addition that would create the collision, refuse to issue a magic link for an already-ambiguous email, and state the one-team constraint in the README. Proper multi-team support needs an identity model above `TeamMember` and is its own future spec
 
 ---
 
@@ -602,6 +638,7 @@ All stages must pass. Branch protection requires CI green before merge.
 - **`authorizeDeliveryManager`**: Extends team membership check with delivery_manager role requirement
 - **Protected routes**: `/api/me/*`, `/api/teams` GET/POST, team exports, session details, participation, responses, and core team settings/trends/member/session routes use cookie AuthContext with requested-resource ownership checks; Task 23.2 route authorization is complete
 - **Member management**: GET/POST/PATCH return a stable member-summary DTO; Delivery Manager additions serialize that exact DTO into an actor-bound `member_added` audit and atomically persist member/default-role/audit; role replacement and removal retain final-manager protection
+- **Session context for the shell**: `GET /api/me` returns `team: { id, name } | null` and `roles: string[]` alongside the member profile, resolved through `repos.team.findById` and `repos.teamMemberRole.findByMemberAndTeam`. The navigation shell reads these to build team-scoped links and to omit Delivery-Manager-only destinations rather than rendering links that 403. `team` is null only when the team record cannot be resolved, which the Prisma foreign key makes unreachable in production
 - **Slack identity**: Pairing derives memberId from AuthContext (never the request body) and `createContainer` wires `slackIdentityLinkRepo` into `AuthService`, so a verified code persists/upserts the link. `DELETE /api/me/slack-link` deletes the record before reporting success, and `GET /api/me` returns the persisted `slackLink`, so status survives reload/restart. The `/me` page's `SlackSection` has a pairing-code input for the unlinked state. Task 24.1 is complete
 - **On-demand prompts**: `/healthcheck` delegates to `HealthCheckPromptService`, which resolves the linked member, the team's open session, the outstanding questions for their cadence preference, and a reused-or-minted session link; the route returns interactive score blocks with a browser fallback. An explicit command is never refused for away/reminders-off/outside-window state
 - **Notification wiring**: Newly-opened prompts reach NotificationService and the production Slack sink, which now gates delivery on Slack link, availability, and the team's delivery window in the team timezone; closing reminders, persistent retry storage, and later-tick draining remain Task 24 blockers
@@ -622,10 +659,67 @@ All stages must pass. Branch protection requires CI green before merge.
 Tasks 1–26 complete. Merged to `master` as `7eba5f6` on 2026-08-26, with `ci`
 and `e2e` green on master afterwards.
 
-### Non-functional baseline — agreed plan (2026-08-26)
+### Manager experience — in progress (2026-08-28)
 
-Current branch: `feat/security-accessibility-baseline`. Assessment of where the
-suite actually stands, and the agreed order of work.
+Current branch: `feat/manager-experience`. Spec written. Phase 1 in progress:
+tasks 1.1–1.6 are complete. Phase 1 is finished; task 2 is the checkpoint.
+
+**Accessibility position.** Axe now covers the shell on settings, dashboard and
+profile, plus three states a page-level audit never reaches: the skip link once
+focused (it is clipped to 1×1 and skipped by axe until then), the sign-out
+failure message, and the dashboard at 320px — the width WCAG 2.1 AA 1.4.10
+actually specifies, being 1280px at 400% zoom. Focus order through the shell is
+asserted in `e2e/navigation.spec.ts`, since axe cannot judge it. **A
+screen-reader pass has still not happened**, and no AA conformance claim should
+be made without one.
+
+**E2E fixture.** `allowConsoleErrors(page, pattern)` in `e2e/fixtures.ts` scopes
+an expected console error to one test. Some states can only be reached by
+provoking a failed request, and the browser logs it; widening the global
+allowlist would stop the suite noticing real 500s.
+
+**E2E seeding.** `seedTeam` clears `UserSession`, `MagicLink` and
+`SlackIdentityLink` for every member of the team before deleting them, not just
+its own member — a team can also hold `seedMember` members, and deleting one who
+has signed in fails a foreign key when `beforeAll` re-runs after a failure.
+
+**Mounting.** `src/app/teams/[teamId]/layout.tsx` and `src/app/me/layout.tsx`
+render `<AppShell>`. Mounting per segment rather than by a runtime check means
+`/`, `/auth/*` and `/session/[token]` cannot render it — they are not in those
+trees. The shell owns the page's single `main` landmark, so the four
+authenticated pages had their own `<main>` wrappers converted to `div`.
+
+**Requirement 1.7 cannot be tested in jsdom.** Rendering a page component never
+composes its layouts, so "this route has no navigation" passes there whether or
+not a layout wraps it in production. It is covered by
+`src/tests/contracts/app-shell-mounting.test.ts`, which scans the route tree and
+pins which layouts mount the shell, plus `e2e/navigation.spec.ts`.
+
+**E2E rate-limit trap.** Magic links are limited to five per email per hour,
+process-wide. A spec that signs the same member in from many tests stops
+receiving tokens partway through and hangs on the verification page, far from
+the cause. `seedMember` in `e2e/db.ts` exists so each test can use its own
+member; leave headroom for CI's two retries.
+
+The shell holds three states: `loading` keeps the navigation landmark and
+offers only Profile, because a guessed team id produces links that 404;
+`ready` offers Dashboard, Settings, Profile and — for a delivery manager —
+the audit log; `anonymous` (401 or unreachable) removes the shell entirely and
+leaves the page to explain itself. The audit log is the only
+Delivery-Manager-only *read* in the API, so it is the only role-gated nav entry.
+
+Sign out is the shell's one action, and the first caller of
+`POST /api/auth/logout` in the product. It navigates only after the server has
+answered: clearing the cookie without a successful revoke would leave a working
+`UserSession` row while telling the member they are signed out.
+Agreed as the milestone before deployment, because the tool is about to be
+trialled with a real team and then shared with other delivery managers, and it
+currently has no navigation and no UI for its central action.
+
+### Non-functional baseline — completed 2026-08-26
+
+Merged to `master` as `67e16d5`. Assessment of where the suite stood, and the
+order of work that was carried out.
 
 **Security coverage today.** 67 assertions of 401/403 across 25 route test
 files, plus Slack signature verification, rate limiting, privacy suppression,
@@ -677,9 +771,13 @@ is the exact failure mode the closure audit existed to correct.
 
 ### Deferred follow-up milestones
 
-- Session lifecycle management UI and explicit materialisation state
-- Dashboard chart clarity, Latest Session redesign, and question affordances
-- Design system / component library, dark mode, responsive shared navigation
+Session lifecycle UI, dashboard clarity, and shared navigation moved out of this
+list on 2026-08-28 into `.kiro/specs/manager-experience/`.
+
+- Multi-team membership (guarded against, not supported — see the spec status above)
+- Deployment: Vercel, Turso, and the production cron trigger. Explicitly after the manager experience
+- Delivery-manager user guide in `docs/`, once in-app guidance exists
+- Design system / component library and dark mode
 - CSRF protection and generalized non-auth rate limiting
 - Load/performance testing and operational telemetry
 - Optional Slack conversational events and richer interaction feedback beyond Requirements 7–8
