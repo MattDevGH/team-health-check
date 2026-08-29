@@ -117,7 +117,7 @@ describe('AuditService', () => {
         userId: 'user-1',
       });
 
-      const entries = await auditService.getLog(teamId);
+      const { entries } = await auditService.getLog(teamId);
 
       expect(entries).toHaveLength(3);
       expect(entries[0].changeType).toBe('third_change');
@@ -137,7 +137,7 @@ describe('AuditService', () => {
         await new Promise(resolve => setTimeout(resolve, 5));
       }
 
-      const entries = await auditService.getLog(teamId, { limit: 2 });
+      const { entries } = await auditService.getLog(teamId, { limit: 2 });
       expect(entries).toHaveLength(2);
       // Should be the two most recent
       expect(entries[0].changeType).toBe('change_4');
@@ -158,20 +158,26 @@ describe('AuditService', () => {
 
       // Get the first page
       const firstPage = await auditService.getLog(teamId, { limit: 2 });
-      expect(firstPage).toHaveLength(2);
+      expect(firstPage.entries).toHaveLength(2);
 
-      // Use the last entry's id as cursor
-      const cursor = firstPage[firstPage.length - 1].id;
-      const secondPage = await auditService.getLog(teamId, { cursor, limit: 2 });
-      expect(secondPage).toHaveLength(2);
-      expect(secondPage[0].changeType).toBe('change_2');
-      expect(secondPage[1].changeType).toBe('change_1');
+      // The service supplies the cursor, so a caller no longer has to know it
+      // is the last entry's id
+      expect(firstPage.nextCursor).toBe(firstPage.entries[1].id);
+
+      const secondPage = await auditService.getLog(teamId, {
+        cursor: firstPage.nextCursor!,
+        limit: 2,
+      });
+      expect(secondPage.entries).toHaveLength(2);
+      expect(secondPage.entries[0].changeType).toBe('change_2');
+      expect(secondPage.entries[1].changeType).toBe('change_1');
     });
 
     it('should return empty array for a team with no entries', async () => {
       const otherTeam = await repos.team.create({ name: 'Other Team' });
-      const entries = await auditService.getLog(otherTeam.id);
+      const { entries, nextCursor } = await auditService.getLog(otherTeam.id);
       expect(entries).toHaveLength(0);
+      expect(nextCursor).toBeNull();
     });
   });
 
@@ -203,7 +209,7 @@ describe('AuditService', () => {
         userId: 'user-1',
       });
 
-      const entries = await auditService.getLog(teamId);
+      const { entries } = await auditService.getLog(teamId);
       const entry = entries[0];
 
       // Verify the entry contains config-level data, not scores

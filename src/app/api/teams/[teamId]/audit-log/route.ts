@@ -49,8 +49,9 @@ export const GET = withErrorHandling(async (request: Request, context) => {
     ? parseInt(url.searchParams.get('limit')!, 10)
     : undefined;
 
-  // Get audit log (most recent first — Requirement 18.4)
-  const entries = await container.auditLog.getLog(teamId, { cursor, limit });
+  // Get audit log (most recent first — Requirement 18.4) with the cursor the
+  // client needs to ask for the next page (Requirement 18.5)
+  const page = await container.auditLog.getLog(teamId, { cursor, limit });
 
-  return Response.json(entries);
+  return Response.json(page);
 });

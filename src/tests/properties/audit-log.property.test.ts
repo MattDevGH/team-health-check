@@ -56,7 +56,7 @@ describe('Audit Log Properties', () => {
             }
 
             // Retrieve and verify completeness
-            const log = await auditService.getLog(teamId, { limit: 100 });
+            const { entries: log } = await auditService.getLog(teamId, { limit: 100 });
             expect(log.length).toBe(entries.length);
 
             // Verify each entry has all required fields (Requirement 18.2)
@@ -94,7 +94,7 @@ describe('Audit Log Properties', () => {
               });
             }
 
-            const log = await auditService.getLog(teamId, { limit: 100 });
+            const { entries: log } = await auditService.getLog(teamId, { limit: 100 });
 
             // The audit log records only team-level configuration events —
             // no individual Response scores should appear (Requirement 18.6).
@@ -175,7 +175,7 @@ describe('Audit Log Properties', () => {
               await new Promise(resolve => setTimeout(resolve, 1));
             }
 
-            const log = await auditService.getLog(teamId, { limit: 100 });
+            const { entries: log } = await auditService.getLog(teamId, { limit: 100 });
 
             // Verify reverse chronological order
             for (let i = 0; i < log.length - 1; i++) {

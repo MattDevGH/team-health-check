@@ -13,7 +13,7 @@
  */
 
 import { test, expect } from './fixtures';
-import { countUserSessions, seedMember, seedSession, seedTeam } from './db';
+import { countUserSessions, seedAuditEntry, seedMember, seedSession, seedTeam } from './db';
 import { signIn } from './sign-in';
 
 /**
@@ -27,6 +27,7 @@ const MEMBER_KEYS = [
   'settings',
   'profile',
   'navigate',
+  'audit-log',
   'skip-link',
   'focus-order',
   'sign-out',
@@ -40,6 +41,7 @@ const emailFor = (key: string) => `nav-${key}@e2e.invalid`;
 
 let teamId = '';
 let sessionToken = '';
+const memberIds: Partial<Record<MemberKey, string>> = {};
 
 test.beforeAll(() => {
   const team = seedTeam({ teamName: 'Navigation Team', memberEmail: emailFor('owner') });
@@ -52,7 +54,7 @@ test.beforeAll(() => {
   }).token;
 
   for (const key of MEMBER_KEYS) {
-    seedMember({ teamId: team.teamId, email: emailFor(key) });
+    memberIds[key] = seedMember({ teamId: team.teamId, email: emailFor(key) }).memberId;
   }
 });
 
@@ -136,6 +138,32 @@ test.describe('using the shell', () => {
     // The proof a skip link works is where focus ends up, not that the URL
     // gained a fragment
     await expect(page.locator('main')).toBeFocused();
+  });
+
+  test('reaches a working audit log from the nav', async ({ page }) => {
+    // Every destination the shell offers has to survive being followed. This
+    // page crashed on a response-shape mismatch that every unit test missed:
+    // the route returned a bare array while the page destructured
+    // `data.entries`, which on an array is `Array.prototype.entries` — a
+    // function, which React's setState then called as a state updater.
+    // Only loading the real page against the real route catches that.
+    seedAuditEntry({
+      teamId,
+      userId: memberIds['audit-log']!,
+      changeType: 'privacy_mode_changed',
+      previousValue: 'attributed',
+      newValue: 'anonymous',
+    });
+
+    await signIn(page, emailFor('audit-log'));
+    await page.goto(`/teams/${teamId}/dashboard`);
+
+    await page.getByRole('link', { name: 'Audit log' }).click();
+
+    await expect(page).toHaveURL(`/teams/${teamId}/audit-log`);
+    await expect(page.getByRole('heading', { name: 'Audit Log' })).toBeVisible();
+    await expect(page.getByText('privacy_mode_changed')).toBeVisible();
+    await expect(page.getByText(/no audit log entries/i)).toHaveCount(0);
   });
 
   test('puts the shell in a sensible tab order before the page content', async ({ page }) => {
