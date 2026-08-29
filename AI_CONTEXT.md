@@ -660,9 +660,25 @@ All stages must pass. Branch protection requires CI green before merge.
 Tasks 1–26 complete. Merged to `master` as `7eba5f6` on 2026-08-26, with `ci`
 and `e2e` green on master afterwards.
 
-### Manager experience — in progress (2026-08-28)
+### Pending manual verification — nav shell (raised 2026-08-29)
 
-Current branch: `feat/manager-experience`. Spec written. Phase 1 in progress:
+Matt reviewed the shell in the browser and confirmed the active-page indicator
+reads clearly and that the skip link works — though he finds it redundant on
+today's short pages, worth revisiting once phase 3 adds chrome above the
+content. His session ended when the Audit Log page crashed, so **sign out** and
+**narrow-window behaviour** are still unchecked by hand, along with the
+**screen-reader pass**. Raise these at his next manual testing session. Both
+remaining items are covered by automated tests — but so was the audit log page,
+whose route test and UI mock each asserted a different response shape and both
+passed.
+
+### Manager experience — phase 1 complete, phase 3 starting (2026-08-29)
+
+Phase 1 merged to `master` via PR #8 (`5bda63b`). Two follow-up fixes found by
+using the app merged after it: PR #9 (magic link claimed twice) and PR #10
+(audit log response shape).
+
+Historical note from phase 1:
 tasks 1.1–1.6 are complete. Phase 1 is finished; task 2 is the checkpoint.
 
 **Accessibility position.** Axe now covers the shell on settings, dashboard and

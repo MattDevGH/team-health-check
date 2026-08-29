@@ -197,10 +197,24 @@ a colleague hits the conflict before the UI work lands.
 
 - [ ] 3. Session lifecycle control
 
-  - [ ] 3.1 Derive Session_State
+  - [x] 3.1 Derive Session_State
     - Write failing unit tests for a pure `deriveSessionState(sessions, aggregatedSessionIds)` covering all four states from the design table
     - **Property 2: exactly one state is derivable from any session list, and the offered control matches it**
     - _Requirements: 2.4, 2.7_
+    - **Done.** `src/components/session-lifecycle/derive-session-state.ts`.
+      Eight example tests, three properties, 11 assertions in total.
+    - The latest closed session is chosen by `actualCloseAt`, not array order:
+      the sessions endpoint gives no ordering guarantee, and reading the array
+      as ordered would show a manager the wrong check. A closed session with no
+      recorded close time sorts oldest, which keeps the comparison total.
+    - **Honest note on the properties.** They cover tie-breaking between equal
+      close times, materialisation sets naming sessions the team never had, and
+      the invariant that the control never contradicts the status. They do not
+      dominate the example tests here — a `findLast`-instead-of-`find` mutation
+      survived both, correctly, because the service enforces at most one open
+      session per team so the two are equivalent in practice. The examples carry
+      most of the weight at this task; the properties will matter more once the
+      panel feeds them real API data.
 
   - [ ] 3.2 Open a session from the dashboard
     - Write a failing component test: a Delivery Manager sees an open control when nothing is open; activating it POSTs to `/api/teams/{id}/sessions` and the panel then shows the collecting state without a reload
