@@ -16,6 +16,21 @@ export interface AuditServiceDeps {
   auditLogRepo: AuditLogRepository;
 }
 
+/**
+ * A page of audit entries plus the cursor to continue from.
+ *
+ * `nextCursor` is null when this page is the end of the log. Returning the
+ * entries alone would make cursor pagination unusable by any client: the
+ * repository supports `cursor`, but nothing could ever discover what to pass.
+ */
+export interface AuditLogPage {
+  entries: AuditLogEntry[];
+  nextCursor: string | null;
+}
+
+/** Entries per page when a caller does not ask for a specific limit. */
+export const DEFAULT_AUDIT_PAGE_SIZE = 50;
+
 export interface AuditService {
   log(entry: {
     teamId: string;
@@ -24,7 +39,7 @@ export interface AuditService {
     newValue: string;
     userId: string;
   }): Promise<void>;
-  getLog(teamId: string, pagination?: { cursor?: string; limit?: number }): Promise<AuditLogEntry[]>;
+  getLog(teamId: string, pagination?: { cursor?: string; limit?: number }): Promise<AuditLogPage>;
 }
 
 /**
@@ -52,16 +67,28 @@ export function createAuditService(deps: AuditServiceDeps): AuditService {
   }
 
   /**
-   * Retrieve audit log entries for a team.
+   * Retrieve a page of audit log entries for a team.
    * Returns entries in reverse chronological order (most recent first).
-   * Supports cursor-based pagination.
    * Requirement 18.4, 18.5
+   *
+   * The limit is always passed explicitly so the page size is known here, and a
+   * full page can be distinguished from the end of the log. A full page yields
+   * a cursor; a short one means there is nothing after it.
+   *
+   * This can hand back a cursor for a log that happens to end on an exact page
+   * boundary, costing one empty request. The alternative — fetching one extra
+   * row to peek — reads a record the caller never asked for on every request.
    */
   async function getLog(
     teamId: string,
     pagination?: { cursor?: string; limit?: number }
-  ): Promise<AuditLogEntry[]> {
-    return auditLogRepo.findByTeamId(teamId, pagination);
+  ): Promise<AuditLogPage> {
+    const limit = pagination?.limit ?? DEFAULT_AUDIT_PAGE_SIZE;
+    const entries = await auditLogRepo.findByTeamId(teamId, { ...pagination, limit });
+
+    const nextCursor = entries.length === limit ? entries[entries.length - 1].id : null;
+
+    return { entries, nextCursor };
   }
 
   return { log, getLog };

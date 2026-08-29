@@ -42,6 +42,41 @@ async function createSession(memberId: string): Promise<string> {
   return token;
 }
 
+/** Seeds a team whose signed-in member is its delivery manager. */
+async function seedManagedTeam(name: string) {
+  await repos.team.create({ name });
+  const teams = await repos.team.list();
+  const team = teams[teams.length - 1];
+
+  const member = await repos.teamMember.create({
+    teamId: team.id,
+    name: `DM ${name}`,
+    email: `dm-${team.id}@audit.test`,
+  });
+  await repos.teamMemberRole.assign({
+    memberId: member.id,
+    teamId: team.id,
+    role: 'delivery_manager',
+  });
+
+  return { team, member, token: await createSession(member.id) };
+}
+
+/** Seeds `count` audit entries for a team, oldest first. */
+async function seedEntries(teamId: string, userId: string, count: number, prefix: string) {
+  for (let i = 0; i < count; i++) {
+    await repos.auditLog.create({
+      teamId,
+      changeType: `${prefix}_${i}`,
+      previousValue: 'a',
+      newValue: 'b',
+      userId,
+    });
+    // Ordering is by timestamp, so entries need distinct ones
+    await new Promise(resolve => setTimeout(resolve, 2));
+  }
+}
+
 // ─── GET /api/teams/[teamId]/audit-log ──────────────────────────────────────────
 
 describe('GET /api/teams/[teamId]/audit-log', () => {
@@ -118,7 +153,8 @@ describe('GET /api/teams/[teamId]/audit-log', () => {
     const res = await GET(req, ctx);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(Array.isArray(body)).toBe(true);
+    expect(Array.isArray(body.entries), 'entries must be an array').toBe(true);
+    expect(body, 'the response must carry a cursor for pagination').toHaveProperty('nextCursor');
   });
 
   it('returns audit log entries most recent first', async () => {
@@ -158,9 +194,10 @@ describe('GET /api/teams/[teamId]/audit-log', () => {
     const res = await GET(req, ctx);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toHaveLength(2);
-    expect(body[0].changeType).toBe('second_change');
-    expect(body[1].changeType).toBe('first_change');
+    expect(body.entries).toHaveLength(2);
+    expect(body.entries[0].changeType).toBe('second_change');
+    expect(body.entries[1].changeType).toBe('first_change');
+    expect(body.nextCursor, 'a partial page has nothing after it').toBeNull();
   });
 
   it('supports limit pagination parameter', async () => {
@@ -194,6 +231,42 @@ describe('GET /api/teams/[teamId]/audit-log', () => {
     const res = await GET(req, ctx);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toHaveLength(2);
+    expect(body.entries).toHaveLength(2);
+  });
+
+  // The page's "Load more" button is driven entirely by nextCursor. Without it
+  // the button can never appear, so pagination is unreachable from the browser
+  // however well the repository supports it.
+
+  it('returns a cursor when the page is full, so more can be fetched', async () => {
+    const { team, token, member } = await seedManagedTeam('Audit Cursor Team');
+    await seedEntries(team.id, member.id, 3, 'cursor_change');
+
+    const { req, ctx } = makeRequest({ cookie: token, teamId: team.id, query: '?limit=2' });
+    const body = await (await GET(req, ctx)).json();
+
+    expect(body.entries).toHaveLength(2);
+    expect(body.nextCursor, 'a full page implies there may be more').toBe(body.entries[1].id);
+  });
+
+  it('continues from the cursor and reports the end of the log', async () => {
+    const { team, token, member } = await seedManagedTeam('Audit Continue Team');
+    await seedEntries(team.id, member.id, 3, 'continue_change');
+
+    const firstPage = makeRequest({ cookie: token, teamId: team.id, query: '?limit=2' });
+    const first = await (await GET(firstPage.req, firstPage.ctx)).json();
+
+    const secondPage = makeRequest({
+      cookie: token,
+      teamId: team.id,
+      query: `?limit=2&cursor=${first.nextCursor}`,
+    });
+    const second = await (await GET(secondPage.req, secondPage.ctx)).json();
+
+    expect(second.entries, 'the third entry, alone').toHaveLength(1);
+    expect(second.entries.map((entry: { id: string }) => entry.id)).not.toContain(
+      first.entries[0].id,
+    );
+    expect(second.nextCursor, 'a partial page is the end of the log').toBeNull();
   });
 });

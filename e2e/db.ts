@@ -227,6 +227,40 @@ export function seedMember(options: {
   });
 }
 
+/**
+ * Seeds one audit log entry for a team.
+ *
+ * Exists so the audit log page can be exercised with real content rather than
+ * only its empty state: the page crashed on a response-shape mismatch that the
+ * empty state would have rendered without complaint.
+ */
+export function seedAuditEntry(options: {
+  teamId: string;
+  userId: string;
+  changeType: string;
+  previousValue?: string;
+  newValue?: string;
+}): { id: string } {
+  return write(db => {
+    const id = `e2e-audit-${slug(options.teamId)}-${slug(options.changeType)}`;
+
+    db.prepare('DELETE FROM AuditLogEntry WHERE id = ?').run(id);
+    db.prepare(
+      'INSERT INTO AuditLogEntry (id, teamId, changeType, previousValue, newValue, userId, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(
+      id,
+      options.teamId,
+      options.changeType,
+      options.previousValue ?? 'before',
+      options.newValue ?? 'after',
+      options.userId,
+      new Date().toISOString(),
+    );
+
+    return { id };
+  });
+}
+
 /** Seeds one session plus the member's link to it, returning that link token. */
 export function seedSession(options: {
   teamId: string;
