@@ -372,11 +372,24 @@ item 3 on the deferred dashboard UX list and would give a durable handle.
 - Both live closes and scheduler ticks returned 200, all ten expected
   aggregates were verified, and the trends API correctly transitioned from the
   one-session threshold response to two-session data.
-- **Suite flake to watch (2026-08-25):** one full run reported a single test
-  failure that did not reproduce across four subsequent full runs, and the
-  failing test's identity was lost to truncated output. Not diagnosed. If it
-  recurs, capture full output — a nondeterministic test undermines the CI
-  skip/isolation enforcement Task 25.6 depends on.
+- **Suite flake (2026-08-25) — probably explained on 2026-08-28.** One full run
+  reported a single failure that did not reproduce, and the failing test's
+  identity was lost to truncated output. The scheduler tick was later found to
+  run on two clocks: it reconciled against its injected clock but stamped
+  `scheduledCloseAt` from the wall clock, so the closing-reminder tests passed
+  or failed according to whether the run happened before or after Friday 17:00
+  UTC. Fixed in `7648e21`; the tick now builds its own session service bound to
+  the tick instant. Treat the 2026-08-25 flake as likely the same defect, but
+  it was never confirmed.
+- **Second, separate flake to watch (2026-08-28, ~00:00 local).** One full run
+  reported a single failure; six subsequent full runs passed. The failing test's
+  identity was again not captured. The run coincided with the local date rolling
+  from 2026-08-28 to 2026-08-29, which is the signature of a test that reads the
+  clock twice and straddles a day boundary — it would fail at most once a day,
+  which fits both the rarity and the difficulty of reproducing it. **Not
+  diagnosed.** If it recurs, capture the full output before re-running: the
+  identity is the whole difficulty, and a second lost occurrence costs another
+  day of guessing.
 - Latest validation: **147 Vitest files / 1193 tests, plus 27 Playwright tests with zero skips, all passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
@@ -632,8 +645,26 @@ and `e2e` green on master afterwards.
 ### Manager experience — in progress (2026-08-28)
 
 Current branch: `feat/manager-experience`. Spec written. Phase 1 in progress:
-tasks 1.1–1.5 are complete. The shell is mounted and live: only 1.6 (the
-accessibility and manual keyboard pass) remains before the phase-1 checkpoint.
+tasks 1.1–1.6 are complete. Phase 1 is finished; task 2 is the checkpoint.
+
+**Accessibility position.** Axe now covers the shell on settings, dashboard and
+profile, plus three states a page-level audit never reaches: the skip link once
+focused (it is clipped to 1×1 and skipped by axe until then), the sign-out
+failure message, and the dashboard at 320px — the width WCAG 2.1 AA 1.4.10
+actually specifies, being 1280px at 400% zoom. Focus order through the shell is
+asserted in `e2e/navigation.spec.ts`, since axe cannot judge it. **A
+screen-reader pass has still not happened**, and no AA conformance claim should
+be made without one.
+
+**E2E fixture.** `allowConsoleErrors(page, pattern)` in `e2e/fixtures.ts` scopes
+an expected console error to one test. Some states can only be reached by
+provoking a failed request, and the browser logs it; widening the global
+allowlist would stop the suite noticing real 500s.
+
+**E2E seeding.** `seedTeam` clears `UserSession`, `MagicLink` and
+`SlackIdentityLink` for every member of the team before deleting them, not just
+its own member — a team can also hold `seedMember` members, and deleting one who
+has signed in fails a foreign key when `beforeAll` re-runs after a failure.
 
 **Mounting.** `src/app/teams/[teamId]/layout.tsx` and `src/app/me/layout.tsx`
 render `<AppShell>`. Mounting per segment rather than by a runtime check means

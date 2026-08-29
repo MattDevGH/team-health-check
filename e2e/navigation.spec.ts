@@ -28,6 +28,7 @@ const MEMBER_KEYS = [
   'profile',
   'navigate',
   'skip-link',
+  'focus-order',
   'sign-out',
   'overflow',
   'reachable',
@@ -135,6 +136,36 @@ test.describe('using the shell', () => {
     // The proof a skip link works is where focus ends up, not that the URL
     // gained a fragment
     await expect(page.locator('main')).toBeFocused();
+  });
+
+  test('puts the shell in a sensible tab order before the page content', async ({ page }) => {
+    // Axe cannot judge focus order — it is one of the things an automated pass
+    // structurally misses, and the reason a manual keyboard check is still
+    // required. Recording the actual order at least makes a regression visible.
+    await signIn(page, emailFor('focus-order'));
+    await page.goto(`/teams/${teamId}/dashboard`);
+    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+
+    const order: string[] = [];
+    for (let i = 0; i < 6; i += 1) {
+      await page.keyboard.press('Tab');
+      order.push(
+        await page.evaluate(() => {
+          const el = document.activeElement;
+          if (!el || el === document.body) return '(none)';
+          return (el.textContent ?? '').trim() || el.tagName.toLowerCase();
+        }),
+      );
+    }
+
+    expect(order).toEqual([
+      'Skip to main content',
+      'Dashboard',
+      'Settings',
+      'Audit log',
+      'Profile',
+      'Sign out',
+    ]);
   });
 
   test('signs the member out and revokes the session in the database', async ({ page }) => {

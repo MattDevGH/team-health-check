@@ -130,11 +130,43 @@ a colleague hits the conflict before the UI work lands.
     - 1226 Vitest tests, 38 Playwright tests with zero skips, `tsc --noEmit`,
       lint, and build all green.
 
-  - [ ] 1.6 Accessibility pass over the shell
+  - [x] 1.6 Accessibility pass over the shell
     - Extend `e2e/accessibility.spec.ts` to cover the shell on the dashboard, settings, and profile
     - Manual keyboard pass: tab from page load, confirm the skip link appears on focus and moves focus to main content. Record the outcome here:
-      - Result: _(not yet run)_
+      - **Result:** driven from Playwright in Chromium, not by hand. Tabbing from
+        page load reaches `Skip to main content` first; it becomes visible on
+        focus; Enter moves focus onto `<main>` (asserted as focus, not as a URL
+        fragment). Full order is skip link → Dashboard → Settings → Audit log →
+        Profile → Sign out, then page content. Recorded as an assertion in
+        `e2e/navigation.spec.ts` so a regression is caught rather than
+        remembered.
+      - **Still outstanding, and not claimable from this:** a screen-reader pass
+        (NVDA or VoiceOver), and a human judgement on whether the announced
+        order and labels make sense. Automated checks find roughly a third to a
+        half of WCAG issues; none of them can tell you the experience is good.
     - _Requirements: NFR 1.1, 1.2, 1.3_
+    - **Axe coverage added:** the profile page (never audited before this
+      milestone), the shell with the skip link focused, the sign-out failure
+      message, and the dashboard at 320px.
+    - The skip link is clipped to 1×1 until focused, which axe treats as hidden
+      and skips — its contrast is only ever checked in the focused state.
+    - 320px is the width WCAG 2.1 AA 1.4.10 (Reflow) actually specifies, being a
+      1280px viewport at 400% zoom. The 375px check in the navigation spec is a
+      phone, not the criterion.
+    - The sign-out failure state needs a provoked 500, and the browser logs the
+      failed response, which the strict fixture rightly fails on. Rather than
+      widen the global allowlist and blind the suite to real 500s,
+      `allowConsoleErrors(page, pattern)` scopes the exception to the test that
+      asked for it.
+    - **Fixed while here:** `seedTeam` revoked only its own member's sessions
+      before deleting every member of the team, so re-running `beforeAll` after
+      a failure hit a foreign key once a team also held `seedMember` members who
+      had signed in. Cleanup is now team-wide across `UserSession`, `MagicLink`
+      and `SlackIdentityLink`. The a11y spec's three authenticated tests also
+      shared one email, which with CI's two retries could exceed the
+      five-per-hour magic-link limit; each test now has its own member.
+    - 1227 Vitest tests, 43 Playwright tests with zero skips, `tsc --noEmit`,
+      lint, and build all green.
 
 - [ ] 2. Checkpoint — navigation shell
   - Full suite, `tsc --noEmit`, lint, build, E2E. Ask the user if questions arise.

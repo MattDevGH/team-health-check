@@ -160,8 +160,15 @@ export function seedTeam(options: {
     }
     db.prepare('DELETE FROM HealthCheckSession WHERE teamId = ?').run(teamId);
     db.prepare('DELETE FROM TeamMemberRole WHERE teamId = ?').run(teamId);
-    db.prepare('DELETE FROM UserSession WHERE memberId = ?').run(memberId);
-    db.prepare('DELETE FROM MagicLink WHERE memberId = ?').run(memberId);
+
+    // Clear rows that reference *any* member of the team, not just the one this
+    // helper creates. A team can also hold members added by `seedMember`, and
+    // deleting a member who has signed in since fails the foreign key.
+    const membersOfTeam = 'SELECT id FROM TeamMember WHERE teamId = ?';
+    for (const table of ['UserSession', 'MagicLink', 'SlackIdentityLink']) {
+      db.prepare(`DELETE FROM ${table} WHERE memberId IN (${membersOfTeam})`).run(teamId);
+    }
+
     db.prepare('DELETE FROM TeamMember WHERE teamId = ?').run(teamId);
     db.prepare('DELETE FROM Team WHERE id = ?').run(teamId);
 
@@ -203,9 +210,9 @@ export function seedMember(options: {
     const memberId = `e2e-member-${slug(options.email)}`;
     const now = new Date().toISOString();
 
-    db.prepare('DELETE FROM UserSession WHERE memberId = ?').run(memberId);
-    db.prepare('DELETE FROM MagicLink WHERE memberId = ?').run(memberId);
-    db.prepare('DELETE FROM TeamMemberRole WHERE memberId = ?').run(memberId);
+    for (const table of ['UserSession', 'MagicLink', 'SlackIdentityLink', 'TeamMemberRole']) {
+      db.prepare(`DELETE FROM ${table} WHERE memberId = ?`).run(memberId);
+    }
     db.prepare('DELETE FROM TeamMember WHERE id = ?').run(memberId);
 
     db.prepare(

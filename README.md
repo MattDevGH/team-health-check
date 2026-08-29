@@ -487,7 +487,9 @@ Feature specifications at `.kiro/specs/`:
 
 ### Accessibility
 
-- **Colour contrast audited and fixed** — Playwright axe runs against seven states (genesis, settings, active feedback, confirmation, ended session, and both dashboard states) plus the expanded question drill-down. That audit found and fixed real WCAG AA failures: `text-gray-400` at 2.48–2.6 against white, and `bg-green-600`/`text-green-600` at 3.21. Pages outside those states are still unaudited.
+- **Colour contrast audited and fixed** — Playwright axe runs against the unauthenticated pages (home, sign-in, genesis), the feedback states (active, confirmation, ended), settings, both dashboard states plus the expanded question drill-down, the profile page, and three states the navigation shell adds: the skip link once focused, the sign-out failure message, and the dashboard at 320px. That audit found and fixed real WCAG AA failures: `text-gray-400` at 2.48–2.6 against white, and `bg-green-600`/`text-green-600` at 3.21.
+- **Reflow is checked at 320px** — the width WCAG 2.1 AA 1.4.10 specifies, being a 1280px viewport at 400% zoom. The 375px check in the navigation spec is a phone, not the criterion.
+- **No screen-reader pass yet** — axe finds roughly a third to a half of WCAG issues and cannot judge whether announced labels and order make sense. Focus order through the shell is asserted end-to-end, but AA conformance should not be claimed until a human has used the app with NVDA or VoiceOver.
 - ~~**No skip-to-content links**~~ — fixed on authenticated pages. The shell's skip link is first in tab order and its target carries `tabindex="-1"`, so activating it moves focus rather than only shifting the sequential start point. Verified end-to-end by asserting where focus lands, not that the URL gained a fragment.
 - **No focus management on route transitions** — screen readers aren't notified when the page changes.
 - **No reduced-motion support** — no `prefers-reduced-motion` media query handling.
