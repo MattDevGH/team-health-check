@@ -168,8 +168,32 @@ a colleague hits the conflict before the UI work lands.
     - 1227 Vitest tests, 43 Playwright tests with zero skips, `tsc --noEmit`,
       lint, and build all green.
 
-- [ ] 2. Checkpoint — navigation shell
+- [x] 2. Checkpoint — navigation shell
   - Full suite, `tsc --noEmit`, lint, build, E2E. Ask the user if questions arise.
+  - **Gates:** 1227 Vitest tests across 152 files, `tsc --noEmit`, lint with zero
+    warnings, production build, and 43 Playwright tests with zero skips. Five
+    consecutive full unit runs were clean after the fixes below.
+  - **Three flakes found and fixed during this checkpoint**, all pre-existing and
+    none introduced by phase 1:
+    1. The scheduler tick ran on two clocks (fixed in `7648e21` during 1.5).
+    2. `session-link/[token]/route.test.ts` compared timing drift against fixed
+       constants. CI failed a *docs-only* commit with `expected 1001 to be less
+       than or equal to 1000` — a claim about machine speed, not about the code.
+       Assertions now bound by the measured request window; the cap itself is
+       still asserted exactly, since that is the security-relevant direction.
+       Mutation-checked by adding 5 seconds to the route's `Max-Age`.
+    3. Property 19 in `csv-export.property.test.ts` searched the whole CSV for
+       each generated member name, so the name `e C` matched `Response Count` in
+       the header and reported a leak that had not happened.
+  - **The checkpoint earned its place.** None of these were visible from a
+    single green run; two were found only because full output was captured
+    instead of a summary line.
+  - **Outstanding for the user, not blocking phase 3:**
+    - A screen-reader pass (NVDA or VoiceOver). No AA conformance claim without it.
+    - A visual look at the shell. The Browser pane was not displayed, so no
+      screenshot was captured; the accessibility tree and computed styles were
+      checked instead.
+    - Whether to merge phase 1 to `master` now or continue on this branch.
 
 - [ ] 3. Session lifecycle control
 

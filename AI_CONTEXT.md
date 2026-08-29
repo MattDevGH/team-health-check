@@ -381,15 +381,32 @@ item 3 on the deferred dashboard UX list and would give a durable handle.
   UTC. Fixed in `7648e21`; the tick now builds its own session service bound to
   the tick instant. Treat the 2026-08-25 flake as likely the same defect, but
   it was never confirmed.
-- **Second, separate flake to watch (2026-08-28, ~00:00 local).** One full run
-  reported a single failure; six subsequent full runs passed. The failing test's
-  identity was again not captured. The run coincided with the local date rolling
-  from 2026-08-28 to 2026-08-29, which is the signature of a test that reads the
-  clock twice and straddles a day boundary — it would fail at most once a day,
-  which fits both the rarity and the difficulty of reproducing it. **Not
-  diagnosed.** If it recurs, capture the full output before re-running: the
-  identity is the whole difficulty, and a second lost occurrence costs another
-  day of guessing.
+- **Two further flakes, both identified and fixed on 2026-08-29.** An earlier
+  note here speculated about a day-boundary effect; that was wrong, and neither
+  cause was time-of-day related.
+
+  1. **Fixed timing tolerances in `session-link/[token]/route.test.ts`.** CI
+     failed a *docs-only* commit with `expected 1001 to be less than or equal to
+     1000`. The route sets `expiresAt` inside `establishSessionLinkAuth` and
+     computes `Max-Age` from a later `Date.now()`, so any pause between the two
+     shortens `Max-Age`. Three assertions compared the drift against constants,
+     which is a claim about how fast the machine is, not about the code. They
+     now bound by the measured request window: the cap is asserted exactly
+     (the security-relevant direction), the lower bound allows for however long
+     the request took. `expectCappedMaxAge` and `expectCookieAndRowAgree` in
+     that file are the shared helpers.
+  2. **Substring collisions in `csv-export.property.test.ts` Property 19.** The
+     leak check searches the whole CSV for each generated member name. A name of
+     `e C` lives inside `Response Count` in the header, so fast-check eventually
+     generated one and reported a leak that had not happened. `ing` inside
+     `q-delivering-value` would have done the same. Names that are part of the
+     export's own fixed text are now excluded, which leaves the property at full
+     strength.
+
+  **Lesson worth keeping:** both were found only because a run's full output was
+  captured rather than filtered to a summary line. When a flake appears, capture
+  the failure block *before* re-running — the identity is the whole difficulty,
+  and a lost occurrence costs days of guessing.
 - Latest validation: **147 Vitest files / 1193 tests, plus 27 Playwright tests with zero skips, all passed**,
   `npx tsc --noEmit`, `npm run lint`, `npm run build`, and `git diff --check`
   all passed.
