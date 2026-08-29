@@ -11,6 +11,7 @@
  * - Displays an error (expired/invalid token)
  */
 
+import { StrictMode } from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -74,9 +75,68 @@ function mockNetworkError() {
   );
 }
 
+/**
+ * Serves a single-use token the way the real route does: the first claim
+ * succeeds, every later one is refused. Returns the request count.
+ *
+ * The route claims the token with a compare-and-set, so a second request is not
+ * a harmless repeat — it is the difference between a member being told they are
+ * signed in and being told their link is broken.
+ */
+function mockSingleUseToken(): () => number {
+  let requests = 0;
+
+  server.use(
+    http.get('/api/auth/magic-link/verify/:token', () => {
+      requests += 1;
+      if (requests > 1) {
+        return HttpResponse.json(
+          { error: { message: 'Magic link is expired or has already been used' } },
+          { status: 404 },
+        );
+      }
+      return HttpResponse.json({
+        status: 'authenticated',
+        memberId: 'member-1',
+        sessionToken: 'session-token-abc',
+      });
+    }),
+  );
+
+  return () => requests;
+}
+
 describe('Magic Link Verification Page', () => {
   beforeEach(() => {
     mockPush.mockClear();
+  });
+
+  describe('single-use token safety (Requirement 7.3, 7.9)', () => {
+    it('claims the token once when the verification effect runs twice', async () => {
+      // React Strict Mode mounts, unmounts and remounts in development, so an
+      // effect with a side effect runs twice. Here that consumed the member's
+      // token on the first run and rendered the second run's refusal — the
+      // member was signed in and told the opposite. Observed live on
+      // 2026-08-29: MagicLink.used = 1 with a UserSession created a minute
+      // later, while the page showed the error.
+      const countRequests = mockSingleUseToken();
+
+      render(
+        <StrictMode>
+          <MagicLinkPage params={Promise.resolve({ token: 'strict-mode-token' })} />
+        </StrictMode>,
+      );
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/');
+      });
+
+      expect(countRequests(), 'a single-use token must be claimed exactly once').toBe(1);
+      expect(
+        screen.queryByText(/expired or has already been used/i),
+        'a successful sign-in must not render the refusal of its own second attempt',
+      ).not.toBeInTheDocument();
+    });
   });
 
   describe('Loading state', () => {
