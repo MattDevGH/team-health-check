@@ -10,7 +10,7 @@
  * - Error (expired/used): shows error with link to request new one
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 type VerifyState =
@@ -50,8 +50,26 @@ export default function MagicLinkPage({ params }: PageProps) {
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  /**
+   * Guards the verification request, which claims a single-use token.
+   *
+   * This effect has a side effect on the server, so it must run exactly once
+   * per page load. React Strict Mode mounts, unmounts and remounts in
+   * development, and an email security scanner or an impatient second click can
+   * do the same in production. A second request is refused by design — the
+   * route claims the token with a compare-and-set — so without this guard a
+   * successful sign-in is overwritten by the refusal of its own second attempt,
+   * and the member is told their link is broken while holding a valid session.
+   *
+   * Deliberately not a `cancelled` flag: discarding the result of a claim that
+   * already succeeded strands the member on the loading state instead. The
+   * request must not be sent twice in the first place.
+   */
+  const hasVerified = useRef(false);
+
   useEffect(() => {
-    let cancelled = false;
+    if (hasVerified.current) return;
+    hasVerified.current = true;
 
     async function verify() {
       const { token } = await params;
@@ -64,15 +82,11 @@ export default function MagicLinkPage({ params }: PageProps) {
             res,
             'Magic link is expired or has already been used',
           );
-          if (!cancelled) {
-            setState({ phase: 'error', message });
-          }
+          setState({ phase: 'error', message });
           return;
         }
 
         const data = await res.json();
-
-        if (cancelled) return;
 
         if (data.status === 'authenticated') {
           setState({ phase: 'authenticated' });
@@ -85,14 +99,11 @@ export default function MagicLinkPage({ params }: PageProps) {
           });
         }
       } catch {
-        if (!cancelled) {
-          setState({ phase: 'error', message: 'Something went wrong. Please try again.' });
-        }
+        setState({ phase: 'error', message: 'Something went wrong. Please try again.' });
       }
     }
 
     verify();
-    return () => { cancelled = true; };
   }, [params, router]);
 
   async function handleCreateTeam(e: React.FormEvent) {
