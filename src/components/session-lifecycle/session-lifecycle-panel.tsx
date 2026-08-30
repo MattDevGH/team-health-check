@@ -16,7 +16,7 @@
  * request.
  */
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import type { HealthCheckSession } from '@/lib/repositories/entities';
 import { deriveSessionState, type SessionState } from './derive-session-state';
@@ -134,6 +134,11 @@ export function SessionLifecyclePanel({
   materialisedSessionIds,
 }: SessionLifecyclePanelProps) {
   const headingId = useId();
+  const confirmHeadingId = useId();
+  const closeTriggerRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [sessions, setSessions] = useState<HealthCheckSession[] | null>(null);
   // Kept with the session it describes, so a count from a previous check can
   // never be shown against the current one
@@ -168,6 +173,65 @@ export function SessionLifecyclePanel({
       if (loaded) setSessions(loaded);
     } finally {
       setOpening(false);
+    }
+  }
+
+  /**
+   * Opens the confirmation as a true modal where the browser supports it.
+   *
+   * `showModal()` gives the top layer, the backdrop, the inert background and
+   * Escape handling for free — all of which a hand-rolled modal gets wrong
+   * sooner or later. jsdom does not implement it (checked against 29.1.1), so
+   * the element's `open` property is set directly when it is missing. That
+   * keeps the confirmation assertable at this tier; the real modal behaviour is
+   * covered in the browser by `e2e/session-lifecycle.spec.ts`.
+   */
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (confirming && !dialog.open) {
+      if (typeof dialog.showModal === 'function') {
+        dialog.showModal();
+      } else {
+        dialog.open = true;
+      }
+    }
+
+    if (!confirming && dialog.open) {
+      if (typeof dialog.close === 'function') {
+        dialog.close();
+      } else {
+        dialog.open = false;
+      }
+    }
+  }, [confirming]);
+
+  /**
+   * Dismisses the confirmation and puts focus back where it came from.
+   *
+   * The dialog is closed first, deliberately. While a modal dialog is open
+   * everything outside the top layer is inert, so focusing the trigger before
+   * closing is silently ignored and the keyboard user is left on `body` with no
+   * idea where they were.
+   */
+  function dismissConfirmation(): void {
+    dialogRef.current?.close?.();
+    setConfirming(false);
+    closeTriggerRef.current?.focus();
+  }
+
+  async function closeSession(sessionId: string): Promise<void> {
+    setClosing(true);
+    try {
+      const res = await fetch(`/api/teams/${teamId}/sessions/${sessionId}`, { method: 'PATCH' });
+      if (!res.ok) return;
+
+      setConfirming(false);
+      const loaded = await fetchSessions(teamId);
+      if (loaded) setSessions(loaded);
+    } finally {
+      setClosing(false);
     }
   }
 
@@ -233,6 +297,73 @@ export function SessionLifecyclePanel({
             >
               {opening ? 'Opening…' : 'Open a health check'}
             </button>
+          )}
+
+          {state.status === 'collecting' && (
+            <>
+              <button
+                ref={closeTriggerRef}
+                type="button"
+                onClick={() => setConfirming(true)}
+                className="mt-3 rounded border border-gray-400 px-4 py-2 text-gray-800 hover:bg-gray-50"
+              >
+                Close the health check
+              </button>
+
+              {/*
+                Rendered only while confirming, so nothing of the dialog exists
+                in the accessibility tree when it is not being asked.
+              */}
+              {confirming && (
+                <dialog
+                  ref={dialogRef}
+                  aria-labelledby={confirmHeadingId}
+                  onCancel={event => {
+                    // A modal dialog turns Escape into a cancel event, and
+                    // closing it that way must not leave focus stranded
+                    event.preventDefault();
+                    dismissConfirmation();
+                  }}
+                  onKeyDown={event => {
+                    // A dialog opened without `showModal()` gets no Escape
+                    // handling from the browser at all, so it is handled here
+                    // too. Both paths dismiss, and dismissing twice is harmless.
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      dismissConfirmation();
+                    }
+                  }}
+                  className="rounded-lg p-6 shadow-xl backdrop:bg-black/40"
+                >
+                  <h3 id={confirmHeadingId} className="text-lg font-semibold text-gray-900">
+                    Close this health check?
+                  </h3>
+                  <p className="mt-2 max-w-sm text-sm text-gray-700">
+                    No more responses can be given after this. Results appear once they have been
+                    prepared.
+                  </p>
+
+                  <div className="mt-4 flex gap-3">
+                    <button
+                      type="button"
+                      autoFocus
+                      onClick={() => closeSession(state.session.id)}
+                      disabled={closing}
+                      className="rounded bg-red-700 px-4 py-2 text-white hover:bg-red-800 disabled:opacity-60"
+                    >
+                      {closing ? 'Closing…' : 'Yes, close it'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={dismissConfirmation}
+                      className="rounded border border-gray-400 px-4 py-2 text-gray-800 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </dialog>
+              )}
+            </>
           )}
         </>
       )}

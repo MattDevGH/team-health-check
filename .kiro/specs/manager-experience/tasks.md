@@ -272,10 +272,31 @@ a colleague hits the conflict before the UI work lands.
       and by `e2e/session-lifecycle.spec.ts`.
     - _Requirements: 2.6_
 
-  - [ ] 3.4 Close with confirmation
+  - [x] 3.4 Close with confirmation
     - Write failing tests: activating close opens a dialog and issues **no** request; confirming issues the PATCH; cancelling issues none and returns focus to the trigger
     - Native `<dialog>`, not `window.confirm`
     - _Requirements: 2.3_
+    - **Done.** Five component tests and three browser tests. The PATCH is
+      counted in the handler, so "asking the question must not also answer it"
+      is asserted as a request count, not as rendered text.
+    - **jsdom 29.1.1 implements neither `showModal()` nor the `cancel` event**
+      (checked before writing the component, not after). The component calls
+      `showModal()` when it exists and sets the `open` property when it does
+      not, so the confirmation stays assertable in jsdom while real browsers get
+      true modality. Escape is handled explicitly as well as through `cancel`,
+      because a dialog opened without `showModal()` gets no Escape handling from
+      the browser at all.
+    - **Found by running it in a browser:** focus did not return to the trigger
+      after Escape. Cancelling focused the trigger *before* closing the dialog,
+      and while a modal is open everything outside the top layer is inert — so
+      the call was silently ignored and the keyboard user was left on `body`.
+      The dialog is now closed first. jsdom could never have caught this: with
+      no top layer there is nothing to be inert.
+    - The browser test asserts `:modal` matches, so a regression to a
+      non-modal `<dialog open>` fails rather than passing on appearance.
+    - Each closing test has its own team with its own running check: sharing one
+      would couple them by order, and sharing a member would spend two of the
+      five magic links an email gets per hour, which CI's two retries exhaust.
 
   - [ ] 3.5 Post-close state and failure handling
     - Write failing tests: immediately after close the panel says results are still being prepared; a failed open or close renders the server's message and leaves the previous state displayed

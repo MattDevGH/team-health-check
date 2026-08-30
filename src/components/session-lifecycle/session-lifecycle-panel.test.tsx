@@ -54,11 +54,25 @@ function wireSession(overrides: Partial<WireSession> & { id: string }): WireSess
  * a request actually crossed the network, and lets the list change after one —
  * the panel refetches rather than trusting its own optimism.
  */
+/**
+ * A stand-in for the server's session list.
+ *
+ * Mutable so a test can say what the list becomes after an open or a close —
+ * the panel refetches, so what it renders next depends on what the server would
+ * then report, not on what the panel guessed.
+ */
+interface SessionsMock {
+  /** POSTs the panel has issued. */
+  posts(): number;
+  /** Replaces what the sessions endpoint will return from now on. */
+  setSessions(sessions: WireSession[]): void;
+}
+
 function mockSessions(options: {
   initial: WireSession[];
   afterOpen?: WireSession[];
   openStatus?: number;
-}): () => number {
+}): SessionsMock {
   let posts = 0;
   let current = options.initial;
 
@@ -77,7 +91,43 @@ function mockSessions(options: {
     }),
   );
 
-  return () => posts;
+  return {
+    posts: () => posts,
+    setSessions: sessions => {
+      current = sessions;
+    },
+  };
+}
+
+/**
+ * Serves the close endpoint, returning a counter of PATCHes issued.
+ *
+ * `revealing` is what the sessions endpoint reports afterwards, so the panel's
+ * refetch sees the state a real server would then be in.
+ */
+function mockClose(
+  sessionId: string,
+  options: { status?: number; sessions?: SessionsMock; revealing?: WireSession[] } = {},
+): () => number {
+  let patches = 0;
+
+  server.use(
+    http.patch(`/api/teams/${TEAM_ID}/sessions/${sessionId}`, () => {
+      patches += 1;
+      if (options.status && options.status >= 400) {
+        return HttpResponse.json(
+          { error: { code: 'CONFLICT', message: 'Session is already closed' } },
+          { status: options.status },
+        );
+      }
+      if (options.sessions && options.revealing) {
+        options.sessions.setSessions(options.revealing);
+      }
+      return HttpResponse.json({ closed: true });
+    }),
+  );
+
+  return () => patches;
 }
 
 /** Serves the participation endpoint for one session. */
@@ -112,7 +162,7 @@ describe('SessionLifecyclePanel', () => {
 
   it('opens a check and shows it collecting, without a reload', async () => {
     const user = userEvent.setup();
-    const countPosts = mockSessions({
+    const sessions = mockSessions({
       initial: [],
       afterOpen: [
         wireSession({
@@ -129,7 +179,7 @@ describe('SessionLifecyclePanel', () => {
 
     // The observable outcome is the state the manager is now looking at
     expect(await screen.findByText(/collecting responses/i)).toBeInTheDocument();
-    expect(countPosts(), 'a session should have been opened on the server').toBe(1);
+    expect(sessions.posts(), 'a session should have been opened on the server').toBe(1);
     expect(
       screen.queryByRole('button', { name: /open a health check/i }),
       'a check is already running, so opening another must not be offered',
@@ -216,6 +266,102 @@ describe('SessionLifecyclePanel', () => {
 
       expect(await screen.findByText(/collecting responses/i)).toBeInTheDocument();
       expect(screen.queryByText(/closes on/i)).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * Requirement 2.3: closing is irreversible and ends collection, so it is
+   * confirmed. Opening is not — the service closes any existing open session
+   * when a new one opens, so it is recoverable.
+   */
+  describe('closing a check', () => {
+    const openSession = wireSession({
+      id: 'open-1',
+      status: 'open',
+      actualCloseAt: null,
+      scheduledCloseAt: '2026-08-28T17:00:00.000Z',
+    });
+
+    const closedSession = wireSession({
+      id: 'open-1',
+      status: 'closed',
+      actualCloseAt: '2026-08-27T12:00:00.000Z',
+    });
+
+    function mockCollecting(): SessionsMock {
+      mockParticipation('open-1', { totalCount: 8, respondedCount: 3 });
+      return mockSessions({ initial: [openSession] });
+    }
+
+    it('offers a close control while a check is collecting', async () => {
+      mockCollecting();
+      renderPanel();
+
+      expect(await screen.findByRole('button', { name: /^close the health check$/i })).toBeEnabled();
+    });
+
+    it('asks for confirmation and sends nothing until it is given', async () => {
+      const user = userEvent.setup();
+      mockCollecting();
+      const countPatches = mockClose('open-1');
+      renderPanel();
+
+      await user.click(await screen.findByRole('button', { name: /^close the health check$/i }));
+
+      expect(await screen.findByRole('dialog', { name: /close this health check/i })).toBeInTheDocument();
+      expect(
+        countPatches(),
+        'asking the question must not also answer it',
+      ).toBe(0);
+    });
+
+    it('closes the check once confirmed and reports results as pending', async () => {
+      const user = userEvent.setup();
+      const sessions = mockCollecting();
+      const countPatches = mockClose('open-1', { sessions, revealing: [closedSession] });
+      renderPanel();
+
+      await user.click(await screen.findByRole('button', { name: /^close the health check$/i }));
+      await user.click(
+        await screen.findByRole('button', { name: /^yes, close it$/i }),
+      );
+
+      expect(await screen.findByText(/results are still being prepared/i)).toBeInTheDocument();
+      expect(countPatches()).toBe(1);
+    });
+
+    it('sends nothing when the confirmation is dismissed, and gives focus back', async () => {
+      const user = userEvent.setup();
+      mockCollecting();
+      const countPatches = mockClose('open-1');
+      renderPanel();
+
+      const trigger = await screen.findByRole('button', { name: /^close the health check$/i });
+      await user.click(trigger);
+      await user.click(await screen.findByRole('button', { name: /^cancel$/i }));
+
+      expect(countPatches(), 'a dismissed confirmation must not close anything').toBe(0);
+      expect(await screen.findByText(/collecting responses/i)).toBeInTheDocument();
+      // Focus has to come back, or a keyboard user is dropped at the top of the
+      // document with no idea where they were
+      expect(trigger).toHaveFocus();
+    });
+
+    it('closes the confirmation on Escape without closing the check', async () => {
+      const user = userEvent.setup();
+      mockCollecting();
+      const countPatches = mockClose('open-1');
+      renderPanel();
+
+      const trigger = await screen.findByRole('button', { name: /^close the health check$/i });
+      await user.click(trigger);
+      await screen.findByRole('dialog', { name: /close this health check/i });
+
+      await user.keyboard('{Escape}');
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(countPatches()).toBe(0);
+      expect(trigger).toHaveFocus();
     });
   });
 
