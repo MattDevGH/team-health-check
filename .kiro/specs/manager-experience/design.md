@@ -1,5 +1,11 @@
 # Technical Design Document: Manager Experience
 
+> **Status: delivered.** This document described the intended design before the
+> work began. Where implementation found something the design had not accounted
+> for, an *As built* note records what changed and why. The notes are the
+> interesting part: each one is something only writing or running the code
+> revealed.
+
 ## Overview
 
 Five changes, in dependency order: a navigation shell, session lifecycle controls,
@@ -105,16 +111,33 @@ Close confirmation is a native `<dialog>` with an explicit "Close the health
 check" button and a Cancel that returns focus to the trigger. Not
 `window.confirm`, which is unstyleable and unassertable.
 
+**As built — two things the design did not anticipate.**
+
+*jsdom 29.1.1 implements neither `showModal()` nor the `cancel` event.* The
+component calls `showModal()` where it exists and sets the `open` property where
+it does not, so the confirmation stays assertable in jsdom while real browsers
+get the top layer, the backdrop and an inert background. Escape is handled
+explicitly as well as through `cancel`, because a dialog opened without
+`showModal()` gets no Escape handling from the browser at all.
+
+*Focus restoration has to close the dialog first.* While a modal is open,
+everything outside the top layer is inert, so focusing the trigger before
+closing is silently ignored and the keyboard user is left on `body`. Found by
+running it in a browser; jsdom has no top layer and cannot catch it. The browser
+test asserts the dialog matches `:modal`, so a regression to a non-modal
+`<dialog open>` — identical in a screenshot, entirely different for keyboard
+users — fails.
+
 ### Dashboard changes
 
 **Chart** — `TrendChart` gains a caption and a legend, and emits a data table.
 
 ```
-<figure>
-  <figcaption>Average score per question, most recent {n} sessions</figcaption>
-  <svg role="img" aria-label="…" aria-describedby="trend-table">…</svg>
-  <ul>legend: swatch + question name, one per line</ul>
-  <details><summary>Show data table</summary><table id="trend-table">…</table></details>
+<figure aria-labelledby="trend-chart-caption">
+  <figcaption id="trend-chart-caption">Average score per question across the last {n} closed sessions…</figcaption>
+  <svg aria-hidden="true">…</svg>
+  <ul aria-label="Questions plotted">swatch + question name, one per line</ul>
+  <table aria-labelledby="trend-chart-caption">…</table>
 </figure>
 ```
 
@@ -122,6 +145,19 @@ The legend carries the question name next to its colour, so the mapping does not
 depend on colour perception. The table has a row per session and a column per
 question, each cell giving score and response count — the same values a tooltip
 would show, reachable by keyboard.
+
+**As built — two changes from the sketch above.**
+
+*The SVG is `aria-hidden`, not `role="img"`.* Keeping `role="img"` would have
+left the drawing announced as a picture with a label, immediately followed by a
+table saying the same thing — the caption read twice before any data. Since the
+table carries everything, the drawing has nothing left to contribute to a screen
+reader.
+
+*The table is not behind a `<details>`.* A table hidden by default is one more
+thing to discover, and this one is small enough to sit in the page. A cell for a
+question a session did not record reads "Not answered" rather than being blank,
+so a gap is distinguishable from a zero.
 
 **Latest Session panel** — replaced. It currently lists response counts only,
 under a heading that promises more. The replacement shows, per question: average
@@ -145,18 +181,30 @@ A `GuidanceBanner` component driven by conditions the pages already have data fo
 
 | Condition | Where | Message |
 |---|---|---|
-| `members.length <= 1` | settings, dashboard | Add your team, link to Members |
-| no schedule configured | settings, dashboard | Configure when checks open and close |
-| `sessions.length === 0` closed | dashboard | Trends appear once a check closes |
-| exactly one closed session | dashboard | Replaces "More data needed" with what to do next |
-| anonymous privacy mode | dashboard | Detail is hidden below {threshold} responses |
+| `members.length <= 1` | settings | Add the rest of your team below |
+| no schedule configured | settings | Choose a schedule below; without one you open each check yourself |
+| no closed sessions | dashboard | Trends appear once a check closes |
+| exactly one closed session | dashboard | A second check is what makes a trend |
+| anonymous privacy mode | dashboard | Hidden is not the same as unanswered |
 
 Each condition is evaluated from loaded data, so guidance disappears on the next
 render once satisfied. No dismissal state is persisted: a banner that can be
-dismissed while still true is a banner that stops telling the truth.
+dismissed while still true is a banner that stops telling the truth. A test
+asserts the banner renders no button at all, so a dismiss control cannot appear
+by accident.
 
 The existing "More data needed" copy stays as the heading for the one-session
 case; the guidance adds the next action.
+
+**As built — members and schedule guidance is on settings only**, not on both
+pages as the table originally said. The dashboard would have needed two extra
+requests to know whether to say anything, about work the manager has to leave
+the page to do. Each page now advises on what it can itself act on, and the
+messages point down the page rather than carrying a link elsewhere.
+
+The no-sessions message also varies by role: a Delivery Manager is pointed at
+the open control above it, a contributor is told trends appear after a close
+without being sent after a button they do not have.
 
 ### Ambiguous identity guard
 
@@ -237,6 +285,46 @@ Two traps this spec is specifically exposed to:
    button was pressed — not that a click handler ran.
 2. **A guidance banner asserted by its own test id.** Assert the text a manager
    reads, so copy that regresses to a placeholder fails.
+
+## What implementation taught
+
+Things the design had no place for, recorded because they will apply to the next
+milestone too.
+
+**Dates cross JSON as strings.** `HealthCheckSession` is serialised straight to
+JSON, so the panel receives ISO strings where the state derivation compares
+`Date`s. The MSW handlers mirror that exactly: a mock returning `Date` objects
+would have let the component skip parsing and still pass, while the real page
+threw on the first comparison. That is the same shape as the audit log crash
+found by using the app, one layer down.
+
+**Pin the locale of any formatted date.** `toLocaleDateString(undefined, …)`
+follows the machine's locale, so the same close time read "28 August 2026"
+locally and "August 28, 2026" on CI. Windows ignores `LANG`, so no local run
+could have reproduced it. Both the panel and the chart now pin `en-GB`.
+
+*Still open:* dates render in the **viewer's** timezone, which is right for a
+person reading them but not necessarily right for the team. A check closing at
+23:30 UTC falls on different days either side of midnight, and the team already
+stores a timezone. Plumbing it through needs a decision about whose day a close
+time belongs to.
+
+**One tick, one clock.** The scheduler reconciled against its injected clock but
+stamped `scheduledCloseAt` from the wall clock, because it took the session
+service from the container. Harmless in production, where both are real; it made
+the closing-reminder tests pass or fail according to the day and hour the suite
+ran. Any route driven by an injectable clock should build its collaborators with
+that clock.
+
+**Two test flakes came from tests growing past their budget**, not from the code
+under test. A property that rendered a component and awaited a fetch a hundred
+times, and a suite paying a route's cold module load inside its first timed
+test. Both only appeared once the suite passed roughly 1300 tests. Properties
+belong on pure functions where one exists; module loading belongs in a hook.
+
+**Assert absences against a rendered page.** `queryByRole(...)` on a component
+that has not finished loading passes for the wrong reason. Every negative
+assertion in this milestone waits for something that is always present first.
 
 ## Out of Scope
 

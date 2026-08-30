@@ -661,6 +661,29 @@ All stages must pass. Branch protection requires CI green before merge.
 Tasks 1–26 complete. Merged to `master` as `7eba5f6` on 2026-08-26, with `ci`
 and `e2e` green on master afterwards.
 
+### Manager experience — COMPLETE (2026-08-30)
+
+All task groups merged to `master` (`70f6e51`). A delivery manager can navigate
+without knowing URLs, sign out, open and close a health check, read a dashboard
+that explains itself, and be told what to do next on a new team. A colleague can
+no longer be silently signed into the wrong team.
+
+**Delivered:** PR #8 navigation shell (`5bda63b`), #11 session lifecycle
+(`f536eeb`), #12 dashboard comprehension (`4c1a9c6`), #13 guidance and identity
+guard (`70f6e51`). Plus #9 and #10, both fixing defects found by using the app
+rather than by testing it.
+
+**Read `.kiro/specs/manager-experience/design.md` before the next milestone.**
+Its *As built* notes and the *What implementation taught* section carry the
+transferable findings: dates crossing JSON as ISO strings, pinning date locales
+so CI and a British machine agree, one tick one clock, why a modal's inert
+background defeats focus restoration, and why two test flakes came from tests
+outgrowing their time budget rather than from the code under test.
+
+**Next milestone: deployment** — Vercel, Turso, the production cron. The
+production database path already has execution coverage, so this is
+configuration rather than new application code.
+
 ### Pending manual verification — nav shell (raised 2026-08-29)
 
 Matt reviewed the shell in the browser and confirmed the active-page indicator
@@ -673,10 +696,10 @@ remaining items are covered by automated tests — but so was the audit log page
 whose route test and UI mock each asserted a different response shape and both
 passed.
 
-### Manager experience — phase 3 complete (2026-08-30)
+### Manager experience — session lifecycle, merged as PR #11
 
-Branch `feat/session-lifecycle`. A delivery manager can now open and close a
-health check from the dashboard, which is the milestone's reason for existing.
+A delivery manager can now open and close a health check from the dashboard,
+which is the milestone's reason for existing.
 
 - `SessionLifecyclePanel` derives one of four states from the session list plus
   which sessions have materialised aggregates: `collecting`, `awaiting_results`,
@@ -698,14 +721,10 @@ health check from the dashboard, which is the milestone's reason for existing.
   date comparison in `deriveSessionState`. MSW handlers mirror that, since a
   mock returning `Date` objects would hide the parsing bug
 
-### Manager experience — phase 1 complete (2026-08-29)
+### Manager experience — navigation shell, merged as PR #8 (`5bda63b`)
 
-Phase 1 merged to `master` via PR #8 (`5bda63b`). Two follow-up fixes found by
-using the app merged after it: PR #9 (magic link claimed twice) and PR #10
-(audit log response shape).
-
-Historical note from phase 1:
-tasks 1.1–1.6 are complete. Phase 1 is finished; task 2 is the checkpoint.
+Two follow-up fixes found by using the app merged after it: PR #9 (magic link
+claimed twice) and PR #10 (audit log response shape).
 
 **Accessibility position.** Axe now covers the shell on settings, dashboard and
 profile, plus three states a page-level audit never reaches: the skip link once

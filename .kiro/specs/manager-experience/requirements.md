@@ -65,6 +65,8 @@ Slack linking, and every team-scoped query.
 4. THE Web_Interface SHALL display the current Session_State, including whether responses are still being collected, how many members have responded, and when the session is scheduled to close.
 5. IF a lifecycle operation fails, THEN THE Web_Interface SHALL display the server's error message and leave the displayed Session_State unchanged.
 6. IF the authenticated member is not a Delivery Manager, THEN THE Web_Interface SHALL NOT render Lifecycle_Controls.
+
+*As built: a contributor sees no lifecycle panel at all, rather than the Session_State without its controls. The panel exists to act on; the trend data a contributor has a stake in is already on the same page. Verified in `e2e/session-lifecycle.spec.ts`.*
 7. WHEN a session has closed but its aggregates have not yet been materialised, THE Web_Interface SHALL say so explicitly rather than presenting the session as though it has no data.
 
 ### Requirement 3: Dashboard Comprehension
@@ -91,6 +93,8 @@ Slack linking, and every team-scoped query.
 
 1. WHEN a team has no members other than its creator, THE Web_Interface SHALL prompt the Delivery Manager to add members and link to where that is done.
 2. WHEN a team has no schedule configured, THE Web_Interface SHALL prompt the Delivery Manager to configure one and explain what the schedule controls.
+
+*As built: both prompts appear on the team settings page, which is where adding members and setting a schedule are done — so each points down the page rather than carrying a link elsewhere. The dashboard would have needed two extra requests to know whether to say anything, about work the manager would have to leave the page to do. `GuidanceBanner` supports an action link for cases that do need one.*
 3. WHEN a team has no closed sessions, THE dashboard SHALL explain that trends appear after sessions close, rather than presenting an empty chart.
 4. WHEN a team has exactly one closed session, THE dashboard SHALL explain that a second session is required before trends can be compared.
 5. THE Web_Interface SHALL explain, at the point of use, that anonymous mode suppresses per-question detail below the anonymity threshold, so that suppressed values do not read as missing data.

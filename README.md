@@ -40,11 +40,11 @@ rather than only once a pull request exists.
 
 ### Project status
 
-The two build specs in `.kiro/specs/` are complete, and a third
-(`manager-experience/`) is open. The application supports the full loop:
-magic-link and genesis sign-in, team and schedule configuration, scheduled
+All three specs in `.kiro/specs/` are complete. The application supports the full
+loop: magic-link and genesis sign-in, team and schedule configuration, scheduled
 sessions, feedback through the web interface or Slack, close and materialisation,
-and a trends dashboard.
+and a trends dashboard — and a delivery manager can now run all of it from the
+interface, without knowing URLs or calling the API.
 
 Integration hardening passed its final verification gate on 2026-08-26 — lint,
 type check, 1193 Vitest tests, build, 27 Playwright tests with zero skips, and a
@@ -64,21 +64,29 @@ The lesson is recorded as Testing Rules in `AGENTS.md`: assert observable
 outcomes rather than the calls you just made, and run the real thing before
 claiming it works.
 
-### Current milestone
+### Manager experience — complete 2026-08-30
 
-**Manager experience** (`.kiro/specs/manager-experience/`) — spec written
-2026-08-28, implementation not started. It covers the gap between "the system
-works" and "a delivery manager can run it unaided":
+`.kiro/specs/manager-experience/` closed the gap between "the system works" and
+"a delivery manager can run it unaided". Delivered across five pull requests:
 
-- **Shared navigation:** the app is currently navigated by knowing URLs.
-- **Session lifecycle management:** a manager UI for opening, closing and
-  monitoring sessions. The API supports these; there is no interface for them,
-  so E2E tests drive that part through the API.
-- **Dashboard comprehension:** chart caption and legend, an accessible data
-  table, a rebuilt Latest Session panel, question disclosure affordances with
-  `aria-expanded`/`aria-controls`, and `1 response` pluralisation.
-- **First-run guidance:** empty and single-session states that say what to do next.
-- **Ambiguous-identity guard:** see the limitation below.
+- **Shared navigation** — a skip link, Dashboard, Settings, Profile, Audit log
+  for delivery managers, and the product's first sign-out control. Mounted by
+  the authenticated segments' layouts, so unauthenticated pages cannot render it.
+- **Session lifecycle** — open a health check in one click, close it behind a
+  confirmation. Previously possible only through the API or by waiting for the
+  scheduler.
+- **Dashboard comprehension** — the trend chart gained a caption, a legend and a
+  real data table; Latest Session shows what people said rather than only how
+  many answered; question rows announce that they expand; `1 responses` is gone.
+- **First-run guidance** — a new team is told what to do next, on the page that
+  does it.
+- **Ambiguous-identity guard** — see the limitation below.
+
+Two defects were found by *using* the app rather than by testing it, and fixed
+outside the plan: a magic link was claimed twice, reporting a successful sign-in
+as expired; and the Audit Log page crashed because its route returned a bare
+array while the page expected an envelope — each side tested, each side green,
+no test crossing between them.
 
 ### Known limitation: one team per person
 
@@ -109,9 +117,14 @@ sign-in is refused for this reason.
 Full multi-team membership needs an identity model above `TeamMember`, a team
 switcher, and a review of every team-scoped query. It is a separate future spec.
 
-### Later milestones (not started)
+### Next milestone
 
-- **Deployment:** Vercel, Turso, and the production cron trigger.
+**Deployment** — Vercel, Turso, and the production cron trigger. The production
+database path already has execution coverage
+(`src/tests/integration/libsql-repository.test.ts`), so this is configuration
+and a cron schedule rather than new application code.
+
+### Later milestones (not started)
 - **Delivery-manager user guide** in `docs/`, once in-app guidance exists.
 - **Slack Socket Mode:** evaluate as a development-only convenience to remove
   the tunnel requirement, keeping HTTP endpoints for production.
@@ -492,10 +505,11 @@ Feature specifications at `.kiro/specs/`:
 - Tasks 1–21 record the original implementation pass; Task 22 records browser regressions
 - Tasks 23–26 closed auth/session, Slack production behaviour, automated evidence, documentation, CI, and merge. Their evidence tables record what was verified and how
 
-**`manager-experience/`** — Manager-facing UI spec (**open**, written 2026-08-28):
+**`manager-experience/`** — Manager-facing UI spec (**complete**, 2026-08-30):
 - Requirements (5 functional + 2 non-functional): navigation, session lifecycle, dashboard comprehension, first-run guidance, ambiguous-identity guard
-- Technical design (9 decisions, 6 correctness properties, per-tier testing strategy)
-- Tasks (9 groups across 5 phases, 3 checkpoints)
+- Technical design (9 decisions, 6 correctness properties, per-tier testing strategy), with *As built* notes where implementation found something the design had not accounted for
+- Tasks (9 groups, 3 checkpoints), each recording what was done, what was found, and what was mutation-checked
+- `design.md` also carries a **What implementation taught** section — dates crossing JSON as strings, pinning date locales, one tick one clock, and why two test flakes came from tests outgrowing their budget rather than from the code
 
 ## Known Issues & Future Work
 
