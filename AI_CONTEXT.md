@@ -712,8 +712,15 @@ focused (it is clipped to 1×1 and skipped by axe until then), the sign-out
 failure message, and the dashboard at 320px — the width WCAG 2.1 AA 1.4.10
 actually specifies, being 1280px at 400% zoom. Focus order through the shell is
 asserted in `e2e/navigation.spec.ts`, since axe cannot judge it. **A
-screen-reader pass has still not happened**, and no AA conformance claim should
-be made without one.
+screen-reader pass has still not happened**.
+
+**Accessibility position, agreed 2026-08-30.** WCAG 2.1 AA is the standard this
+project constantly aims for, not one it claims to meet. Every new state gets axe
+against the AA rule set, asserted semantics, and keyboard operation driven
+end-to-end — that is the standing bar for any change. A formal audit including a
+screen-reader pass is the gate on *claiming* conformance, not a blocker on
+shipping work. Do not treat "no screen-reader pass yet" as a reason to hold a
+milestone; do treat it as a reason never to write that the app is AA conformant.
 
 **E2E fixture.** `allowConsoleErrors(page, pattern)` in `e2e/fixtures.ts` scopes
 an expected console error to one test. Some states can only be reached by
