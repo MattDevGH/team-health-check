@@ -16,16 +16,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-/** The subset of GET /api/me the shell depends on. */
-interface SessionContext {
-  team: { id: string; name: string } | null;
-  roles: string[];
-}
+import { destinationsFor, type ShellContext } from './destinations';
 
-interface Destination {
-  href: string;
-  label: string;
-}
+/** The subset of GET /api/me the shell depends on. */
+type SessionContext = ShellContext;
+
 
 /**
  * Loading is distinct from unauthenticated. While `/api/me` is in flight the
@@ -38,8 +33,6 @@ type ShellState =
   | { status: 'ready'; context: SessionContext }
   | { status: 'anonymous' };
 
-/** The role that gates destinations a member would otherwise be refused. */
-const DELIVERY_MANAGER = 'delivery_manager';
 
 /**
  * Compares two paths ignoring a trailing slash. Next.js normalises these, but
@@ -50,33 +43,6 @@ function samePath(a: string, b: string): boolean {
   return strip(a) === strip(b);
 }
 
-/**
- * The destinations this member can actually reach.
- *
- * A null context is the in-flight state: the team id is not yet known, and a
- * guessed one would produce links that 404. The audit log is the only
- * Delivery-Manager-only read in the API, so it is the only role-gated entry
- * here; every other manager-gated route is a write behind a control on a page
- * both roles can open.
- */
-function destinationsFor(context: SessionContext | null): Destination[] {
-  const destinations: Destination[] = [];
-
-  if (context?.team) {
-    destinations.push(
-      { href: `/teams/${context.team.id}/dashboard`, label: 'Dashboard' },
-      { href: `/teams/${context.team.id}/settings`, label: 'Settings' },
-    );
-
-    if (context.roles.includes(DELIVERY_MANAGER)) {
-      destinations.push({ href: `/teams/${context.team.id}/audit-log`, label: 'Audit log' });
-    }
-  }
-
-  destinations.push({ href: '/me', label: 'Profile' });
-
-  return destinations;
-}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

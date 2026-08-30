@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { GuidanceBanner, type GuidanceItem } from '@/components/guidance';
 import { SessionLifecyclePanel } from '@/components/session-lifecycle';
 import { LatestSessionPanel } from './latest-session-panel';
 import { TrendChart } from './trend-chart';
@@ -45,6 +46,50 @@ interface TrendsResponse {
 
 interface PageProps {
   params: Promise<{ teamId: string }>;
+}
+
+/** Suppression threshold, matching the trend service and the drill-down. */
+const ANONYMITY_THRESHOLD = 3;
+
+/**
+ * What the dashboard can usefully say next, from data it has already loaded.
+ *
+ * Guidance about members and the schedule lives on the settings page, which is
+ * where both jobs are done and which already holds the data to know whether to
+ * offer it. Here it would cost two extra requests to say something the manager
+ * would have to leave for anyway.
+ */
+function dashboardGuidance(state: {
+  closedSessionCount: number;
+  anonymousMode: boolean;
+  canManage: boolean;
+}): GuidanceItem[] {
+  const items: GuidanceItem[] = [];
+
+  if (state.closedSessionCount === 0) {
+    items.push({
+      id: 'no-sessions',
+      message: state.canManage
+        ? 'Trends appear once a health check has closed. Open one above to get started.'
+        : 'Trends appear once a health check has closed.',
+    });
+  } else if (state.closedSessionCount === 1) {
+    items.push({
+      id: 'one-session',
+      message:
+        'One check has closed. A second gives the first something to be compared against, and the trend lines begin there.',
+    });
+  }
+
+  // Said before a manager meets a blank row and reads it as nobody answering
+  if (state.anonymousMode) {
+    items.push({
+      id: 'anonymity',
+      message: `This team is in anonymous mode, so a question answered by fewer than ${ANONYMITY_THRESHOLD} people is hidden rather than shown. Hidden is not the same as unanswered.`,
+    });
+  }
+
+  return items;
 }
 
 export default function TrendDashboardPage({ params }: PageProps) {
@@ -159,6 +204,12 @@ export default function TrendDashboardPage({ params }: PageProps) {
    * their ids are what tells the panel a closed check has results — no extra
    * request.
    */
+  const guidance = dashboardGuidance({
+    closedSessionCount: sessions.length,
+    anonymousMode,
+    canManage,
+  });
+
   const lifecyclePanel =
     canManage && teamId ? (
       <div className="mb-6">
@@ -178,6 +229,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
           </h1>
 
           {lifecyclePanel}
+          <GuidanceBanner items={guidance} />
           <div className="bg-white rounded-lg shadow p-8 text-center">
             <p className="text-gray-500 text-lg">
               More data needed
@@ -199,6 +251,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
         </h1>
 
         {lifecyclePanel}
+        <GuidanceBanner items={guidance} />
 
         <div className="bg-white rounded-lg shadow p-4 mb-6">
           <TrendChart sessions={sessions} />

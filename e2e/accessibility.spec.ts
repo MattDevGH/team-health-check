@@ -253,6 +253,41 @@ test.describe('authenticated pages', () => {
 });
 
 /**
+ * First-run guidance.
+ *
+ * Requirements: Manager Experience 4.1, 4.3, 4.5; NFR 1
+ *
+ * The states a brand new team meets, which every other authenticated test
+ * deliberately seeds past.
+ */
+test.describe('first-run guidance', () => {
+  const FRESH = 'a11y-guidance-fresh@e2e.invalid';
+  let freshTeamId = '';
+
+  test.beforeAll(() => {
+    // No members beyond the creator, no schedule, no sessions
+    const fresh = seedTeam({ teamName: 'A11y Guidance Team', memberEmail: FRESH });
+    freshTeamId = fresh.teamId;
+  });
+
+  test('the dashboard of a team that has never run a check', async ({ page }) => {
+    await signIn(page, FRESH);
+    await page.goto(`/teams/${freshTeamId}/dashboard`);
+    await expect(page.getByRole('region', { name: 'Next steps' })).toBeVisible();
+
+    await expectNoViolations(page, 'dashboard with first-run guidance');
+  });
+
+  test('the settings page of a team still being set up', async ({ page }) => {
+    await signIn(page, FRESH);
+    await page.goto(`/teams/${freshTeamId}/settings`);
+    await expect(page.getByRole('region', { name: 'Next steps' })).toBeVisible();
+
+    await expectNoViolations(page, 'settings with first-run guidance');
+  });
+});
+
+/**
  * The lifecycle panel, including the confirmation dialog.
  *
  * The dialog is a distinct state a page-level audit never reaches: it exists

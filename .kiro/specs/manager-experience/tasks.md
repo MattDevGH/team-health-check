@@ -471,24 +471,43 @@ a colleague hits the conflict before the UI work lands.
       which a Tailwind class could never have detected, and which any restyle
       could have broken without anyone noticing.
 
-- [ ] 6. First-run guidance
+- [x] 6. First-run guidance
 
-  - [ ] 6.1 Guidance component
+  - [x] 6.1 Guidance component
     - Write failing tests for each condition in the design table, including that the banner disappears once its condition is false
     - Assert the text a manager reads, not a test id
     - _Requirements: 4.1, 4.2, 4.6_
+    - **Done.** `GuidanceBanner` renders a "Next steps" region, or nothing when
+      there is nothing to say. Every item is derived from loaded data on every
+      render — nothing stored, and no dismiss control: a banner that can be
+      dismissed while still true is a banner that stops telling the truth. A
+      test asserts no button exists, so a dismiss cannot be added without a
+      deliberate decision.
+    - **Placement decision.** Members and schedule guidance lives on the
+      settings page, which does both jobs and already holds the data; session
+      and anonymity guidance lives on the dashboard, likewise. Putting all of it
+      on the dashboard would have cost two extra requests to say something the
+      manager has to leave the page to act on.
 
-  - [ ] 6.2 Empty and single-session dashboard states
+  - [x] 6.2 Empty and single-session dashboard states
     - Write failing tests: no closed sessions explains trends appear after a close; exactly one closed session explains a second is needed
     - _Requirements: 4.3, 4.4_
+    - **Done.** The no-sessions message points a manager at the control above it
+      only when they can actually use it — a contributor is told trends appear
+      after a close, without being sent after a button they do not have.
 
-  - [ ] 6.3 Explain anonymity suppression at the point of use
+  - [x] 6.3 Explain anonymity suppression at the point of use
     - Write a failing test: with anonymous privacy mode, the dashboard states that detail is hidden below the threshold
     - _Requirements: 4.5_
+    - **Done.** "Hidden is not the same as unanswered" — said before a manager
+      meets a suppressed row and reads it as silence from the team.
 
-  - [ ] 6.4 Accessibility pass over guidance states
+  - [x] 6.4 Accessibility pass over guidance states
     - axe over each guidance state in `e2e/accessibility.spec.ts`
     - _Requirements: NFR 1.1_
+    - **Done.** A team with no members beyond its creator, no schedule and no
+      sessions — the state every other authenticated test deliberately seeds
+      past — audited on both the dashboard and the settings page.
 
 - [ ] 7. Ambiguous identity guard
 

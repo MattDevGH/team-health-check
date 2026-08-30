@@ -8,35 +8,32 @@
  * For any set of roles returned by GET /api/me, a Delivery-Manager-only
  * destination is offered if and only if that set contains `delivery_manager`.
  *
- * The example-based tests cover the two roles this product assigns today. This
- * property covers the ones it does not: unknown roles, roles whose names
- * contain "delivery_manager" as a substring, duplicates, and the empty set. A
- * gate written as a substring match or a truthiness check on the array passes
- * every example test in the suite and fails here.
+ * The example-based tests in `app-shell.test.tsx` prove the rendered shell
+ * honours this decision. This exercises the decision itself, across the role
+ * names nobody writes an example for: unknown roles, names containing
+ * "delivery_manager" as a substring, duplicates, and the empty set. A gate
+ * written as a substring match or a truthiness check on the array passes every
+ * example test in the suite and fails here.
+ *
+ * It used to drive the whole component and wait on a fetch per run, which made
+ * a hundred runs slower than the test timeout once the suite grew. Testing the
+ * pure function is both faster and a better fit for what the property claims.
  */
 
-import { describe, it, expect, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
-import { http, HttpResponse } from 'msw';
 
-import { server } from '@/tests/mocks/server';
-import { AppShell } from './app-shell';
+import { destinationsFor, DELIVERY_MANAGER } from './destinations';
 
-vi.mock('next/navigation', () => ({
-  usePathname: () => '/teams/team-1/dashboard',
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
-}));
-
-const MANAGER = 'delivery_manager';
+const TEAM = { id: 'team-1', name: 'Platform Squad' };
 
 /**
- * Role names, weighted towards the ones that can actually break the gate:
- * the real role, the other real role, and near-misses that a substring or
+ * Role names, weighted towards the ones that can actually break the gate: the
+ * real role, the other real role, and near-misses that a substring or
  * case-insensitive comparison would wrongly accept.
  */
 const roleArb = fc.oneof(
-  fc.constant(MANAGER),
+  fc.constant(DELIVERY_MANAGER),
   fc.constant('contributor'),
   fc.constant('delivery_manager_deputy'),
   fc.constant('deputy_delivery_manager'),
@@ -44,39 +41,51 @@ const roleArb = fc.oneof(
   fc.stringMatching(/^[a-z_]{3,15}$/),
 );
 
+const rolesArb = fc.array(roleArb, { maxLength: 6 });
+
+function labels(roles: string[]): string[] {
+  return destinationsFor({ team: TEAM, roles }).map(destination => destination.label);
+}
+
 describe('Property 1: Delivery-Manager-only destinations', () => {
-  it('offers the audit log if and only if the roles contain delivery_manager', async () => {
-    await fc.assert(
-      fc.asyncProperty(fc.array(roleArb, { maxLength: 6 }), async (roles) => {
-        server.resetHandlers();
-        server.use(
-          http.get('/api/me', () =>
-            HttpResponse.json({
-              id: 'member-1',
-              teamId: 'team-1',
-              name: 'Alice',
-              slackLink: null,
-              team: { id: 'team-1', name: 'Platform Squad' },
-              roles,
-            }),
-          ),
+  it('offers the audit log if and only if the roles contain delivery_manager', () => {
+    fc.assert(
+      fc.property(rolesArb, roles => {
+        expect(labels(roles).includes('Audit log')).toBe(roles.includes(DELIVERY_MANAGER));
+      }),
+    );
+  });
+
+  it('offers every member the same destinations regardless of role', () => {
+    fc.assert(
+      fc.property(rolesArb, roles => {
+        const offered = labels(roles);
+
+        // Whatever else changes, a member never loses their own dashboard,
+        // their team's settings, or their profile
+        expect(offered).toEqual(expect.arrayContaining(['Dashboard', 'Settings', 'Profile']));
+      }),
+    );
+  });
+
+  it('offers no team-scoped destination until the team is known', () => {
+    fc.assert(
+      fc.property(rolesArb, roles => {
+        // The in-flight state: a guessed team id produces links that 404
+        expect(destinationsFor({ team: null, roles }).map(d => d.label)).toEqual(['Profile']);
+      }),
+    );
+  });
+
+  it('builds every team-scoped link from the team it was given', () => {
+    fc.assert(
+      fc.property(fc.stringMatching(/^team-[a-z0-9]{4,10}$/), rolesArb, (teamId, roles) => {
+        const teamScoped = destinationsFor({ team: { id: teamId, name: 'Any' }, roles }).filter(
+          destination => destination.href.startsWith('/teams/'),
         );
 
-        try {
-          render(
-            <AppShell>
-              <h1>Page content</h1>
-            </AppShell>,
-          );
-
-          // Anchor on a destination every member gets, so an absence is
-          // asserted against a rendered shell rather than an empty document
-          await screen.findByRole('link', { name: /dashboard/i });
-
-          const auditLog = screen.queryByRole('link', { name: /audit log/i });
-          expect(auditLog !== null).toBe(roles.includes(MANAGER));
-        } finally {
-          cleanup();
+        for (const destination of teamScoped) {
+          expect(destination.href.startsWith(`/teams/${teamId}/`)).toBe(true);
         }
       }),
     );

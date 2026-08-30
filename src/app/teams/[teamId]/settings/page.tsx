@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { GuidanceBanner, type GuidanceItem } from '@/components/guidance';
 import { TeamDetailsSection } from './team-details-section';
 import { PrivacyModeSection } from './privacy-mode-section';
 import { MembersSection, type Member } from './members-section';
@@ -29,6 +30,39 @@ interface TeamData {
 
 interface PageProps {
   params: Promise<{ teamId: string }>;
+}
+
+/**
+ * What a manager still needs to do, from data this page has already loaded.
+ *
+ * Members and schedule guidance lives here rather than on the dashboard: this
+ * is the page that does both jobs, and the dashboard would need two extra
+ * requests to know whether to say anything.
+ */
+function settingsGuidance(state: {
+  members: Member[];
+  schedule: ScheduleData | null;
+}): GuidanceItem[] {
+  const items: GuidanceItem[] = [];
+
+  // A team of one is the state every team starts in, and a health check of one
+  // person is not a health check
+  if (state.members.length <= 1) {
+    items.push({
+      id: 'members',
+      message: 'Add the rest of your team below — a check needs more than one person to be useful.',
+    });
+  }
+
+  if (!state.schedule) {
+    items.push({
+      id: 'schedule',
+      message:
+        'Choose a schedule below to open and close checks automatically. Without one you can still open each check yourself from the dashboard.',
+    });
+  }
+
+  return items;
 }
 
 export default function TeamSettingsPage({ params }: PageProps) {
@@ -101,6 +135,8 @@ export default function TeamSettingsPage({ params }: PageProps) {
     <div className="min-h-screen bg-gray-50 py-6 px-4">
       <div className="max-w-2xl mx-auto space-y-8">
         <h1 className="text-2xl font-bold text-gray-800">Team Settings</h1>
+
+        <GuidanceBanner items={settingsGuidance({ members, schedule })} />
 
         <TeamDetailsSection
           teamId={team.id}

@@ -1,10 +1,25 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
 // Requirements: 1.1, 1.5, 7.2, 7.4, 7.9
 
 describe('GET /api/auth/magic-link/verify/[token]', () => {
+  /**
+   * Loads the route once before any test is timed.
+   *
+   * The first `await import('./route')` pulls in the container, the services
+   * and the generated Prisma client. Paying that inside the first test made it
+   * exceed the 5s test timeout as the suite grew, failing a test that had
+   * nothing wrong with it — and only in a full-suite run, never on its own.
+   * Hooks get a longer budget, and every later import hits a warm cache.
+   *
+   * The two tests that call `vi.resetModules()` still get a genuinely fresh
+   * module: they need one, because they stub NODE_ENV before importing.
+   */
+  beforeAll(async () => {
+    await import('./route');
+  });
+
   beforeEach(async () => {
-    // Each test imports the module fresh for isolation
     vi.unstubAllEnvs();
   });
 

@@ -98,6 +98,42 @@ describe('Team Settings Page', () => {
     setupHandlers();
   });
 
+  /**
+   * Manager Experience 4.1, 4.2, 4.6. Guidance about members and the schedule
+   * lives here because this is the page that does both jobs.
+   */
+  describe('first-run guidance', () => {
+    it('prompts a manager whose team is still just themselves', async () => {
+      server.use(
+        http.get(`/api/teams/${TEAM_ID}/members`, () => HttpResponse.json([mockMembers[0]])),
+      );
+      renderPage();
+
+      const guidance = await screen.findByRole('region', { name: /next steps/i });
+      expect(guidance).toHaveTextContent(/add the rest of your team/i);
+    });
+
+    it('prompts a manager with no schedule, and says what happens without one', async () => {
+      server.use(
+        http.get(`/api/teams/${TEAM_ID}/schedule`, () => HttpResponse.json({ schedule: null })),
+      );
+      renderPage();
+
+      const guidance = await screen.findByRole('region', { name: /next steps/i });
+      expect(guidance).toHaveTextContent(/choose a schedule/i);
+      // Not having one is a choice, not a fault: say what still works
+      expect(guidance).toHaveTextContent(/open each check yourself/i);
+    });
+
+    it('says nothing once the team is set up', async () => {
+      // The default handlers already give two members and a schedule
+      renderPage();
+
+      await screen.findByRole('heading', { name: /team settings/i });
+      expect(screen.queryByRole('region', { name: /next steps/i })).not.toBeInTheDocument();
+    });
+  });
+
   describe('Loading and Layout', () => {
     it('renders loading state initially', () => {
       renderPage();

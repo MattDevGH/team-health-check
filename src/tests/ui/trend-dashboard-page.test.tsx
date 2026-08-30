@@ -34,10 +34,12 @@ interface TrendDistributionData {
 function mockTrendsApi(options: {
   sessions?: SessionData[];
   trendDistribution?: TrendDistributionData[];
+  privacyMode?: string;
 } = {}) {
   const {
     sessions = [],
     trendDistribution = [],
+    privacyMode,
   } = options;
 
   server.use(
@@ -45,6 +47,8 @@ function mockTrendsApi(options: {
       return HttpResponse.json({
         sessions,
         trendDistribution,
+        // Mirrors the real route, which includes privacyMode in the response
+        ...(privacyMode ? { privacyMode } : {}),
       });
     }),
   );
@@ -147,6 +151,64 @@ describe('Trend Dashboard Page', () => {
 
     expect(await screen.findByText('1 response')).toBeInTheDocument();
     expect(screen.queryByText('1 responses')).not.toBeInTheDocument();
+  });
+
+  /**
+   * Manager Experience 4.3, 4.4, 4.5, 4.6: say what happens next, and stop
+   * saying it once it has happened.
+   */
+  describe('first-run guidance', () => {
+    it('explains that trends begin once a check closes', async () => {
+      mockRoles(['delivery_manager']);
+      mockTrendsApi({ sessions: [] });
+      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+      const guidance = await screen.findByRole('region', { name: /next steps/i });
+      expect(guidance).toHaveTextContent(/trends appear once a health check has closed/i);
+    });
+
+    it('explains that a second check is what makes a trend', async () => {
+      mockRoles([]);
+      mockTrendsApi({
+        sessions: [{ sessionId: 's1', closedAt: '2026-08-01T17:00:00Z', averages: [] }],
+      });
+      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+      const guidance = await screen.findByRole('region', { name: /next steps/i });
+      expect(guidance).toHaveTextContent(/one check has closed/i);
+    });
+
+    it('says what anonymous mode hides, so a gap is not read as silence', async () => {
+      mockRoles([]);
+      mockTrendsApi({
+        sessions: [
+          { sessionId: 's1', closedAt: '2026-08-01T17:00:00Z', averages: [] },
+          { sessionId: 's2', closedAt: '2026-08-08T17:00:00Z', averages: [] },
+        ],
+        privacyMode: 'anonymous',
+      });
+      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+      const guidance = await screen.findByRole('region', { name: /next steps/i });
+      expect(guidance).toHaveTextContent(/hidden is not the same as unanswered/i);
+    });
+
+    it('stops offering guidance once there is nothing left to say', async () => {
+      mockRoles([]);
+      mockTrendsApi({
+        sessions: [
+          { sessionId: 's1', closedAt: '2026-08-01T17:00:00Z', averages: [] },
+          { sessionId: 's2', closedAt: '2026-08-08T17:00:00Z', averages: [] },
+        ],
+        privacyMode: 'attributed',
+      });
+      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+      // Anchor on content the page always renders, so the absence is asserted
+      // against a loaded dashboard
+      await screen.findByRole('figure', { name: /average score per question/i });
+      expect(screen.queryByRole('region', { name: /next steps/i })).not.toBeInTheDocument();
+    });
   });
 
   describe('Requirement 8.3: Fewer than 2 closed sessions', () => {
