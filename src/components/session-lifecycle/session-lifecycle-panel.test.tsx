@@ -80,6 +80,21 @@ function mockSessions(options: {
   return () => posts;
 }
 
+/** Serves the participation endpoint for one session. */
+function mockParticipation(
+  sessionId: string,
+  data: { totalCount: number; respondedCount: number } | { status: number },
+) {
+  server.use(
+    http.get(`/api/teams/${TEAM_ID}/sessions/${sessionId}/participation`, () => {
+      if ('status' in data) {
+        return HttpResponse.json({ error: { message: 'nope' } }, { status: data.status });
+      }
+      return HttpResponse.json({ ...data, nonResponders: [] });
+    }),
+  );
+}
+
 function renderPanel(materialisedSessionIds: string[] = []) {
   return render(
     <SessionLifecyclePanel teamId={TEAM_ID} materialisedSessionIds={materialisedSessionIds} />,
@@ -151,6 +166,57 @@ describe('SessionLifecyclePanel', () => {
     renderPanel([]);
 
     expect(await screen.findByText(/results are still being prepared/i)).toBeInTheDocument();
+  });
+
+  // Requirement 2.4: a manager watching a check needs to know whether it is
+  // worth chasing anyone, and when it closes.
+
+  describe('while a check is collecting', () => {
+    const openSession = wireSession({
+      id: 'open-1',
+      status: 'open',
+      actualCloseAt: null,
+      scheduledCloseAt: '2026-08-28T17:00:00.000Z',
+    });
+
+    it('reports how many of the team have answered', async () => {
+      mockSessions({ initial: [openSession] });
+      mockParticipation('open-1', { totalCount: 8, respondedCount: 3 });
+      renderPanel();
+
+      expect(await screen.findByText(/3 of 8 answered/i)).toBeInTheDocument();
+    });
+
+    it('reports when the check is due to close', async () => {
+      mockSessions({ initial: [openSession] });
+      mockParticipation('open-1', { totalCount: 8, respondedCount: 3 });
+      renderPanel();
+
+      expect(await screen.findByText(/closes on 28 august 2026/i)).toBeInTheDocument();
+    });
+
+    it('still reports the check as collecting when participation cannot be read', async () => {
+      // A failed count is not a reason to hide the fact that a check is running
+      mockSessions({ initial: [openSession] });
+      mockParticipation('open-1', { status: 500 });
+      renderPanel();
+
+      expect(await screen.findByText(/collecting responses/i)).toBeInTheDocument();
+      expect(screen.queryByText(/answered/i)).not.toBeInTheDocument();
+    });
+
+    it('omits a close time rather than inventing one when none is scheduled', async () => {
+      mockSessions({
+        initial: [
+          wireSession({ id: 'open-1', status: 'open', actualCloseAt: null, scheduledCloseAt: null }),
+        ],
+      });
+      mockParticipation('open-1', { totalCount: 2, respondedCount: 0 });
+      renderPanel();
+
+      expect(await screen.findByText(/collecting responses/i)).toBeInTheDocument();
+      expect(screen.queryByText(/closes on/i)).not.toBeInTheDocument();
+    });
   });
 
   it('is announced as a region a manager can find', async () => {

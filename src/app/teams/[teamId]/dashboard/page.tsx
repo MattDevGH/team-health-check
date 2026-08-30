@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { SessionLifecyclePanel } from '@/components/session-lifecycle';
 import { TrendChart } from './trend-chart';
 import { TrendDistribution as TrendDistributionPanel } from './trend-distribution';
 import { QuestionDetailView } from './question-detail-view';
@@ -49,6 +50,47 @@ export default function TrendDashboardPage({ params }: PageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<TrendsResponse | null>(null);
+  const [teamId, setTeamId] = useState<string | null>(null);
+  const [canManage, setCanManage] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    params.then(({ teamId: id }) => {
+      if (!cancelled) setTeamId(id);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [params]);
+
+  /**
+   * Lifecycle controls are Delivery-Manager-only (Requirement 2.6), and the
+   * roles come from the same endpoint the navigation shell uses.
+   *
+   * Fetched again here rather than shared from the shell: a context would
+   * couple this page to being rendered inside that layout, and one small GET is
+   * a fair price for the page standing on its own.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch('/api/me')
+      .then(res => (res.ok ? res.json() : null))
+      .then((me: { roles?: string[] } | null) => {
+        if (!cancelled && me) {
+          setCanManage(Array.isArray(me.roles) && me.roles.includes('delivery_manager'));
+        }
+      })
+      .catch(() => {
+        // A page that cannot read roles simply offers no controls
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,6 +149,25 @@ export default function TrendDashboardPage({ params }: PageProps) {
   const hasEnoughData = sessions.length >= 2;
   const anonymousMode = privacyMode === 'anonymous';
 
+  /**
+   * The lifecycle panel belongs in every data state, not only the populated
+   * one: a team with no closed sessions is exactly the team that most needs to
+   * open its first check.
+   *
+   * Sessions in the trends response are the ones whose aggregates exist, so
+   * their ids are what tells the panel a closed check has results — no extra
+   * request.
+   */
+  const lifecyclePanel =
+    canManage && teamId ? (
+      <div className="mb-6">
+        <SessionLifecyclePanel
+          teamId={teamId}
+          materialisedSessionIds={sessions.map(session => session.sessionId)}
+        />
+      </div>
+    ) : null;
+
   if (!hasEnoughData) {
     return (
       <div className="min-h-screen bg-gray-50 py-6 px-4">
@@ -114,6 +175,8 @@ export default function TrendDashboardPage({ params }: PageProps) {
           <h1 className="text-2xl font-bold text-gray-800 mb-4">
             Trend Dashboard
           </h1>
+
+          {lifecyclePanel}
           <div className="bg-white rounded-lg shadow p-8 text-center">
             <p className="text-gray-500 text-lg">
               More data needed
@@ -136,6 +199,8 @@ export default function TrendDashboardPage({ params }: PageProps) {
         <h1 className="text-2xl font-bold text-gray-800 mb-4">
           Trend Dashboard
         </h1>
+
+        {lifecyclePanel}
 
         <div className="bg-white rounded-lg shadow p-4 mb-6">
           <TrendChart sessions={sessions} />

@@ -49,6 +49,33 @@ function parseDate(value: string | null): Date | null {
   return value ? new Date(value) : null;
 }
 
+/** How many of the team have answered the open check. */
+interface Participation {
+  totalCount: number;
+  respondedCount: number;
+}
+
+/**
+ * Fetches participation for one session, or null if it cannot be read.
+ *
+ * A failed count is not a reason to hide the fact that a check is running, so
+ * the caller renders the collecting state either way.
+ */
+async function fetchParticipation(
+  teamId: string,
+  sessionId: string,
+): Promise<Participation | null> {
+  try {
+    const res = await fetch(`/api/teams/${teamId}/sessions/${sessionId}/participation`);
+    if (!res.ok) return null;
+
+    const data: Participation = await res.json();
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Fetches the team's sessions, parsed. Returns null if the request failed.
  *
@@ -108,6 +135,12 @@ export function SessionLifecyclePanel({
 }: SessionLifecyclePanelProps) {
   const headingId = useId();
   const [sessions, setSessions] = useState<HealthCheckSession[] | null>(null);
+  // Kept with the session it describes, so a count from a previous check can
+  // never be shown against the current one
+  const [participation, setParticipation] = useState<{
+    sessionId: string;
+    data: Participation;
+  } | null>(null);
   const [opening, setOpening] = useState(false);
 
   useEffect(() => {
@@ -139,6 +172,29 @@ export function SessionLifecyclePanel({
   }
 
   const state = sessions ? deriveSessionState(sessions, new Set(materialisedSessionIds)) : null;
+  const openSessionId = state?.status === 'collecting' ? state.session.id : null;
+
+  // Participation is only meaningful while a check is collecting, and it must
+  // follow whichever session is open rather than the one that was open when the
+  // panel first rendered
+  useEffect(() => {
+    if (!openSessionId) return;
+
+    let cancelled = false;
+
+    fetchParticipation(teamId, openSessionId).then(loaded => {
+      if (!cancelled && loaded) setParticipation({ sessionId: openSessionId, data: loaded });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, openSessionId]);
+
+  // Only the count belonging to the session on screen is shown, so a closed
+  // check leaves no lingering figure behind
+  const currentParticipation =
+    openSessionId && participation?.sessionId === openSessionId ? participation.data : null;
 
   return (
     <section aria-labelledby={headingId} className="bg-white rounded-lg shadow p-4">
@@ -151,6 +207,22 @@ export function SessionLifecyclePanel({
       ) : (
         <>
           <p className="text-gray-700">{describe(state)}</p>
+
+          {state.status === 'collecting' && (
+            <ul className="mt-2 space-y-1 text-sm text-gray-600">
+              {/* "3 of 8 answered" sidesteps the singular/plural problem
+                  entirely, so this needs no pluralise helper */}
+              {currentParticipation && (
+                <li>
+                  {currentParticipation.respondedCount} of {currentParticipation.totalCount}{' '}
+                  answered
+                </li>
+              )}
+              {state.session.scheduledCloseAt && (
+                <li>Closes on {formatDate(state.session.scheduledCloseAt)}</li>
+              )}
+            </ul>
+          )}
 
           {state.control === 'open' && (
             <button

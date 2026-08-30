@@ -242,10 +242,35 @@ a colleague hits the conflict before the UI work lands.
     - Not yet wired into the dashboard page — that lands with 3.3, which needs
       the trends response for response counts.
 
-  - [ ] 3.3 Display the collecting state
+  - [x] 3.3 Display the collecting state
     - Write failing tests: response count and scheduled close time shown while a session is open
     - Counts come from the participation endpoint; use `pluralise` from task 5.1 if that has landed, otherwise correct the copy here and delete the duplication when it does
     - _Requirements: 2.4_
+    - **Done.** "3 of 8 answered" and "Closes on 28 August 2026" while a check
+      is collecting. The count-of-total phrasing sidesteps singular/plural
+      entirely, so no `pluralise` helper is needed here and there is nothing for
+      task 5.1 to come back and deduplicate.
+    - A failed participation request does not hide the fact that a check is
+      running; the count is simply omitted. Same for a session with no
+      scheduled close — the panel says nothing rather than inventing a date.
+    - Participation is stored **with the session id it describes**, so a count
+      from a previous check can never be shown against the current one. That
+      shape was forced by `react-hooks/set-state-in-effect` rejecting a
+      synchronous reset, and is more correct than what it replaced.
+    - Panel mounted on the dashboard, in **every** data state: a team with no
+      closed sessions is exactly the team that most needs to open its first
+      check. Materialised session ids come from the trends response the page
+      already fetches, so the panel costs no extra request.
+    - The dashboard fetches `/api/me` for roles rather than sharing the shell's
+      copy. A context would couple the page to being rendered inside that
+      layout; one small GET keeps it standing on its own.
+
+  - [x] 3.6 Hide controls from non-managers
+    - **Pulled forward into 3.3.** Mounting the panel without the gate would
+      have left the branch in a state where a contributor sees a button that
+      403s, which the commit discipline rules out. Covered by a dashboard test
+      and by `e2e/session-lifecycle.spec.ts`.
+    - _Requirements: 2.6_
 
   - [ ] 3.4 Close with confirmation
     - Write failing tests: activating close opens a dialog and issues **no** request; confirming issues the PATCH; cancelling issues none and returns focus to the trigger
@@ -256,9 +281,10 @@ a colleague hits the conflict before the UI work lands.
     - Write failing tests: immediately after close the panel says results are still being prepared; a failed open or close renders the server's message and leaves the previous state displayed
     - _Requirements: 2.5, 2.7_
 
-  - [ ] 3.6 Hide controls from non-managers
-    - Write a failing test: a member without `delivery_manager` sees the state but no controls
-    - _Requirements: 2.6_
+  - [x] 3.6 Hide controls from non-managers — **done as part of 3.3, see above**
+    - A contributor sees no panel at all rather than the state without controls:
+      the panel exists to act, and the dashboard already shows the trend data
+      that is a contributor's stake in the check.
 
   - [ ] 3.7 Drive open and close through the UI in the E2E journey
     - Replace the `page.request.post` / `page.request.patch` calls in `e2e/journey.spec.ts` with UI interactions, and delete the comments explaining their absence
