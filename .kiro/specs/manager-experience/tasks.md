@@ -400,9 +400,13 @@ a colleague hits the conflict before the UI work lands.
     - The lifecycle panel needs nothing from this: "3 of 8 answered" sidesteps
       agreement entirely.
 
-  - [ ] 5.2 Chart caption and legend
+  - [x] 5.2 Chart caption and legend
     - Write failing tests: the figure has a caption naming what is plotted; every plotted question appears in the legend by name
     - _Requirements: 3.1, 3.2_
+    - **Done.** The chart is now a `<figure>` with a `<figcaption>` naming what
+      is plotted and the score range, and a legend pairing each question name
+      with its colour. Five lines told apart by hue alone are unreadable to
+      anyone with a colour vision deficiency and unprintable in greyscale.
 
   - [ ] 5.3 Accessible data table
     - Write failing tests: the table exposes score, response count, question name, and session date for every plotted point; values match those given to the chart

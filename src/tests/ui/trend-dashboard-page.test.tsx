@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import TrendDashboardPage from '@/app/teams/[teamId]/dashboard/page';
@@ -213,7 +213,12 @@ describe('Trend Dashboard Page', () => {
       render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
 
       await waitFor(() => {
-        expect(screen.getByRole('img', { name: /trend chart/i })).toBeInTheDocument();
+        // The chart is a figure with a caption, not an unlabelled image: the
+        // drawing itself is hidden from assistive technology and its values are
+        // carried by the accompanying table
+        expect(
+          screen.getByRole('figure', { name: /average score per question/i }),
+        ).toBeInTheDocument();
       });
     });
 
@@ -221,7 +226,12 @@ describe('Trend Dashboard Page', () => {
       render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
 
       await waitFor(() => {
-        expect(screen.getByRole('img', { name: /trend chart/i })).toBeInTheDocument();
+        // The chart is a figure with a caption, not an unlabelled image: the
+        // drawing itself is hidden from assistive technology and its values are
+        // carried by the accompanying table
+        expect(
+          screen.getByRole('figure', { name: /average score per question/i }),
+        ).toBeInTheDocument();
       });
 
       expect(screen.queryByText(/more data needed/i)).not.toBeInTheDocument();
@@ -256,9 +266,10 @@ describe('Trend Dashboard Page', () => {
     it('displays response counts for the most recent session', async () => {
       render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/6 responses/i)).toBeInTheDocument();
-      });
+      // Scoped to the Latest Session panel: the chart's data table now reports
+      // counts too, so an unscoped search matches both and proves neither
+      const panel = await screen.findByRole('region', { name: /latest session/i });
+      expect(within(panel).getByText(/6 responses/i)).toBeInTheDocument();
     });
   });
 

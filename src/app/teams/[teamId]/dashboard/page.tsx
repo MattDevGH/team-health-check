@@ -207,8 +207,11 @@ export default function TrendDashboardPage({ params }: PageProps) {
           <TrendChart sessions={sessions} />
         </div>
 
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-3">
+        <section
+          aria-labelledby="latest-session-heading"
+          className="bg-white rounded-lg shadow p-4 mb-6"
+        >
+          <h2 id="latest-session-heading" className="text-lg font-semibold text-gray-700 mb-3">
             Latest Session
           </h2>
           <div className="space-y-2">
@@ -226,7 +229,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
         {trendDistribution.length > 0 && (
           <div className="bg-white rounded-lg shadow p-4">
