@@ -298,28 +298,78 @@ a colleague hits the conflict before the UI work lands.
       would couple them by order, and sharing a member would spend two of the
       five magic links an email gets per hour, which CI's two retries exhaust.
 
-  - [ ] 3.5 Post-close state and failure handling
+  - [x] 3.5 Post-close state and failure handling
     - Write failing tests: immediately after close the panel says results are still being prepared; a failed open or close renders the server's message and leaves the previous state displayed
     - _Requirements: 2.5, 2.7_
+    - **Done.** The post-close state landed with 3.1's `awaiting_results`; this
+      task added failure handling.
+    - The panel shows the server's own words — "Session is already closed" tells
+      a manager what happened, "Something went wrong" does not. The generic
+      fallback is only for responses carrying no message at all.
+    - A failed action leaves the displayed state exactly as it was. Claiming a
+      check is running because the request to start one failed is worse than
+      reporting that nothing happened, so the tests assert the *old* state is
+      still on screen, not merely that an error appeared.
+    - `role="alert"`, because the message follows an action the manager took and
+      they need to know it did not happen.
+    - A failed close dismisses the confirmation rather than leaving it open: the
+      failure belongs beside the check it concerns, and the manager needs the
+      close control back to retry.
 
   - [x] 3.6 Hide controls from non-managers — **done as part of 3.3, see above**
     - A contributor sees no panel at all rather than the state without controls:
       the panel exists to act, and the dashboard already shows the trend data
       that is a contributor's stake in the check.
 
-  - [ ] 3.7 Drive open and close through the UI in the E2E journey
+  - [x] 3.7 Drive open and close through the UI in the E2E journey
     - Replace the `page.request.post` / `page.request.patch` calls in `e2e/journey.spec.ts` with UI interactions, and delete the comments explaining their absence
     - The scheduler tick stays an API call: it is a cron endpoint with no UI by design
     - _Requirements: NFR 2.1_
+    - **Done.** The journey opens a check from the dashboard button and closes it
+      through the confirmation, twice over. The comment explaining why the API
+      was used is gone, because the reason is gone.
+    - Closing also cross-checks that no open session remains, so the journey
+      proves the server acted rather than that the page changed its mind.
+    - The scheduler tick remains the single API call, as designed.
 
-  - [ ] 3.8 Accessibility pass over the lifecycle panel
+  - [x] 3.8 Accessibility pass over the lifecycle panel
     - axe over the panel and the open confirmation dialog
     - Manual keyboard pass: open the dialog, confirm focus moves into it, Escape cancels, focus returns to the trigger. Record the outcome here:
-      - Result: _(not yet run)_
+      - **Result:** driven from Playwright in Chromium, not by hand. Focusing the
+        close control and pressing Enter opens the dialog with focus already on
+        the confirm button; Tab reaches Cancel; Enter dismisses it and focus
+        returns to the trigger with the check still running. Pressing Enter
+        again reopens and confirms, and the check closes. Escape is covered
+        separately, and the dialog is asserted to match `:modal`, so a
+        regression to a non-modal `<dialog open>` fails rather than passing on
+        appearance.
+      - **Still outstanding:** a screen-reader pass. Nothing automated can say
+        whether the dialog is announced sensibly when it opens.
+    - axe covers the panel while a check is collecting, and the confirmation
+      dialog itself — a state that exists only after a click and renders over an
+      inert page.
     - _Requirements: NFR 1.1, 1.2, 1.3_
 
-- [ ] 4. Checkpoint — lifecycle control
+- [x] 4. Checkpoint — lifecycle control
   - Full suite, `tsc --noEmit`, lint, build, E2E. Ask the user if questions arise.
+  - **Gates:** 1262 Vitest tests across 155 files, `tsc --noEmit`, lint with zero
+    warnings, production build, and 51 Playwright tests with zero skips — run
+    twice, clean both times.
+  - **Two defects the full-suite run exposed that per-spec runs did not**, both
+    introduced by this phase:
+    1. The tab-order test waited for the navigation landmark, which the shell
+       renders with Profile alone while `/api/me` is in flight. Once the
+       dashboard also began fetching `/api/me` and the sessions list, the page
+       became slow enough for the test to tab through a half-built nav. It now
+       waits for a team-scoped link, which only exists in the ready state.
+    2. `seedTeam` deleted responses and session links by *session*, which was
+       enough while every session was seeded but not once tests create sessions
+       by clicking "Open a health check". Cleanup now enumerates every table
+       holding a foreign key to a member of the team, which stays correct as
+       tests gain new ways to write rows.
+  - Neither would have appeared in a spec run on its own. The second only fires
+    on the retry after a first failure — precisely when a suite can least afford
+    a second, unrelated error.
 
 - [ ] 5. Dashboard comprehension
 

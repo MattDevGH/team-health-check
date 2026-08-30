@@ -672,7 +672,32 @@ remaining items are covered by automated tests — but so was the audit log page
 whose route test and UI mock each asserted a different response shape and both
 passed.
 
-### Manager experience — phase 1 complete, phase 3 starting (2026-08-29)
+### Manager experience — phase 3 complete (2026-08-30)
+
+Branch `feat/session-lifecycle`. A delivery manager can now open and close a
+health check from the dashboard, which is the milestone's reason for existing.
+
+- `SessionLifecyclePanel` derives one of four states from the session list plus
+  which sessions have materialised aggregates: `collecting`, `awaiting_results`,
+  `idle`, `never_run`. `awaiting_results` exists because closing does not
+  compute results — a scheduler tick does, at least 30s later — and an empty
+  dashboard would otherwise read as nobody having answered
+- Closing is confirmed through a native `<dialog>`; opening is not, because the
+  service closes any existing open session when a new one opens
+- **jsdom 29 implements neither `showModal()` nor the `cancel` event.** The
+  component falls back to the `open` property so the confirmation stays
+  assertable there, and `e2e/session-lifecycle.spec.ts` asserts `:modal` in a
+  real browser so a regression to a non-modal dialog fails
+- **Focus restoration must close the dialog first.** While a modal is open the
+  rest of the page is inert, so focusing the trigger before closing is silently
+  ignored. Found in a browser; jsdom has no top layer and cannot catch it
+- `e2e/journey.spec.ts` now drives open and close through the UI. The scheduler
+  tick is the only remaining API call in it, by design
+- Session data crosses JSON as **ISO strings**; the panel parses them before the
+  date comparison in `deriveSessionState`. MSW handlers mirror that, since a
+  mock returning `Date` objects would hide the parsing bug
+
+### Manager experience — phase 1 complete (2026-08-29)
 
 Phase 1 merged to `master` via PR #8 (`5bda63b`). Two follow-up fixes found by
 using the app merged after it: PR #9 (magic link claimed twice) and PR #10

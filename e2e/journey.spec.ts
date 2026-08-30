@@ -4,10 +4,9 @@
  * Each stage is its own test so a failure localises, and `describe.serial`
  * stops the rest rather than reporting a cascade of confusing errors.
  *
- * The browser drives everything the product exposes a UI for. Session open and
- * close, and the scheduler tick, go through the API because no UI exists for
- * them — session lifecycle management is a deferred milestone, not a shortcut
- * taken here for convenience.
+ * The browser drives everything the product exposes a UI for, which now
+ * includes opening and closing a session. Only the scheduler tick goes through
+ * the API: it is a cron endpoint with no UI by design.
  *
  * Nothing is skipped. If the TEST_MODE capture is unavailable the run fails.
  *
@@ -68,17 +67,22 @@ const SECOND_ANSWERS: Answer[] = [
 /**
  * Opens a session and answers it in the browser.
  *
- * Opening goes through the API because the product has no UI for it — session
- * lifecycle management is a deferred milestone. Everything a member actually
- * does is driven through the page.
+ * Every step here is a real interaction: opening is now a button on the
+ * dashboard, so nothing in this journey reaches for the API on a manager's
+ * behalf. The scheduler tick below is the one exception, and it is a cron
+ * endpoint with no UI by design.
  */
 async function openSessionAndAnswer(
   page: Page,
   current: typeof state,
   answers: Answer[],
 ): Promise<void> {
-  const opened = await page.request.post(`/api/teams/${current.teamId}/sessions`);
-  expect(opened.status(), 'delivery manager should be able to open a session').toBe(201);
+  await page.goto(`/teams/${current.teamId}/dashboard`);
+
+  const panel = page.getByRole('region', { name: 'Health check' });
+  await expect(panel, 'a delivery manager should be offered the lifecycle panel').toBeVisible();
+  await panel.getByRole('button', { name: /open a health check/i }).click();
+  await expect(panel).toContainText(/collecting responses/i);
 
   const session = findOpenSession(current.teamId);
   expect(session, 'an open session should exist after opening one').toBeTruthy();
@@ -133,11 +137,14 @@ async function openSessionAndAnswer(
 async function closeAndMaterialise(page: Page, current: typeof state): Promise<void> {
   const sessionId = current.sessionIds[current.sessionIds.length - 1];
 
-  const closed = await page.request.patch(
-    `/api/teams/${current.teamId}/sessions/${sessionId}`,
-    { data: { status: 'closed' } },
-  );
-  expect(closed.ok(), 'delivery manager should be able to close the session').toBe(true);
+  await page.goto(`/teams/${current.teamId}/dashboard`);
+
+  const panel = page.getByRole('region', { name: 'Health check' });
+  await panel.getByRole('button', { name: /^close the health check$/i }).click();
+  await page.getByRole('button', { name: /^yes, close it$/i }).click();
+  await expect(panel).toContainText(/results are still being prepared/i);
+
+  expect(findOpenSession(current.teamId), 'the check should be closed server-side').toBeUndefined();
 
   backdateClose(sessionId);
 

@@ -365,6 +365,67 @@ describe('SessionLifecyclePanel', () => {
     });
   });
 
+  /**
+   * Requirement 2.5: a failed action reports what the server said and leaves
+   * the displayed state alone. Showing a check as closed because the request to
+   * close it failed would be worse than showing nothing.
+   */
+  describe('when an action fails', () => {
+    it('reports the server\'s message and leaves the state as it was', async () => {
+      const user = userEvent.setup();
+      mockSessions({ initial: [], openStatus: 409 });
+      renderPanel();
+
+      await user.click(await screen.findByRole('button', { name: /open a health check/i }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/could not open/i);
+      expect(
+        screen.getByText(/no health check has run/i),
+        'the panel must not claim a check is running when opening failed',
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /open a health check/i })).toBeEnabled();
+    });
+
+    it('keeps a check collecting when closing it fails', async () => {
+      const user = userEvent.setup();
+      mockParticipation('open-1', { totalCount: 8, respondedCount: 3 });
+      mockSessions({
+        initial: [wireSession({ id: 'open-1', status: 'open', actualCloseAt: null })],
+      });
+      mockClose('open-1', { status: 409 });
+      renderPanel();
+
+      await user.click(await screen.findByRole('button', { name: /^close the health check$/i }));
+      await user.click(await screen.findByRole('button', { name: /^yes, close it$/i }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/already closed/i);
+      expect(screen.getByText(/collecting responses/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /^close the health check$/i }),
+        'the manager needs the control back to try again',
+      ).toBeInTheDocument();
+    });
+
+    it('clears the failure once an action succeeds', async () => {
+      const user = userEvent.setup();
+      mockSessions({ initial: [], openStatus: 409 });
+      renderPanel();
+
+      await user.click(await screen.findByRole('button', { name: /open a health check/i }));
+      await screen.findByRole('alert');
+
+      // The endpoint recovers
+      mockSessions({
+        initial: [wireSession({ id: 'open-1', status: 'open', actualCloseAt: null })],
+      });
+      mockParticipation('open-1', { totalCount: 4, respondedCount: 0 });
+      await user.click(screen.getByRole('button', { name: /open a health check/i }));
+
+      expect(await screen.findByText(/collecting responses/i)).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  });
+
   it('is announced as a region a manager can find', async () => {
     mockSessions({ initial: [] });
     renderPanel();

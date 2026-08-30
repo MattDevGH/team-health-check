@@ -20,9 +20,11 @@ const MANAGER = 'lifecycle-manager@e2e.invalid';
 const CONTRIBUTOR = 'lifecycle-contributor@e2e.invalid';
 const CANCELLER = 'lifecycle-canceller@e2e.invalid';
 const CONFIRMER = 'lifecycle-confirmer@e2e.invalid';
+const KEYBOARD = 'lifecycle-keyboard@e2e.invalid';
 let teamId = '';
 let cancelTeamId = '';
 let confirmTeamId = '';
+let keyboardTeamId = '';
 
 /**
  * Each closing test gets its own team with its own running check.
@@ -46,6 +48,7 @@ test.beforeAll(() => {
 
   cancelTeamId = seedTeamWithOpenCheck('Lifecycle Cancel Team', CANCELLER);
   confirmTeamId = seedTeamWithOpenCheck('Lifecycle Confirm Team', CONFIRMER);
+  keyboardTeamId = seedTeamWithOpenCheck('Lifecycle Keyboard Team', KEYBOARD);
 });
 
 test('a delivery manager opens the team\'s first health check', async ({ page }) => {
@@ -121,6 +124,45 @@ test('confirming closes the check for real', async ({ page }) => {
   // The rendered text is what the page believes; the absent row is what the
   // server actually did
   expect(findOpenSession(confirmTeamId), 'the check should be closed server-side').toBeUndefined();
+});
+
+/**
+ * NFR 1.2: every control introduced here is operable by keyboard alone.
+ *
+ * Driven with real key presses rather than clicks, so a control that is only
+ * reachable with a mouse fails.
+ */
+test('the whole close flow is operable by keyboard alone', async ({ page }) => {
+  await signIn(page, KEYBOARD);
+  await page.goto(`/teams/${keyboardTeamId}/dashboard`);
+
+  const panel = page.getByRole('region', { name: 'Health check' });
+  await expect(panel).toContainText(/collecting responses/i);
+
+  const trigger = panel.getByRole('button', { name: /^close the health check$/i });
+  await trigger.focus();
+  await page.keyboard.press('Enter');
+
+  const dialog = page.getByRole('dialog', { name: /close this health check/i });
+  await expect(dialog).toBeVisible();
+
+  // Tab from the confirm button reaches Cancel, so both choices are available
+  // without a pointer
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: /^cancel$/i })).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+  expect(findOpenSession(keyboardTeamId), 'cancelling must leave the check running').toBeDefined();
+
+  // And the check can then be closed, still without a pointer
+  await page.keyboard.press('Enter');
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Enter');
+
+  await expect(panel).toContainText(/results are still being prepared/i);
+  expect(findOpenSession(keyboardTeamId)).toBeUndefined();
 });
 
 test('a contributor sees no lifecycle controls', async ({ page }) => {

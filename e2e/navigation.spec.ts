@@ -172,7 +172,11 @@ test.describe('using the shell', () => {
     // required. Recording the actual order at least makes a regression visible.
     await signIn(page, emailFor('focus-order'));
     await page.goto(`/teams/${teamId}/dashboard`);
-    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+
+    // Wait for a team-scoped link, not merely the landmark. The shell renders
+    // the landmark with Profile alone while /api/me is in flight, so waiting on
+    // the landmark tabs through a half-built nav and asserts the wrong order.
+    await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
 
     const order: string[] = [];
     for (let i = 0; i < 6; i += 1) {

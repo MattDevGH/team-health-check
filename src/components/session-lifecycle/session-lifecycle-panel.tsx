@@ -49,6 +49,33 @@ function parseDate(value: string | null): Date | null {
   return value ? new Date(value) : null;
 }
 
+/**
+ * Reads the server's own explanation of a failure.
+ *
+ * The route's typed errors carry a message worth showing — "Session is already
+ * closed" tells a manager what happened; "Something went wrong" does not. The
+ * fallback exists only for responses that carry no message at all.
+ */
+async function readErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const body: unknown = await response.json();
+    if (
+      typeof body === 'object' &&
+      body !== null &&
+      'error' in body &&
+      typeof (body as { error: unknown }).error === 'object' &&
+      (body as { error: { message?: unknown } }).error !== null
+    ) {
+      const message = (body as { error: { message?: unknown } }).error.message;
+      if (typeof message === 'string' && message.trim()) return message;
+    }
+  } catch {
+    // A body that is not JSON tells us nothing; fall through
+  }
+
+  return fallback;
+}
+
 /** How many of the team have answered the open check. */
 interface Participation {
   totalCount: number;
@@ -139,6 +166,7 @@ export function SessionLifecyclePanel({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [confirming, setConfirming] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<HealthCheckSession[] | null>(null);
   // Kept with the session it describes, so a count from a previous check can
   // never be shown against the current one
@@ -162,15 +190,24 @@ export function SessionLifecyclePanel({
 
   async function openSession(): Promise<void> {
     setOpening(true);
+    setActionError(null);
     try {
       const res = await fetch(`/api/teams/${teamId}/sessions`, { method: 'POST' });
-      if (!res.ok) return;
+      if (!res.ok) {
+        // The displayed state is deliberately left alone: claiming a check is
+        // running because the request to start one failed is worse than saying
+        // nothing happened
+        setActionError(await readErrorMessage(res, 'The health check could not be opened.'));
+        return;
+      }
 
       // Refetch rather than trusting the created session alone: opening also
       // closes any session that was already open, so the list is the only
       // account of what the team now has
       const loaded = await fetchSessions(teamId);
       if (loaded) setSessions(loaded);
+    } catch {
+      setActionError('The health check could not be opened.');
     } finally {
       setOpening(false);
     }
@@ -223,13 +260,23 @@ export function SessionLifecyclePanel({
 
   async function closeSession(sessionId: string): Promise<void> {
     setClosing(true);
+    setActionError(null);
     try {
       const res = await fetch(`/api/teams/${teamId}/sessions/${sessionId}`, { method: 'PATCH' });
-      if (!res.ok) return;
+      if (!res.ok) {
+        // Dismissed rather than left open: the failure belongs beside the check
+        // it concerns, and the manager needs the close control back to retry
+        setActionError(await readErrorMessage(res, 'The health check could not be closed.'));
+        dismissConfirmation();
+        return;
+      }
 
       setConfirming(false);
       const loaded = await fetchSessions(teamId);
       if (loaded) setSessions(loaded);
+    } catch {
+      setActionError('The health check could not be closed.');
+      dismissConfirmation();
     } finally {
       setClosing(false);
     }
@@ -271,6 +318,14 @@ export function SessionLifecyclePanel({
       ) : (
         <>
           <p className="text-gray-700">{describe(state)}</p>
+
+          {/* role="alert" because this follows an action the manager took and
+              they need to know it did not happen */}
+          {actionError && (
+            <p role="alert" className="mt-2 text-sm text-red-700">
+              {actionError}
+            </p>
+          )}
 
           {state.status === 'collecting' && (
             <ul className="mt-2 space-y-1 text-sm text-gray-600">
