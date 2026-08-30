@@ -135,9 +135,24 @@ function toSession(wire: WireSession): HealthCheckSession {
   };
 }
 
+/**
+ * Formats a date as "28 August 2026".
+ *
+ * The locale is pinned rather than taken from the viewer. Leaving it to the
+ * runtime meant the same close time read as "28 August 2026" on a British
+ * machine and "August 28, 2026" on CI, which is how this reached a pull
+ * request. The rest of the app formats dates explicitly too — the trend chart
+ * names its own months — so a fixed locale is also the consistent choice.
+ *
+ * The *timezone* is still the viewer's, which is right for someone reading it
+ * but not necessarily right for the team: a check closing at 23:30 UTC falls on
+ * different days either side of midnight. The team already stores a timezone;
+ * using it here needs it plumbed to this component, and is recorded as
+ * follow-up work rather than guessed at now.
+ */
 function formatDate(date: Date | null): string {
   if (!date) return 'an unrecorded date';
-  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 /** What the manager is told is happening right now. */

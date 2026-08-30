@@ -370,6 +370,17 @@ a colleague hits the conflict before the UI work lands.
   - Neither would have appeared in a spec run on its own. The second only fires
     on the retry after a first failure — precisely when a suite can least afford
     a second, unrelated error.
+  - **A third, found by CI and not reproducible locally at all.** The panel
+    formatted dates with `toLocaleDateString(undefined, …)`, so the same close
+    time read as "28 August 2026" on a British machine and "August 28, 2026" on
+    the runner. Windows ignores `LANG`, so no local run could have shown it. The
+    locale is now pinned to `en-GB`, matching the trend chart, which already
+    names its own months.
+  - **Follow-up recorded, not guessed at:** dates render in the *viewer's*
+    timezone, which is right for a person reading them but not necessarily right
+    for the team — a check closing at 23:30 UTC falls on different days either
+    side of midnight. The team already stores a timezone; using it here needs it
+    plumbed to the panel and belongs in its own change.
 
 - [ ] 5. Dashboard comprehension
 
