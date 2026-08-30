@@ -638,6 +638,7 @@ All stages must pass. Branch protection requires CI green before merge.
 - **`authorizeDeliveryManager`**: Extends team membership check with delivery_manager role requirement
 - **Protected routes**: `/api/me/*`, `/api/teams` GET/POST, team exports, session details, participation, responses, and core team settings/trends/member/session routes use cookie AuthContext with requested-resource ownership checks; Task 23.2 route authorization is complete
 - **Member management**: GET/POST/PATCH return a stable member-summary DTO; Delivery Manager additions serialize that exact DTO into an actor-bound `member_added` audit and atomically persist member/default-role/audit; role replacement and removal retain final-manager protection
+- **One team per person, enforced in services not schema**: `TeamMember` is unique on `(teamId, name, email)`, so the database accepts one email in several teams — `src/tests/integration/shared-email.test.ts` proves it against a real file. Sign-in cannot resolve that, so `team.service.addMember` rejects an email held by another team before writing anything, and `auth.service.requestMagicLink` issues no token for an email matching more than one member, logging the email and team ids. `requestMagicLink` still returns void for every input, so anti-enumeration is unaffected. `findAllByEmail` exists for callers that must see *all* matches; `findByEmail` returns an arbitrary one and is unsafe for identity resolution. Multi-team membership remains a future spec
 - **Audit log response shape**: `GET /api/teams/[teamId]/audit-log` returns `{ entries, nextCursor }`, not a bare array. It returned an array until 2026-08-29, while the page destructured `data.entries` — which on an array is `Array.prototype.entries`, a *function*. React's `setState` treats a function argument as an updater and called it unbound, throwing `Cannot convert undefined or null to object` at the `useState` line. The route test asserted `Array.isArray(body)` and the page's MSW mock returned `{ entries, nextCursor }`: both green, flatly contradicting each other, because no test crossed the boundary. `e2e/navigation.spec.ts` now follows the nav link and asserts a seeded entry renders
 - **Session context for the shell**: `GET /api/me` returns `team: { id, name } | null` and `roles: string[]` alongside the member profile, resolved through `repos.team.findById` and `repos.teamMemberRole.findByMemberAndTeam`. The navigation shell reads these to build team-scoped links and to omit Delivery-Manager-only destinations rather than rendering links that 403. `team` is null only when the team record cannot be resolved, which the Prisma foreign key makes unreachable in production
 - **Slack identity**: Pairing derives memberId from AuthContext (never the request body) and `createContainer` wires `slackIdentityLinkRepo` into `AuthService`, so a verified code persists/upserts the link. `DELETE /api/me/slack-link` deletes the record before reporting success, and `GET /api/me` returns the persisted `slackLink`, so status survives reload/restart. The `/me` page's `SlackSection` has a pairing-code input for the unlinked state. Task 24.1 is complete
@@ -712,8 +713,15 @@ focused (it is clipped to 1×1 and skipped by axe until then), the sign-out
 failure message, and the dashboard at 320px — the width WCAG 2.1 AA 1.4.10
 actually specifies, being 1280px at 400% zoom. Focus order through the shell is
 asserted in `e2e/navigation.spec.ts`, since axe cannot judge it. **A
-screen-reader pass has still not happened**, and no AA conformance claim should
-be made without one.
+screen-reader pass has still not happened**.
+
+**Accessibility position, agreed 2026-08-30.** WCAG 2.1 AA is the standard this
+project constantly aims for, not one it claims to meet. Every new state gets axe
+against the AA rule set, asserted semantics, and keyboard operation driven
+end-to-end — that is the standing bar for any change. A formal audit including a
+screen-reader pass is the gate on *claiming* conformance, not a blocker on
+shipping work. Do not treat "no screen-reader pass yet" as a reason to hold a
+milestone; do treat it as a reason never to write that the app is AA conformant.
 
 **E2E fixture.** `allowConsoleErrors(page, pattern)` in `e2e/fixtures.ts` scopes
 an expected console error to one test. Some states can only be reached by

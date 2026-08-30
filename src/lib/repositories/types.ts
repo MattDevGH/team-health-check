@@ -66,6 +66,15 @@ export interface TeamMemberRepository {
   findByTeamId(teamId: string): Promise<TeamMember[]>;
   findByTeamAndNameEmail(teamId: string, name: string, email?: string): Promise<TeamMember | null>;
   findByEmail(email: string): Promise<TeamMember | null>;
+  /**
+   * Every member holding this email, oldest first.
+   *
+   * `TeamMember` is unique on `(teamId, name, email)`, so one address can exist
+   * in several teams. `findByEmail` returns an arbitrary one of them, which is
+   * fine for callers that have already established there is only one — and
+   * unsafe for sign-in, which must be able to see that there is more than one.
+   */
+  findAllByEmail(email: string): Promise<TeamMember[]>;
   update(id: string, data: Partial<Pick<TeamMember, 'name' | 'email' | 'cadencePreference' | 'remindersEnabled' | 'currentStreak' | 'bestStreak' | 'lastStreakSessionClose'>>): Promise<TeamMember>;
   remove(id: string): Promise<void>;
 }

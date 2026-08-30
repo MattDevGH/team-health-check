@@ -155,7 +155,30 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRY_MS);
 
-    const member = await teamMemberRepo.findByEmail(email);
+    const members = await teamMemberRepo.findAllByEmail(email);
+
+    /**
+     * An email held by more than one member cannot be resolved to a person.
+     *
+     * The schema permits it — `TeamMember` is unique on `(teamId, name, email)`
+     * — and this used to be a `findByEmail`, which answers with an arbitrary
+     * one of them. That would have signed the member into whichever team the
+     * query happened to return.
+     *
+     * No link is issued and no genesis record is created. The HTTP response is
+     * unchanged, because this function returns void for every input: the
+     * anti-enumeration guarantee of Requirement 7.8 costs nothing to keep here.
+     */
+    if (members.length > 1) {
+      console.error(
+        `Ambiguous sign-in: ${email} belongs to ${members.length} members across teams ` +
+          `${members.map((m) => m.teamId).join(', ')}. No magic link issued. ` +
+          `A person can belong to only one team; remove the duplicate member or change one email.`,
+      );
+      return;
+    }
+
+    const member = members[0] ?? null;
 
     if (member) {
       await magicLinkRepo.create({

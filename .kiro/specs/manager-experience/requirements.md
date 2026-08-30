@@ -120,6 +120,7 @@ Slack linking, and every team-scoped query.
 1. Every state introduced by this spec SHALL pass axe with the WCAG 2.1 A and AA rule sets, matching the existing suite.
 2. Every interactive control introduced by this spec SHALL be reachable and operable by keyboard alone.
 3. The Navigation_Shell and Lifecycle_Controls SHALL be verified by a manual keyboard pass, recorded in the tasks document. Automated checks detect roughly a third to a half of WCAG issues and cannot confirm conformance alone.
+4. WCAG 2.1 AA is the standard this project aims for continuously. Meeting criteria 1–3 is the bar for shipping a change; a formal audit including a screen-reader pass is the gate on *claiming* conformance. The absence of that audit SHALL NOT block delivery, and SHALL prevent any statement that the application conforms to AA.
 
 ### NFR 2: No Regression in Evidence
 

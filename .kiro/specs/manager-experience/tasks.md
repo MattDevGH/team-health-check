@@ -471,54 +471,103 @@ a colleague hits the conflict before the UI work lands.
       which a Tailwind class could never have detected, and which any restyle
       could have broken without anyone noticing.
 
-- [ ] 6. First-run guidance
+- [x] 6. First-run guidance
 
-  - [ ] 6.1 Guidance component
+  - [x] 6.1 Guidance component
     - Write failing tests for each condition in the design table, including that the banner disappears once its condition is false
     - Assert the text a manager reads, not a test id
     - _Requirements: 4.1, 4.2, 4.6_
+    - **Done.** `GuidanceBanner` renders a "Next steps" region, or nothing when
+      there is nothing to say. Every item is derived from loaded data on every
+      render — nothing stored, and no dismiss control: a banner that can be
+      dismissed while still true is a banner that stops telling the truth. A
+      test asserts no button exists, so a dismiss cannot be added without a
+      deliberate decision.
+    - **Placement decision.** Members and schedule guidance lives on the
+      settings page, which does both jobs and already holds the data; session
+      and anonymity guidance lives on the dashboard, likewise. Putting all of it
+      on the dashboard would have cost two extra requests to say something the
+      manager has to leave the page to act on.
 
-  - [ ] 6.2 Empty and single-session dashboard states
+  - [x] 6.2 Empty and single-session dashboard states
     - Write failing tests: no closed sessions explains trends appear after a close; exactly one closed session explains a second is needed
     - _Requirements: 4.3, 4.4_
+    - **Done.** The no-sessions message points a manager at the control above it
+      only when they can actually use it — a contributor is told trends appear
+      after a close, without being sent after a button they do not have.
 
-  - [ ] 6.3 Explain anonymity suppression at the point of use
+  - [x] 6.3 Explain anonymity suppression at the point of use
     - Write a failing test: with anonymous privacy mode, the dashboard states that detail is hidden below the threshold
     - _Requirements: 4.5_
+    - **Done.** "Hidden is not the same as unanswered" — said before a manager
+      meets a suppressed row and reads it as silence from the team.
 
-  - [ ] 6.4 Accessibility pass over guidance states
+  - [x] 6.4 Accessibility pass over guidance states
     - axe over each guidance state in `e2e/accessibility.spec.ts`
     - _Requirements: NFR 1.1_
+    - **Done.** A team with no members beyond its creator, no schedule and no
+      sessions — the state every other authenticated test deliberately seeds
+      past — audited on both the dashboard and the settings page.
 
-- [ ] 7. Ambiguous identity guard
+- [x] 7. Ambiguous identity guard
 
-  - [ ] 7.1 `findAllByEmail`
+  - [x] 7.1 `findAllByEmail`
     - Write failing tests for the in-memory fake and an integration test over a real SQLite file proving two members in different teams share one email
     - Add to `TeamMemberRepository`, the Prisma implementation, and the fake
     - The integration test is the point: the schema permits this, and only the database can prove it
     - _Requirements: 5.4_
+    - **Done.** `src/tests/integration/shared-email.test.ts` applies every
+      committed migration to a temporary SQLite file and inserts the same email
+      into two teams. It succeeds — which is the finding. An in-memory fake
+      could never have settled this: a fake permits whatever it is written to
+      permit, so it cannot show that the case the guard defends against is real.
 
-  - [ ] 7.2 Reject conflicting member additions
+  - [x] 7.2 Reject conflicting member additions
     - Write failing service tests: adding an email held by a member of another team throws `ConflictError`; the same email within the same team behaves as it does today; members without an email are unaffected
     - **Property 5: for any email held by a member of another team, `addMember` throws and the member count is unchanged**
     - Assert the member count and audit-log length after the throw
     - _Requirements: 5.1, 5.2_
+    - **Done.** Rejected before the member row and the `member_added` audit are
+      written, so a refused addition leaves no trace — asserted by comparing
+      both counts before and after, not just by catching the error.
+    - **Mutation-checked:** neutralising the guard fails Property 5.
+    - Members without an email are exempt. The ambiguity is about sign-in, and
+      they cannot sign in.
 
-  - [ ] 7.3 Guard magic-link issuance
+  - [x] 7.3 Guard magic-link issuance
     - Write failing tests: two matching members creates neither a magic link nor a pending genesis record; one matching member is unchanged; none is unchanged
     - **Property 4: no token of either kind is created for an ambiguous email**
     - **Property 6: `requestMagicLink` returns without throwing for every input**
     - _Requirements: 5.3, 5.4, 5.6_
+    - **Done.** Property 4 asserts what the person experiences — no email
+      arrives — as well as that neither token was persisted.
+    - **A vacuous assertion caught in review.** The first version reached for a
+      `getAll()` the in-memory magic-link repository does not have, defaulting
+      to `[]`, so it compared an empty array to length zero on every run and
+      would have passed with the guard removed. Replaced with the email service
+      record and explicit spies. **Mutation-checked** afterwards: neutralising
+      the guard fails Property 4.
+    - A companion property asserts a link *is* issued when exactly one member
+      holds the email, and that the emailed token is redeemable. Without it, a
+      guard that refused every request would satisfy Property 4.
+    - Property 6 matters because anti-enumeration is a claim about every input:
+      an ambiguous email that threw would be distinguishable from one that did
+      not.
 
-  - [ ] 7.4 Log the collision
+  - [x] 7.4 Log the collision
     - Write a failing test asserting the log carries the email and both team ids
     - _Requirements: 5.5_
+    - **Done as part of 7.3.** The log names the email, the number of members,
+      every team id involved, and what an operator should do about it — the
+      information needed to resolve it without reading this file.
 
-  - [ ] 7.5 Document the limitation
+  - [x] 7.5 Document the limitation
     - README: a person belongs to exactly one team; colleagues each run their own team
     - AI_CONTEXT: the constraint, why it exists, and that multi-team support is a future spec
     - Note how an operator resolves a pre-existing conflict: remove the duplicate member row, or change one email
     - _Requirements: 5.8_
+    - **Done.** README carries the constraint, both guards, the exemption for
+      members without an email, and the SQL to find a pre-existing conflict.
 
 - [ ] 8. Checkpoint — identity guard
   - Full suite, `tsc --noEmit`, lint, build, E2E. Ask the user if questions arise.

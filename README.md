@@ -82,12 +82,32 @@ works" and "a delivery manager can run it unaided":
 
 ### Known limitation: one team per person
 
-A person can belong to only one team. The schema allows the same email address in
-several teams, but sign-in resolves an email to a single member and would
-otherwise pick an arbitrary one. Colleagues sharing this tool should each run
-their own team. The manager-experience milestone adds a guard that rejects a
-member addition which would create the conflict, rather than letting it produce a
-wrong-team sign-in later. Full multi-team membership is a separate future spec.
+**A person can belong to only one team.** Colleagues sharing this tool should
+each run their own.
+
+The schema permits the same email in several teams — `TeamMember` is unique on
+`(teamId, name, email)`, and an integration test against a real database
+confirms it — but sign-in has to resolve an email to a single member. Two
+guards enforce the constraint the schema does not:
+
+- **Adding a member** whose email already belongs to another team is rejected
+  with a 409 before anything is written, so the manager doing the adding finds
+  out immediately.
+- **Requesting a magic link** for an email held by more than one member issues
+  nothing and logs the collision. The HTTP response is unchanged, so the
+  anti-enumeration property is preserved.
+
+Members without an email address are unaffected: the ambiguity is about
+sign-in, and they cannot sign in.
+
+**Resolving a conflict that predates the guard:** find the duplicate rows with
+`SELECT id, teamId, name FROM TeamMember WHERE email = '…'`, then either remove
+the member from the team they no longer belong to, or give one of them a
+different email. The server log names the email and the team ids whenever a
+sign-in is refused for this reason.
+
+Full multi-team membership needs an identity model above `TeamMember`, a team
+switcher, and a review of every team-scoped query. It is a separate future spec.
 
 ### Later milestones (not started)
 
@@ -489,7 +509,7 @@ Feature specifications at `.kiro/specs/`:
 
 - **Colour contrast audited and fixed** — Playwright axe runs against the unauthenticated pages (home, sign-in, genesis), the feedback states (active, confirmation, ended), settings, both dashboard states plus the expanded question drill-down, the profile page, and three states the navigation shell adds: the skip link once focused, the sign-out failure message, and the dashboard at 320px. That audit found and fixed real WCAG AA failures: `text-gray-400` at 2.48–2.6 against white, and `bg-green-600`/`text-green-600` at 3.21.
 - **Reflow is checked at 320px** — the width WCAG 2.1 AA 1.4.10 specifies, being a 1280px viewport at 400% zoom. The 375px check in the navigation spec is a phone, not the criterion.
-- **No screen-reader pass yet** — axe finds roughly a third to a half of WCAG issues and cannot judge whether announced labels and order make sense. Focus order through the shell is asserted end-to-end, but AA conformance should not be claimed until a human has used the app with NVDA or VoiceOver.
+- **WCAG 2.1 AA is the standard we build towards, not a claim we make.** Every new state is checked with axe against the AA rule set, semantics are asserted in tests, and keyboard operation is driven end-to-end — but axe finds roughly a third to a half of WCAG issues and cannot judge whether announced labels and order make sense. A formal audit, including a screen-reader pass with NVDA or VoiceOver, is required before *stating* the app conforms to AA. Until then: aim for it in every change, do not claim it.
 - ~~**No skip-to-content links**~~ — fixed on authenticated pages. The shell's skip link is first in tab order and its target carries `tabindex="-1"`, so activating it moves focus rather than only shifting the sequential start point. Verified end-to-end by asserting where focus lands, not that the URL gained a fragment.
 - **No focus management on route transitions** — screen readers aren't notified when the page changes.
 - **No reduced-motion support** — no `prefers-reduced-motion` media query handling.

@@ -62,6 +62,12 @@ export class InMemoryTeamMemberRepository implements TeamMemberRepository {
     return members.find((m) => m.email === email) ?? null;
   }
 
+  async findAllByEmail(email: string): Promise<TeamMember[]> {
+    return Array.from(this.store.values())
+      .filter((m) => m.email === email)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+
   async update(
     id: string,
     data: Partial<Pick<TeamMember, 'name' | 'email' | 'cadencePreference' | 'remindersEnabled' | 'currentStreak' | 'bestStreak' | 'lastStreakSessionClose'>>

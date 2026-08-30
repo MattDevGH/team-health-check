@@ -99,6 +99,30 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
       );
     }
 
+    /**
+     * A person belongs to exactly one team.
+     *
+     * The schema does not enforce this — `TeamMember` is unique on
+     * `(teamId, name, email)` — but sign-in resolves an email to a single
+     * member, so a second membership would let that person be signed into
+     * whichever team the query happened to return.
+     *
+     * Rejected here, before anything is written, so the manager doing the
+     * adding finds out immediately rather than the member discovering it weeks
+     * later in the wrong dashboard. Members without an email are exempt: the
+     * ambiguity is about sign-in, and they cannot sign in.
+     */
+    if (parsed.data.email) {
+      const elsewhere = await teamMemberRepo.findAllByEmail(parsed.data.email);
+      const otherTeam = elsewhere.find((member) => member.teamId !== teamId);
+
+      if (otherTeam) {
+        throw new ConflictError(
+          `That email already belongs to a member of another team. A person can belong to only one team in this tool.`
+        );
+      }
+    }
+
     const member = {
       id: crypto.randomUUID(),
       teamId,
