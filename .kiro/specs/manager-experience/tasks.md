@@ -509,35 +509,65 @@ a colleague hits the conflict before the UI work lands.
       sessions — the state every other authenticated test deliberately seeds
       past — audited on both the dashboard and the settings page.
 
-- [ ] 7. Ambiguous identity guard
+- [x] 7. Ambiguous identity guard
 
-  - [ ] 7.1 `findAllByEmail`
+  - [x] 7.1 `findAllByEmail`
     - Write failing tests for the in-memory fake and an integration test over a real SQLite file proving two members in different teams share one email
     - Add to `TeamMemberRepository`, the Prisma implementation, and the fake
     - The integration test is the point: the schema permits this, and only the database can prove it
     - _Requirements: 5.4_
+    - **Done.** `src/tests/integration/shared-email.test.ts` applies every
+      committed migration to a temporary SQLite file and inserts the same email
+      into two teams. It succeeds — which is the finding. An in-memory fake
+      could never have settled this: a fake permits whatever it is written to
+      permit, so it cannot show that the case the guard defends against is real.
 
-  - [ ] 7.2 Reject conflicting member additions
+  - [x] 7.2 Reject conflicting member additions
     - Write failing service tests: adding an email held by a member of another team throws `ConflictError`; the same email within the same team behaves as it does today; members without an email are unaffected
     - **Property 5: for any email held by a member of another team, `addMember` throws and the member count is unchanged**
     - Assert the member count and audit-log length after the throw
     - _Requirements: 5.1, 5.2_
+    - **Done.** Rejected before the member row and the `member_added` audit are
+      written, so a refused addition leaves no trace — asserted by comparing
+      both counts before and after, not just by catching the error.
+    - **Mutation-checked:** neutralising the guard fails Property 5.
+    - Members without an email are exempt. The ambiguity is about sign-in, and
+      they cannot sign in.
 
-  - [ ] 7.3 Guard magic-link issuance
+  - [x] 7.3 Guard magic-link issuance
     - Write failing tests: two matching members creates neither a magic link nor a pending genesis record; one matching member is unchanged; none is unchanged
     - **Property 4: no token of either kind is created for an ambiguous email**
     - **Property 6: `requestMagicLink` returns without throwing for every input**
     - _Requirements: 5.3, 5.4, 5.6_
+    - **Done.** Property 4 asserts what the person experiences — no email
+      arrives — as well as that neither token was persisted.
+    - **A vacuous assertion caught in review.** The first version reached for a
+      `getAll()` the in-memory magic-link repository does not have, defaulting
+      to `[]`, so it compared an empty array to length zero on every run and
+      would have passed with the guard removed. Replaced with the email service
+      record and explicit spies. **Mutation-checked** afterwards: neutralising
+      the guard fails Property 4.
+    - A companion property asserts a link *is* issued when exactly one member
+      holds the email, and that the emailed token is redeemable. Without it, a
+      guard that refused every request would satisfy Property 4.
+    - Property 6 matters because anti-enumeration is a claim about every input:
+      an ambiguous email that threw would be distinguishable from one that did
+      not.
 
-  - [ ] 7.4 Log the collision
+  - [x] 7.4 Log the collision
     - Write a failing test asserting the log carries the email and both team ids
     - _Requirements: 5.5_
+    - **Done as part of 7.3.** The log names the email, the number of members,
+      every team id involved, and what an operator should do about it — the
+      information needed to resolve it without reading this file.
 
-  - [ ] 7.5 Document the limitation
+  - [x] 7.5 Document the limitation
     - README: a person belongs to exactly one team; colleagues each run their own team
     - AI_CONTEXT: the constraint, why it exists, and that multi-team support is a future spec
     - Note how an operator resolves a pre-existing conflict: remove the duplicate member row, or change one email
     - _Requirements: 5.8_
+    - **Done.** README carries the constraint, both guards, the exemption for
+      members without an email, and the SQL to find a pre-existing conflict.
 
 - [ ] 8. Checkpoint — identity guard
   - Full suite, `tsc --noEmit`, lint, build, E2E. Ask the user if questions arise.

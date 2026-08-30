@@ -74,6 +74,14 @@ export class PrismaTeamMemberRepository implements TeamMemberRepository {
     return record ? this.mapToEntity(record) : null;
   }
 
+  async findAllByEmail(email: string): Promise<TeamMember[]> {
+    const records = await this.prisma.teamMember.findMany({
+      where: { email },
+      orderBy: { createdAt: 'asc' },
+    });
+    return records.map((r) => this.mapToEntity(r));
+  }
+
   async update(
     id: string,
     data: Partial<

@@ -82,12 +82,32 @@ works" and "a delivery manager can run it unaided":
 
 ### Known limitation: one team per person
 
-A person can belong to only one team. The schema allows the same email address in
-several teams, but sign-in resolves an email to a single member and would
-otherwise pick an arbitrary one. Colleagues sharing this tool should each run
-their own team. The manager-experience milestone adds a guard that rejects a
-member addition which would create the conflict, rather than letting it produce a
-wrong-team sign-in later. Full multi-team membership is a separate future spec.
+**A person can belong to only one team.** Colleagues sharing this tool should
+each run their own.
+
+The schema permits the same email in several teams — `TeamMember` is unique on
+`(teamId, name, email)`, and an integration test against a real database
+confirms it — but sign-in has to resolve an email to a single member. Two
+guards enforce the constraint the schema does not:
+
+- **Adding a member** whose email already belongs to another team is rejected
+  with a 409 before anything is written, so the manager doing the adding finds
+  out immediately.
+- **Requesting a magic link** for an email held by more than one member issues
+  nothing and logs the collision. The HTTP response is unchanged, so the
+  anti-enumeration property is preserved.
+
+Members without an email address are unaffected: the ambiguity is about
+sign-in, and they cannot sign in.
+
+**Resolving a conflict that predates the guard:** find the duplicate rows with
+`SELECT id, teamId, name FROM TeamMember WHERE email = '…'`, then either remove
+the member from the team they no longer belong to, or give one of them a
+different email. The server log names the email and the team ids whenever a
+sign-in is refused for this reason.
+
+Full multi-team membership needs an identity model above `TeamMember`, a team
+switcher, and a review of every team-scoped query. It is a separate future spec.
 
 ### Later milestones (not started)
 
