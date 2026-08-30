@@ -384,11 +384,21 @@ a colleague hits the conflict before the UI work lands.
 
 - [ ] 5. Dashboard comprehension
 
-  - [ ] 5.1 Pluralisation helper
+  - [x] 5.1 Pluralisation helper
     - Write failing tests for `pluralise` in `src/lib/format.ts`
     - **Property 3: the rendered noun is singular iff the count is 1** — generate non-negative integers
     - Replace `{count} responses` at every call site
     - _Requirements: 3.7_
+    - **Done.** Both call sites — the Latest Session panel and the question
+      drill-down — now agree in number, plus a dashboard test asserting the
+      singular actually renders, since the helper being right proves nothing
+      about the page using it.
+    - English pluralises on *exactly one*, not *more than one*: zero takes the
+      plural. Property 3 asserts both directions of the "if and only if", which
+      is what separates it from the examples — `count > 1` renders "0 response"
+      and passes a suite that only checks 1 and 7.
+    - The lifecycle panel needs nothing from this: "3 of 8 answered" sidesteps
+      agreement entirely.
 
   - [ ] 5.2 Chart caption and legend
     - Write failing tests: the figure has a caption naming what is plotted; every plotted question appears in the legend by name

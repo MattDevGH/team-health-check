@@ -123,6 +123,32 @@ describe('Trend Dashboard Page', () => {
     });
   });
 
+  /**
+   * Manager Experience 3.7. The dashboard read "1 responses" for any question a
+   * single person had answered — visible to any team where someone is on leave.
+   */
+  it('agrees in number when a single person has responded', async () => {
+    mockRoles([]);
+    mockTrendsApi({
+      sessions: [
+        {
+          sessionId: 's1',
+          closedAt: '2026-08-01T17:00:00Z',
+          averages: [{ questionId: 'q-delivering-value', averageScore: 4, responseCount: 1 }],
+        },
+        {
+          sessionId: 's2',
+          closedAt: '2026-08-08T17:00:00Z',
+          averages: [{ questionId: 'q-delivering-value', averageScore: 4, responseCount: 1 }],
+        },
+      ],
+    });
+    render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+    expect(await screen.findByText('1 response')).toBeInTheDocument();
+    expect(screen.queryByText('1 responses')).not.toBeInTheDocument();
+  });
+
   describe('Requirement 8.3: Fewer than 2 closed sessions', () => {
     it('displays "More data needed" when no sessions exist', async () => {
       mockTrendsApi({ sessions: [] });

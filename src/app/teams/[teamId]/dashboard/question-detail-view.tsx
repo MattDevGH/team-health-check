@@ -12,6 +12,8 @@
 
 import { useState } from 'react';
 
+import { pluralise } from '@/lib/format';
+
 interface SessionAverage {
   questionId: string;
   averageScore: number;
@@ -96,7 +98,7 @@ export function QuestionDetailView({
                             {avg.averageScore.toFixed(1)}
                           </span>
                           <span className="text-gray-500">
-                            {avg.responseCount} responses
+                            {pluralise(avg.responseCount, 'response')}
                           </span>
                         </span>
                       )}

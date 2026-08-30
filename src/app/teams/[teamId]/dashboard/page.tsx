@@ -13,6 +13,7 @@
 import { useEffect, useState } from 'react';
 
 import { SessionLifecyclePanel } from '@/components/session-lifecycle';
+import { pluralise } from '@/lib/format';
 import { TrendChart } from './trend-chart';
 import { TrendDistribution as TrendDistributionPanel } from './trend-distribution';
 import { QuestionDetailView } from './question-detail-view';
@@ -220,7 +221,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
                   {formatQuestionId(avg.questionId)}
                 </span>
                 <span className="text-gray-500">
-                  {avg.responseCount} responses
+                  {pluralise(avg.responseCount, 'response')}
                 </span>
               </div>
             ))}
