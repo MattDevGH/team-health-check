@@ -2,20 +2,42 @@
 
 ## Overview
 
-Five phases, dependency-ordered. Phase 1 unblocks every page that follows;
-phase 2 is the milestone's reason for existing; phases 3 and 4 make the dashboard
-readable; phase 5 is the identity guard.
+**Complete.** Delivered across five pull requests between 2026-08-28 and
+2026-08-30, plus two fixes for defects found by using the app.
+
+Task group 1 is the navigation shell, which unblocks every page that follows;
+group 3 is session lifecycle control, the milestone's reason for existing;
+group 5 makes the dashboard readable; group 6 adds first-run guidance; group 7
+is the identity guard. Groups 2, 4 and 8 are checkpoints. (The prose here
+originally numbered these "phases 1–5"; the task numbers below are the
+authoritative ones.)
 
 All tasks follow TDD (Red → Green → Refactor) and one green behaviour per commit.
 Update AI_CONTEXT.md and README.md in the commit that changes behaviour, test
 coverage, or conventions — not afterwards.
 
-Phases 1, 2, and 5 each end at a checkpoint. Phase 5 can be taken out of order if
-a colleague hits the conflict before the UI work lands.
+Group 7 could have been taken out of order if a colleague had hit the conflict
+before the UI work landed. It was not needed early.
+
+## Delivery record
+
+| Group | Pull request | Merge |
+|---|---|---|
+| 1 — Navigation shell | [#8](https://github.com/MattDevGH/team-health-check/pull/8) | `5bda63b` |
+| 3 — Session lifecycle | [#11](https://github.com/MattDevGH/team-health-check/pull/11) | `f536eeb` |
+| 5 — Dashboard comprehension | [#12](https://github.com/MattDevGH/team-health-check/pull/12) | `4c1a9c6` |
+| 6 and 7 — Guidance and identity guard | [#13](https://github.com/MattDevGH/team-health-check/pull/13) | `70f6e51` |
+
+Two defects found by using the app, both fixed outside the plan:
+
+| Defect | Pull request | Merge |
+|---|---|---|
+| Magic link claimed twice, reporting a successful sign-in as expired | [#9](https://github.com/MattDevGH/team-health-check/pull/9) | `1e48e70` |
+| Audit log page crashed on a response-shape mismatch | [#10](https://github.com/MattDevGH/team-health-check/pull/10) | `2014b80` |
 
 ## Tasks
 
-- [ ] 1. Navigation shell
+- [x] 1. Navigation shell
 
   - [x] 1.1 Extend `/api/me` with team and roles
     - Write failing route tests: authenticated request returns `team: {id, name}` and `roles`; a member with no roles returns `[]`; 401 unchanged
@@ -572,10 +594,31 @@ a colleague hits the conflict before the UI work lands.
 - [ ] 8. Checkpoint — identity guard
   - Full suite, `tsc --noEmit`, lint, build, E2E. Ask the user if questions arise.
 
-- [ ] 9. Reconcile and merge
+- [x] 9. Reconcile and merge
   - Update requirements/design/tasks to match what was built, including any decision that changed during implementation
   - Update README.md and AI_CONTEXT.md
   - Run every gate, push, and merge through a green PR
+  - **Four decisions changed during implementation and are now recorded where
+    they were originally stated**, rather than only in the commit that made them:
+    1. A contributor sees **no lifecycle panel at all**, not the state without
+       its controls (Requirement 2.6).
+    2. Members and schedule guidance is on **settings only**, not on both pages
+       (Requirement 4.1, 4.2 and the design's guidance table). The dashboard
+       would have needed two extra requests to say something the manager has to
+       leave the page to act on.
+    3. The chart's SVG is **`aria-hidden`, not `role="img"`** — keeping the role
+       would have had a screen reader announce the caption twice before any
+       data, once for the picture and once for the table.
+    4. The data table is **not behind a `<details>`**: a table hidden by default
+       is one more thing to discover, and this one is small.
+  - The design gained **What implementation taught**: dates crossing JSON as ISO
+    strings, pinning date locales so CI and a British machine agree, one tick one
+    clock, a modal's inert background defeating focus restoration, and why two
+    test flakes came from tests outgrowing their time budget rather than from the
+    code under test. That section is the part worth reading before the next
+    milestone.
+  - The tasks overview originally called the groups "phases 1–5" while numbering
+    them 1–9. The task numbers are authoritative and the prose now says so.
 
 ## Slack parity note
 
