@@ -37,15 +37,20 @@ function aggregate(overrides: Partial<SeededAggregate> & { questionId: string })
  * Expands a question and returns just its detail region.
  *
  * Scoping matters: the trend chart renders Y-axis labels "1.0" through "5.0",
- * so a page-wide search for a score matches an axis tick and proves nothing.
+ * and now a data table of every score too, so a page-wide search for a value
+ * matches something and proves nothing.
  *
- * The region is located by its border class because the disclosure has no
- * accessible relationship to its content yet. Adding `aria-controls` is item 3
- * on the deferred dashboard UX list and would give a durable handle here.
+ * Located by the accessible relationship the disclosure now exposes, rather
+ * than by a Tailwind class any restyle would silently break. If this stops
+ * finding the region, the page has genuinely stopped telling assistive
+ * technology which content the button controls.
  */
 async function openQuestionDetail(page: Page, question: RegExp) {
-  await page.getByRole('button', { name: question }).click();
-  const detail = page.locator('div.border-l-2');
+  const trigger = page.getByRole('button', { name: question });
+  await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+  const detail = page.getByRole('region', { name: question });
   await expect(detail).toBeVisible();
   return detail;
 }

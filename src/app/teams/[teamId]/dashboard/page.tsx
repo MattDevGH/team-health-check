@@ -13,6 +13,7 @@
 import { useEffect, useState } from 'react';
 
 import { SessionLifecyclePanel } from '@/components/session-lifecycle';
+import { LatestSessionPanel } from './latest-session-panel';
 import { TrendChart } from './trend-chart';
 import { TrendDistribution as TrendDistributionPanel } from './trend-distribution';
 import { QuestionDetailView } from './question-detail-view';
@@ -190,9 +191,6 @@ export default function TrendDashboardPage({ params }: PageProps) {
     );
   }
 
-  // Get the most recent session for response counts and distribution
-  const mostRecentSession = sessions[sessions.length - 1];
-
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4">
       <div className="max-w-3xl mx-auto">
@@ -206,26 +204,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
           <TrendChart sessions={sessions} />
         </div>
 
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-3">
-            Latest Session
-          </h2>
-          <div className="space-y-2">
-            {mostRecentSession.averages.map((avg) => (
-              <div
-                key={avg.questionId}
-                className="flex justify-between items-center text-sm"
-              >
-                <span className="text-gray-700">
-                  {formatQuestionId(avg.questionId)}
-                </span>
-                <span className="text-gray-500">
-                  {avg.responseCount} responses
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <LatestSessionPanel sessions={sessions} anonymousMode={anonymousMode} />
 
         {trendDistribution.length > 0 && (
           <div className="bg-white rounded-lg shadow p-4">
@@ -242,13 +221,4 @@ export default function TrendDashboardPage({ params }: PageProps) {
       </div>
     </div>
   );
-}
-
-/** Converts a question ID like "q-delivering-value" to "Delivering Value" */
-function formatQuestionId(id: string): string {
-  return id
-    .replace(/^q-/, '')
-    .split('-')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
 }
