@@ -216,10 +216,31 @@ a colleague hits the conflict before the UI work lands.
       most of the weight at this task; the properties will matter more once the
       panel feeds them real API data.
 
-  - [ ] 3.2 Open a session from the dashboard
+  - [x] 3.2 Open a session from the dashboard
     - Write a failing component test: a Delivery Manager sees an open control when nothing is open; activating it POSTs to `/api/teams/{id}/sessions` and the panel then shows the collecting state without a reload
     - Assert the rendered state after the response, not the fetch call
     - _Requirements: 2.1, 2.2_
+    - **Done.** `SessionLifecyclePanel` renders all four states and offers the
+      open control for three of them. Six component tests.
+    - The MSW handlers mirror the real routes exactly, **including dates as ISO
+      strings**. The route serialises `HealthCheckSession` straight to JSON, so
+      the component receives strings where `deriveSessionState` needs `Date`s.
+      A mock returning `Date` objects would have let the component skip parsing
+      and still pass, while the real page threw on the first date comparison —
+      the same shape of defect as the audit log. One test seeds two closed
+      sessions specifically to force that comparison.
+    - The panel refetches after opening rather than trusting the created
+      session: opening also closes any session already open, so the list is the
+      only account of what the team now has. **Mutation-checked** — dropping the
+      refetch fails the test.
+    - The POST is counted in the handler, so the test asserts a request crossed
+      the network as well as what the manager now sees.
+    - `react-hooks/set-state-in-effect` rejected calling a `useCallback` loader
+      from the effect body. Data fetching is now a plain function outside the
+      component and the effect updates state from its callback, which is
+      cleaner anyway.
+    - Not yet wired into the dashboard page — that lands with 3.3, which needs
+      the trends response for response counts.
 
   - [ ] 3.3 Display the collecting state
     - Write failing tests: response count and scheduled close time shown while a session is open
