@@ -316,11 +316,12 @@ test.describe.serial('team lifecycle journey', () => {
     await page.getByRole('button', { name: /psychological safety/i }).click();
 
     // One respondent in an anonymous team is below the threshold of 3, so the
-    // score must not be shown. Scoped to the drill-down: the trend chart renders
-    // axis labels "1.0" to "5.0", so a page-wide search would match a tick and
-    // prove nothing. Exact per-value assertions live in dashboard.spec.ts, where
+    // score must not be shown. Scoped to the drill-down by its accessible
+    // relationship to the button: the chart renders axis labels and a data
+    // table of every score, so a page-wide search matches those and proves
+    // nothing. Exact per-value assertions live in dashboard.spec.ts, where
     // counts are seeded high enough to display.
-    const detail = page.locator('div.border-l-2');
+    const detail = page.getByRole('region', { name: /psychological safety/i });
     await expect(detail).toContainText(/insufficient data/i);
     await expect(detail).not.toContainText(psychologicalSafety!.averageScore.toFixed(1));
   });

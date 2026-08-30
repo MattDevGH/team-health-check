@@ -57,22 +57,51 @@ export function QuestionDetailView({
         Questions
       </h2>
       <div className="space-y-1">
-        {questionIds.map((qId) => (
+        {questionIds.map((qId) => {
+          const expanded = selectedQuestionId === qId;
+          const panelId = `question-detail-${qId}`;
+
+          return (
           <div key={qId}>
             <button
               type="button"
               onClick={() => handleQuestionClick(qId)}
-              className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                selectedQuestionId === qId
+              aria-expanded={expanded}
+              aria-controls={panelId}
+              className={`flex w-full items-center gap-2 text-left px-3 py-2 rounded text-sm transition-colors ${
+                expanded
                   ? 'bg-blue-50 text-blue-700 font-medium'
                   : 'text-gray-700 hover:bg-gray-100'
               }`}
             >
+              {/*
+                A chevron so the row looks expandable as well as reporting
+                itself as such. Hidden from assistive technology, which is told
+                the same thing by aria-expanded.
+              */}
+              <span aria-hidden="true" className="inline-block w-3 text-xs">
+                {expanded ? '▾' : '▸'}
+              </span>
               {formatQuestionId(qId)}
             </button>
 
-            {selectedQuestionId === qId && (
-              <div className="mt-2 ml-3 border-l-2 border-blue-200 pl-3 space-y-2">
+            {/*
+              Rendered whether or not it is open, and hidden with the `hidden`
+              attribute rather than unmounted. `aria-controls` must resolve to
+              an element that exists: pointing at nothing promises a
+              relationship the page does not have, which is worse than saying
+              nothing. `hidden` also keeps it out of the accessibility tree and
+              out of the tab order while collapsed.
+            */}
+            <div
+              id={panelId}
+              role="region"
+              aria-label={formatQuestionId(qId)}
+              hidden={!expanded}
+              className="mt-2 ml-3 border-l-2 border-blue-200 pl-3 space-y-2"
+            >
+              {expanded && (
+              <>
                 {sessions.map((session) => {
                   const avg = session.averages.find((a) => a.questionId === qId);
                   if (!avg) return null;
@@ -105,10 +134,12 @@ export function QuestionDetailView({
                     </div>
                   );
                 })}
-              </div>
-            )}
+              </>
+              )}
+            </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

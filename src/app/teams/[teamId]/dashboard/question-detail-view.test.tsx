@@ -51,6 +51,82 @@ const SESSIONS: SessionData[] = [
   },
 ];
 
+/**
+ * Manager Experience 3.8, 3.9.
+ *
+ * The rows expand, but nothing said so: a screen reader announced a button with
+ * a question's name and no indication that activating it revealed anything, or
+ * whether it was already open.
+ */
+describe('QuestionDetailView disclosure semantics', () => {
+  it('announces that a question expands, and that it starts collapsed', () => {
+    render(<QuestionDetailView sessions={SESSIONS} anonymousMode={false} />);
+
+    expect(screen.getByRole('button', { name: /delivering value/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('reports itself as expanded once opened', async () => {
+    const user = userEvent.setup();
+    render(<QuestionDetailView sessions={SESSIONS} anonymousMode={false} />);
+
+    const trigger = screen.getByRole('button', { name: /delivering value/i });
+    await user.click(trigger);
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('points at the panel it controls, and that panel exists', () => {
+    // An aria-controls naming an element that is not in the document is worse
+    // than none: it promises a relationship the page does not have
+    render(<QuestionDetailView sessions={SESSIONS} anonymousMode={false} />);
+
+    const trigger = screen.getByRole('button', { name: /delivering value/i });
+    const controlledId = trigger.getAttribute('aria-controls');
+    expect(controlledId).toBeTruthy();
+
+    expect(document.getElementById(controlledId!)).toBeInTheDocument();
+  });
+
+  it('gives the revealed detail a name of its own', async () => {
+    const user = userEvent.setup();
+    render(<QuestionDetailView sessions={SESSIONS} anonymousMode={false} />);
+
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+
+    // A named region is what lets the E2E suite stop locating this by a
+    // Tailwind class that any restyle would break
+    expect(
+      screen.getByRole('region', { name: /delivering value/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('collapses again, and says so', async () => {
+    const user = userEvent.setup();
+    render(<QuestionDetailView sessions={SESSIONS} anonymousMode={false} />);
+
+    const trigger = screen.getByRole('button', { name: /delivering value/i });
+    await user.click(trigger);
+    await user.click(trigger);
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('region', { name: /delivering value/i })).not.toBeInTheDocument();
+  });
+
+  it('is operable by keyboard', async () => {
+    const user = userEvent.setup();
+    render(<QuestionDetailView sessions={SESSIONS} anonymousMode={false} />);
+
+    const trigger = screen.getByRole('button', { name: /delivering value/i });
+    trigger.focus();
+    await user.keyboard('{Enter}');
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  });
+});
+
 describe('QuestionDetailView', () => {
   describe('Requirement 8.5: Clickable question list with detail', () => {
     it('renders a list of question names that are clickable', () => {

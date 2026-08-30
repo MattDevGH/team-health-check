@@ -408,22 +408,68 @@ a colleague hits the conflict before the UI work lands.
       with its colour. Five lines told apart by hue alone are unreadable to
       anyone with a colour vision deficiency and unprintable in greyscale.
 
-  - [ ] 5.3 Accessible data table
+  - [x] 5.3 Accessible data table
     - Write failing tests: the table exposes score, response count, question name, and session date for every plotted point; values match those given to the chart
     - Cross-check one rendered value against the seeded aggregate rather than against the component's own props
     - _Requirements: 3.3, 3.4_
+    - **Done.** A real `<table>`: question names as column headers, session close
+      dates as row headers, each cell reading "4.2 from 6 responses".
+    - **The `role="img"` is gone.** It hid every child of the SVG from assistive
+      technology, so no plotted value was available to anyone who could not see
+      the picture. The drawing is now `aria-hidden` and the table carries the
+      data — which satisfies Requirement 3.3 for every user rather than only
+      those who can hover, and needs no hand-built widget of focusable SVG
+      points.
+    - Three existing dashboard tests failed on this and were right to: two
+      asserted the `role="img"` that was the problem, and one searched the whole
+      page for a response count that now legitimately appears twice. That one is
+      scoped to the Latest Session region rather than loosened.
+    - A cell for a question a session did not record reads "Not answered"
+      rather than being blank, so a gap is distinguishable from a zero.
+    - The dashboard E2E cross-check against seeded aggregates already lives in
+      `e2e/dashboard.spec.ts`, which reads values back from the database.
 
-  - [ ] 5.4 Replace the Latest Session panel
+  - [x] 5.4 Replace the Latest Session panel
     - Write failing tests: per question, average score, change from the previous session stated in text, and response count; suppressed values say they are suppressed rather than rendering blank
     - _Requirements: 3.5, 3.6_
+    - **Done.** The old panel listed response counts under a heading promising
+      the latest session: a manager could see that six people answered and not
+      what they said. It now gives score, movement and count per question.
+    - Movement is stated in words — "1.2 higher" — because an arrow or a colour
+      leaves a screen reader user with a bare number.
+    - The delta is rounded to one decimal *before* comparison, so two scores
+      that display identically are never reported as having changed. "3.9, 0.0
+      higher" reads as a bug even when the underlying floats genuinely differ.
+    - Suppressed values say "Hidden until 3 people have answered" rather than
+      rendering blank, and the test asserts the score itself does not leak.
+    - Verified live: the chart table showed 3.4 then 4.6, and the panel
+      independently reported "1.2 higher" — the arithmetic cross-checked
+      against a separate rendering of the same data rather than against itself.
 
-  - [ ] 5.5 Question disclosure semantics
+  - [x] 5.5 Question disclosure semantics
     - Write failing tests: the trigger carries `aria-expanded` reflecting state and `aria-controls` naming the panel; the panel is reachable and toggleable by keyboard
     - _Requirements: 3.8, 3.9_
+    - **Done.** The rows expanded, but nothing said so: a screen reader
+      announced a button with a question name and no indication that it
+      revealed anything, or whether it was already open. They now carry
+      `aria-expanded` and `aria-controls`, plus a chevron so the row looks
+      expandable as well as reporting itself as such.
+    - **The panel is hidden, not unmounted.** `aria-controls` has to resolve to
+      an element that exists; pointing at nothing promises a relationship the
+      page does not have, which is worse than saying nothing. A test asserts the
+      referenced id is in the document while collapsed — it failed first, which
+      is how the unmounting was caught.
+    - `hidden` keeps the collapsed panel out of the accessibility tree and the
+      tab order. Confirmed live: `hidden` true, computed display none.
 
-  - [ ] 5.6 Re-anchor the E2E selectors
+  - [x] 5.6 Re-anchor the E2E selectors
     - Replace `page.locator('div.border-l-2')` in `e2e/dashboard.spec.ts` and `e2e/journey.spec.ts` with a lookup through the accessible relationship
     - _Requirements: NFR 2.2_
+    - **Done.** Both now locate the drill-down by its named region and assert
+      `aria-expanded` flipped. If that stops working, the page has genuinely
+      stopped telling assistive technology which content the button controls —
+      which a Tailwind class could never have detected, and which any restyle
+      could have broken without anyone noticing.
 
 - [ ] 6. First-run guidance
 
