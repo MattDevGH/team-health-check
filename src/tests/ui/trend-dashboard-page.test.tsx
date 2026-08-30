@@ -61,7 +61,68 @@ function mockTrendsApiError() {
   );
 }
 
+/** Overrides /api/me so the page sees a member with the given roles. */
+function mockRoles(roles: string[]) {
+  server.use(
+    http.get('/api/me', () =>
+      HttpResponse.json({
+        id: 'member-1',
+        teamId: TEAM_ID,
+        name: 'Alice',
+        slackLink: null,
+        team: { id: TEAM_ID, name: 'Platform Squad' },
+        roles,
+      }),
+    ),
+  );
+}
+
 describe('Trend Dashboard Page', () => {
+  /**
+   * Manager Experience 2.1, 2.6: the panel is where a check is opened and
+   * closed, so it belongs in every data state — a team with nothing to show is
+   * exactly the team that needs to open its first check — and nowhere at all
+   * for a member who would be refused the action.
+   */
+  describe('session lifecycle panel', () => {
+    it('offers the panel to a delivery manager with no data yet', async () => {
+      mockRoles(['delivery_manager']);
+      mockTrendsApi({ sessions: [] });
+      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+      expect(await screen.findByRole('region', { name: /health check/i })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: /open a health check/i })).toBeInTheDocument();
+    });
+
+    it('offers the panel alongside a populated dashboard', async () => {
+      mockRoles(['delivery_manager']);
+      mockTrendsApi({
+        sessions: [
+          { sessionId: 's1', closedAt: '2026-08-01T17:00:00Z', averages: [] },
+          { sessionId: 's2', closedAt: '2026-08-08T17:00:00Z', averages: [] },
+        ],
+      });
+      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+      expect(await screen.findByRole('region', { name: /health check/i })).toBeInTheDocument();
+    });
+
+    it('withholds it from a member who is not a delivery manager', async () => {
+      mockRoles([]);
+      mockTrendsApi({ sessions: [] });
+      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+      // Anchor on content the page always renders, so the absence is asserted
+      // against a rendered dashboard rather than an empty document
+      await screen.findByText(/more data needed/i);
+
+      expect(screen.queryByRole('region', { name: /health check/i })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /open a health check/i }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   describe('Requirement 8.3: Fewer than 2 closed sessions', () => {
     it('displays "More data needed" when no sessions exist', async () => {
       mockTrendsApi({ sessions: [] });

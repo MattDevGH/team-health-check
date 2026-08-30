@@ -50,6 +50,21 @@ export const handlers = [
   }),
 
   /**
+   * GET /api/teams/[teamId]/sessions
+   *
+   * Mirrors the real route, which returns a **bare array** of sessions with
+   * every date serialised as an ISO string — not an envelope, and not Date
+   * objects. A mock that handed back Dates would let a component skip parsing
+   * and still pass while the real page threw on the first date comparison.
+   *
+   * Empty by default: a team with no sessions is the state the dashboard's
+   * lifecycle panel has to handle first. Tests needing sessions override this.
+   *
+   * Requirements: Manager Experience 2.1, 2.4
+   */
+  http.get('/api/teams/:teamId/sessions', () => HttpResponse.json([])),
+
+  /**
    * GET /api/auth/session-link/[token]
    *
    * Returns enriched session context with cookie-based auth.

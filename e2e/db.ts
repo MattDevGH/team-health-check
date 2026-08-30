@@ -161,11 +161,25 @@ export function seedTeam(options: {
     db.prepare('DELETE FROM HealthCheckSession WHERE teamId = ?').run(teamId);
     db.prepare('DELETE FROM TeamMemberRole WHERE teamId = ?').run(teamId);
 
-    // Clear rows that reference *any* member of the team, not just the one this
-    // helper creates. A team can also hold members added by `seedMember`, and
-    // deleting a member who has signed in since fails the foreign key.
+    // Clear every table holding a foreign key to a member of this team.
+    //
+    // Deleting by member rather than by session matters: tests now create
+    // sessions at runtime by clicking "Open a health check", and each of those
+    // generates a link per member. Enumerating the tables that reference a
+    // member is the only cleanup that stays correct as tests gain new ways to
+    // write rows — anything narrower fails a foreign key on the retry that
+    // follows the first failure, which is precisely when a suite can least
+    // afford a second, unrelated error.
     const membersOfTeam = 'SELECT id FROM TeamMember WHERE teamId = ?';
-    for (const table of ['UserSession', 'MagicLink', 'SlackIdentityLink']) {
+    for (const table of [
+      'Response',
+      'SessionLink',
+      'UserSession',
+      'MagicLink',
+      'SlackIdentityLink',
+      'Availability',
+      'TeamMemberRole',
+    ]) {
       db.prepare(`DELETE FROM ${table} WHERE memberId IN (${membersOfTeam})`).run(teamId);
     }
 

@@ -197,47 +197,190 @@ a colleague hits the conflict before the UI work lands.
 
 - [ ] 3. Session lifecycle control
 
-  - [ ] 3.1 Derive Session_State
+  - [x] 3.1 Derive Session_State
     - Write failing unit tests for a pure `deriveSessionState(sessions, aggregatedSessionIds)` covering all four states from the design table
     - **Property 2: exactly one state is derivable from any session list, and the offered control matches it**
     - _Requirements: 2.4, 2.7_
+    - **Done.** `src/components/session-lifecycle/derive-session-state.ts`.
+      Eight example tests, three properties, 11 assertions in total.
+    - The latest closed session is chosen by `actualCloseAt`, not array order:
+      the sessions endpoint gives no ordering guarantee, and reading the array
+      as ordered would show a manager the wrong check. A closed session with no
+      recorded close time sorts oldest, which keeps the comparison total.
+    - **Honest note on the properties.** They cover tie-breaking between equal
+      close times, materialisation sets naming sessions the team never had, and
+      the invariant that the control never contradicts the status. They do not
+      dominate the example tests here — a `findLast`-instead-of-`find` mutation
+      survived both, correctly, because the service enforces at most one open
+      session per team so the two are equivalent in practice. The examples carry
+      most of the weight at this task; the properties will matter more once the
+      panel feeds them real API data.
 
-  - [ ] 3.2 Open a session from the dashboard
+  - [x] 3.2 Open a session from the dashboard
     - Write a failing component test: a Delivery Manager sees an open control when nothing is open; activating it POSTs to `/api/teams/{id}/sessions` and the panel then shows the collecting state without a reload
     - Assert the rendered state after the response, not the fetch call
     - _Requirements: 2.1, 2.2_
+    - **Done.** `SessionLifecyclePanel` renders all four states and offers the
+      open control for three of them. Six component tests.
+    - The MSW handlers mirror the real routes exactly, **including dates as ISO
+      strings**. The route serialises `HealthCheckSession` straight to JSON, so
+      the component receives strings where `deriveSessionState` needs `Date`s.
+      A mock returning `Date` objects would have let the component skip parsing
+      and still pass, while the real page threw on the first date comparison —
+      the same shape of defect as the audit log. One test seeds two closed
+      sessions specifically to force that comparison.
+    - The panel refetches after opening rather than trusting the created
+      session: opening also closes any session already open, so the list is the
+      only account of what the team now has. **Mutation-checked** — dropping the
+      refetch fails the test.
+    - The POST is counted in the handler, so the test asserts a request crossed
+      the network as well as what the manager now sees.
+    - `react-hooks/set-state-in-effect` rejected calling a `useCallback` loader
+      from the effect body. Data fetching is now a plain function outside the
+      component and the effect updates state from its callback, which is
+      cleaner anyway.
+    - Not yet wired into the dashboard page — that lands with 3.3, which needs
+      the trends response for response counts.
 
-  - [ ] 3.3 Display the collecting state
+  - [x] 3.3 Display the collecting state
     - Write failing tests: response count and scheduled close time shown while a session is open
     - Counts come from the participation endpoint; use `pluralise` from task 5.1 if that has landed, otherwise correct the copy here and delete the duplication when it does
     - _Requirements: 2.4_
+    - **Done.** "3 of 8 answered" and "Closes on 28 August 2026" while a check
+      is collecting. The count-of-total phrasing sidesteps singular/plural
+      entirely, so no `pluralise` helper is needed here and there is nothing for
+      task 5.1 to come back and deduplicate.
+    - A failed participation request does not hide the fact that a check is
+      running; the count is simply omitted. Same for a session with no
+      scheduled close — the panel says nothing rather than inventing a date.
+    - Participation is stored **with the session id it describes**, so a count
+      from a previous check can never be shown against the current one. That
+      shape was forced by `react-hooks/set-state-in-effect` rejecting a
+      synchronous reset, and is more correct than what it replaced.
+    - Panel mounted on the dashboard, in **every** data state: a team with no
+      closed sessions is exactly the team that most needs to open its first
+      check. Materialised session ids come from the trends response the page
+      already fetches, so the panel costs no extra request.
+    - The dashboard fetches `/api/me` for roles rather than sharing the shell's
+      copy. A context would couple the page to being rendered inside that
+      layout; one small GET keeps it standing on its own.
 
-  - [ ] 3.4 Close with confirmation
+  - [x] 3.6 Hide controls from non-managers
+    - **Pulled forward into 3.3.** Mounting the panel without the gate would
+      have left the branch in a state where a contributor sees a button that
+      403s, which the commit discipline rules out. Covered by a dashboard test
+      and by `e2e/session-lifecycle.spec.ts`.
+    - _Requirements: 2.6_
+
+  - [x] 3.4 Close with confirmation
     - Write failing tests: activating close opens a dialog and issues **no** request; confirming issues the PATCH; cancelling issues none and returns focus to the trigger
     - Native `<dialog>`, not `window.confirm`
     - _Requirements: 2.3_
+    - **Done.** Five component tests and three browser tests. The PATCH is
+      counted in the handler, so "asking the question must not also answer it"
+      is asserted as a request count, not as rendered text.
+    - **jsdom 29.1.1 implements neither `showModal()` nor the `cancel` event**
+      (checked before writing the component, not after). The component calls
+      `showModal()` when it exists and sets the `open` property when it does
+      not, so the confirmation stays assertable in jsdom while real browsers get
+      true modality. Escape is handled explicitly as well as through `cancel`,
+      because a dialog opened without `showModal()` gets no Escape handling from
+      the browser at all.
+    - **Found by running it in a browser:** focus did not return to the trigger
+      after Escape. Cancelling focused the trigger *before* closing the dialog,
+      and while a modal is open everything outside the top layer is inert — so
+      the call was silently ignored and the keyboard user was left on `body`.
+      The dialog is now closed first. jsdom could never have caught this: with
+      no top layer there is nothing to be inert.
+    - The browser test asserts `:modal` matches, so a regression to a
+      non-modal `<dialog open>` fails rather than passing on appearance.
+    - Each closing test has its own team with its own running check: sharing one
+      would couple them by order, and sharing a member would spend two of the
+      five magic links an email gets per hour, which CI's two retries exhaust.
 
-  - [ ] 3.5 Post-close state and failure handling
+  - [x] 3.5 Post-close state and failure handling
     - Write failing tests: immediately after close the panel says results are still being prepared; a failed open or close renders the server's message and leaves the previous state displayed
     - _Requirements: 2.5, 2.7_
+    - **Done.** The post-close state landed with 3.1's `awaiting_results`; this
+      task added failure handling.
+    - The panel shows the server's own words — "Session is already closed" tells
+      a manager what happened, "Something went wrong" does not. The generic
+      fallback is only for responses carrying no message at all.
+    - A failed action leaves the displayed state exactly as it was. Claiming a
+      check is running because the request to start one failed is worse than
+      reporting that nothing happened, so the tests assert the *old* state is
+      still on screen, not merely that an error appeared.
+    - `role="alert"`, because the message follows an action the manager took and
+      they need to know it did not happen.
+    - A failed close dismisses the confirmation rather than leaving it open: the
+      failure belongs beside the check it concerns, and the manager needs the
+      close control back to retry.
 
-  - [ ] 3.6 Hide controls from non-managers
-    - Write a failing test: a member without `delivery_manager` sees the state but no controls
-    - _Requirements: 2.6_
+  - [x] 3.6 Hide controls from non-managers — **done as part of 3.3, see above**
+    - A contributor sees no panel at all rather than the state without controls:
+      the panel exists to act, and the dashboard already shows the trend data
+      that is a contributor's stake in the check.
 
-  - [ ] 3.7 Drive open and close through the UI in the E2E journey
+  - [x] 3.7 Drive open and close through the UI in the E2E journey
     - Replace the `page.request.post` / `page.request.patch` calls in `e2e/journey.spec.ts` with UI interactions, and delete the comments explaining their absence
     - The scheduler tick stays an API call: it is a cron endpoint with no UI by design
     - _Requirements: NFR 2.1_
+    - **Done.** The journey opens a check from the dashboard button and closes it
+      through the confirmation, twice over. The comment explaining why the API
+      was used is gone, because the reason is gone.
+    - Closing also cross-checks that no open session remains, so the journey
+      proves the server acted rather than that the page changed its mind.
+    - The scheduler tick remains the single API call, as designed.
 
-  - [ ] 3.8 Accessibility pass over the lifecycle panel
+  - [x] 3.8 Accessibility pass over the lifecycle panel
     - axe over the panel and the open confirmation dialog
     - Manual keyboard pass: open the dialog, confirm focus moves into it, Escape cancels, focus returns to the trigger. Record the outcome here:
-      - Result: _(not yet run)_
+      - **Result:** driven from Playwright in Chromium, not by hand. Focusing the
+        close control and pressing Enter opens the dialog with focus already on
+        the confirm button; Tab reaches Cancel; Enter dismisses it and focus
+        returns to the trigger with the check still running. Pressing Enter
+        again reopens and confirms, and the check closes. Escape is covered
+        separately, and the dialog is asserted to match `:modal`, so a
+        regression to a non-modal `<dialog open>` fails rather than passing on
+        appearance.
+      - **Still outstanding:** a screen-reader pass. Nothing automated can say
+        whether the dialog is announced sensibly when it opens.
+    - axe covers the panel while a check is collecting, and the confirmation
+      dialog itself — a state that exists only after a click and renders over an
+      inert page.
     - _Requirements: NFR 1.1, 1.2, 1.3_
 
-- [ ] 4. Checkpoint — lifecycle control
+- [x] 4. Checkpoint — lifecycle control
   - Full suite, `tsc --noEmit`, lint, build, E2E. Ask the user if questions arise.
+  - **Gates:** 1262 Vitest tests across 155 files, `tsc --noEmit`, lint with zero
+    warnings, production build, and 51 Playwright tests with zero skips — run
+    twice, clean both times.
+  - **Two defects the full-suite run exposed that per-spec runs did not**, both
+    introduced by this phase:
+    1. The tab-order test waited for the navigation landmark, which the shell
+       renders with Profile alone while `/api/me` is in flight. Once the
+       dashboard also began fetching `/api/me` and the sessions list, the page
+       became slow enough for the test to tab through a half-built nav. It now
+       waits for a team-scoped link, which only exists in the ready state.
+    2. `seedTeam` deleted responses and session links by *session*, which was
+       enough while every session was seeded but not once tests create sessions
+       by clicking "Open a health check". Cleanup now enumerates every table
+       holding a foreign key to a member of the team, which stays correct as
+       tests gain new ways to write rows.
+  - Neither would have appeared in a spec run on its own. The second only fires
+    on the retry after a first failure — precisely when a suite can least afford
+    a second, unrelated error.
+  - **A third, found by CI and not reproducible locally at all.** The panel
+    formatted dates with `toLocaleDateString(undefined, …)`, so the same close
+    time read as "28 August 2026" on a British machine and "August 28, 2026" on
+    the runner. Windows ignores `LANG`, so no local run could have shown it. The
+    locale is now pinned to `en-GB`, matching the trend chart, which already
+    names its own months.
+  - **Follow-up recorded, not guessed at:** dates render in the *viewer's*
+    timezone, which is right for a person reading them but not necessarily right
+    for the team — a check closing at 23:30 UTC falls on different days either
+    side of midnight. The team already stores a timezone; using it here needs it
+    plumbed to the panel and belongs in its own change.
 
 - [ ] 5. Dashboard comprehension
 

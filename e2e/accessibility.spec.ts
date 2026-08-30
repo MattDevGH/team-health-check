@@ -253,6 +253,54 @@ test.describe('authenticated pages', () => {
 });
 
 /**
+ * The lifecycle panel, including the confirmation dialog.
+ *
+ * The dialog is a distinct state a page-level audit never reaches: it exists
+ * only after a click, and it renders in the top layer over an inert page.
+ *
+ * Requirements: Manager Experience 2.3, 2.4; NFR 1
+ */
+test.describe('session lifecycle states', () => {
+  const COLLECTING = 'a11y-lifecycle-collecting@e2e.invalid';
+  const CONFIRMING = 'a11y-lifecycle-confirming@e2e.invalid';
+  let collectingTeamId = '';
+  let confirmingTeamId = '';
+
+  test.beforeAll(() => {
+    const collecting = seedTeam({ teamName: 'A11y Collecting Team', memberEmail: COLLECTING });
+    seedSession({ teamId: collecting.teamId, memberId: collecting.memberId, status: 'open' });
+    collectingTeamId = collecting.teamId;
+
+    const confirming = seedTeam({ teamName: 'A11y Confirming Team', memberEmail: CONFIRMING });
+    seedSession({ teamId: confirming.teamId, memberId: confirming.memberId, status: 'open' });
+    confirmingTeamId = confirming.teamId;
+  });
+
+  test('the panel while a check is collecting', async ({ page }) => {
+    await signIn(page, COLLECTING);
+    await page.goto(`/teams/${collectingTeamId}/dashboard`);
+    await expect(page.getByRole('region', { name: 'Health check' })).toContainText(
+      /collecting responses/i,
+    );
+
+    await expectNoViolations(page, 'lifecycle panel while collecting');
+  });
+
+  test('the close confirmation dialog', async ({ page }) => {
+    await signIn(page, CONFIRMING);
+    await page.goto(`/teams/${confirmingTeamId}/dashboard`);
+
+    await page
+      .getByRole('region', { name: 'Health check' })
+      .getByRole('button', { name: /^close the health check$/i })
+      .click();
+    await expect(page.getByRole('dialog', { name: /close this health check/i })).toBeVisible();
+
+    await expectNoViolations(page, 'close confirmation dialog');
+  });
+});
+
+/**
  * States the shell introduces that a page-level audit never reaches.
  *
  * Requirements: Manager Experience 1.2, 1.5, 1.6; NFR 1
