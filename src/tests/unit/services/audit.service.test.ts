@@ -16,6 +16,7 @@ describe('AuditService', () => {
     repos = createInMemoryRepositories();
     auditService = createAuditService({
       auditLogRepo: repos.auditLog,
+      teamMemberRepo: repos.teamMember,
     });
 
     const team = await repos.team.create({ name: 'Test Team' });

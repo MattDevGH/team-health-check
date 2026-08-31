@@ -51,7 +51,9 @@ export const GET = withErrorHandling(async (request: Request, context) => {
 
   // Get audit log (most recent first — Requirement 18.4) with the cursor the
   // client needs to ask for the next page (Requirement 18.5)
-  const page = await container.auditLog.getLog(teamId, { cursor, limit });
+  // The reader's id resolves "You" without the client needing a second request
+  // for its own identity
+  const page = await container.auditLog.getLog(teamId, { cursor, limit }, auth.memberId);
 
   return Response.json(page);
 });

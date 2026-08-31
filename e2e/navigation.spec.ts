@@ -164,6 +164,14 @@ test.describe('using the shell', () => {
     await expect(page.getByRole('heading', { name: 'Audit Log' })).toBeVisible();
     await expect(page.getByText('privacy_mode_changed')).toBeVisible();
     await expect(page.getByText(/no audit log entries/i)).toHaveCount(0);
+
+    // The entry was seeded against this member, so the log should recognise
+    // them rather than printing the id it stores
+    const entry = page.getByRole('article').first();
+    await expect(entry).toContainText('Changed by: You');
+    await expect(entry, 'a raw member id must never reach the page').not.toContainText(
+      memberIds['audit-log']!,
+    );
   });
 
   test('puts the shell in a sensible tab order before the page content', async ({ page }) => {

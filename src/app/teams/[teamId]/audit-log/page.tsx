@@ -11,11 +11,36 @@
 
 import { useEffect, useState, useCallback } from 'react';
 
+/** Who made a change, resolved by the server. */
+interface AuditActor {
+  id: string;
+  name: string | null;
+  isViewer: boolean;
+  isErased: boolean;
+}
+
+/**
+ * Names the actor for a reader.
+ *
+ * A raw id is never shown: it told the reader nothing, and reading the log
+ * should not require a database. Where the actor genuinely cannot be named, the
+ * log says why rather than falling back to the identifier.
+ */
+function describeActor(actor: AuditActor | undefined): string {
+  if (!actor) return 'Unknown';
+  if (actor.isViewer) return 'You';
+  if (actor.name) return actor.name;
+  // The erasure hash exists so this person cannot be identified
+  if (actor.isErased) return 'A deleted account';
+  return 'A former member';
+}
+
 interface AuditEntry {
   id: string;
   changeType: string;
   previousValue: string;
   newValue: string;
+  actor?: AuditActor;
   userId: string;
   timestamp: string;
 }
@@ -169,7 +194,7 @@ export default function AuditLogPage({ params }: PageProps) {
                   <span>{entry.newValue}</span>
                 </div>
                 <div className="mt-1 text-xs text-gray-600">
-                  Changed by: {entry.userId}
+                  Changed by: {describeActor(entry.actor)}
                 </div>
               </article>
             ))}

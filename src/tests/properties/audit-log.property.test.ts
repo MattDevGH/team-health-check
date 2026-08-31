@@ -40,7 +40,7 @@ describe('Audit Log Properties', () => {
           fc.array(auditEntryArb, { minLength: 1, maxLength: 20 }),
           async (entries) => {
             const repos = createInMemoryRepositories();
-            const auditService = createAuditService({ auditLogRepo: repos.auditLog });
+            const auditService = createAuditService({ auditLogRepo: repos.auditLog, teamMemberRepo: repos.teamMember });
 
             const teamId = `team-${crypto.randomUUID()}`;
 
@@ -80,7 +80,7 @@ describe('Audit Log Properties', () => {
           fc.array(auditEntryArb, { minLength: 1, maxLength: 20 }),
           async (entries) => {
             const repos = createInMemoryRepositories();
-            const auditService = createAuditService({ auditLogRepo: repos.auditLog });
+            const auditService = createAuditService({ auditLogRepo: repos.auditLog, teamMemberRepo: repos.teamMember });
 
             const teamId = `team-${crypto.randomUUID()}`;
 
@@ -120,7 +120,7 @@ describe('Audit Log Properties', () => {
           fc.array(auditEntryArb, { minLength: 1, maxLength: 5 }),
           async (entries) => {
             const repos = createInMemoryRepositories();
-            const auditService = createAuditService({ auditLogRepo: repos.auditLog });
+            const auditService = createAuditService({ auditLogRepo: repos.auditLog, teamMemberRepo: repos.teamMember });
 
             const teamId = `team-${crypto.randomUUID()}`;
 
@@ -159,7 +159,7 @@ describe('Audit Log Properties', () => {
           fc.array(auditEntryArb, { minLength: 2, maxLength: 15 }),
           async (entries) => {
             const repos = createInMemoryRepositories();
-            const auditService = createAuditService({ auditLogRepo: repos.auditLog });
+            const auditService = createAuditService({ auditLogRepo: repos.auditLog, teamMemberRepo: repos.teamMember });
 
             const teamId = `team-${crypto.randomUUID()}`;
 

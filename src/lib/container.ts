@@ -69,7 +69,10 @@ export interface Container {
  * (sinks, other services) and are wired separately at the route handler level.
  */
 export function createContainer(repos: Repositories, options?: ContainerOptions): Container {
-  const auditLog = createAuditService({ auditLogRepo: repos.auditLog });
+  const auditLog = createAuditService({
+    auditLogRepo: repos.auditLog,
+    teamMemberRepo: repos.teamMember,
+  });
 
   const team = createTeamService({
     teamRepo: repos.team,

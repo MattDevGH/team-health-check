@@ -44,11 +44,27 @@ Groups 1 and 5 each end at a checkpoint.
     - A test covers the unresolvable-team case rendering *nothing* rather than a
       label with a blank after it — the shape of the original defect.
 
-  - [ ] 1.2 Audit log attributes changes to people
+  - [x] 1.2 Audit log attributes changes to people
     - Write failing tests for each of the four outcomes: the reader, another current member, a former member, `deleted:<hash>`
     - **Property 5: for any actor id, exactly one attribution is produced and a raw id is never displayed**
     - Resolution is presentation only; stored values do not change
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
+    - **Done.** Resolved **server-side**, not client-side as the design assumed.
+      The design said "the members the audit page already loads" — it does not;
+      it loads only the log. Resolving in the service keeps it to one request
+      and means the client never receives an id it might render by accident.
+    - `getLog` takes the reader's id, so "You" needs no second request for the
+      client's own identity. Members are read **once per page**, not once per
+      entry — a log of fifty changes by two people is still two people, and a
+      test counts the lookups.
+    - Erasure is checked **before** the name lookup, so a `deleted:<hash>` value
+      can never resolve to a person. The hash exists precisely so the actor
+      cannot be identified; resolving it would defeat the erasure it records.
+    - Stored values are untouched, asserted directly: the log stays append-only
+      and this is presentation only.
+    - No system actor is written to the audit log today, so Requirement 6.4's
+      "system process" case is covered by the unresolved path rather than a
+      branch of its own.
 
   - [ ] 1.3 Absent question themes said out loud
     - Write failing tests: a question theme with no responses appears in the Latest Session panel marked as unanswered, and appears in the expanded history marked as unanswered
