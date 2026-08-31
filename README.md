@@ -119,8 +119,17 @@ switcher, and a review of every team-scoped query. It is a separate future spec.
 
 ### Next milestone
 
-**Deployment** — Vercel, Turso, and the production cron trigger. The production
-database path already has execution coverage
+**Dashboard refinement** (`.kiro/specs/dashboard-refinement/`) — spec written
+2026-08-31, not started. Every requirement came from one manual pass over the
+live app against real team data; none of it was found by a test, and none of it
+failed one. It covers three defects, a chart that spaces sessions evenly
+regardless of when they closed, series distinguished only by colour, topics
+named "questions" while the real question text is never shown, and settings a
+colleague cannot interpret without having been in the conversations that
+produced them.
+
+**Then deployment** — Vercel, Turso, and the production cron trigger. The
+production database path already has execution coverage
 (`src/tests/integration/libsql-repository.test.ts`), so this is configuration
 and a cron schedule rather than new application code.
 
@@ -510,6 +519,11 @@ Feature specifications at `.kiro/specs/`:
 - Technical design (9 decisions, 6 correctness properties, per-tier testing strategy), with *As built* notes where implementation found something the design had not accounted for
 - Tasks (9 groups, 3 checkpoints), each recording what was done, what was found, and what was mutation-checked
 - `design.md` also carries a **What implementation taught** section — dates crossing JSON as strings, pinning date locales, one tick one clock, and why two test flakes came from tests outgrowing their budget rather than from the code
+
+**`dashboard-refinement/`** — Follow-up spec (**open**, written 2026-08-31):
+- Requirements (9 functional + 2 non-functional), every one traced to a manual pass over the live application rather than to a test failure
+- Technical design (7 decisions, 6 correctness properties), including an open decision on whether removing a session means deletion or exclusion
+- Tasks (9 groups, 3 checkpoints), with session removal explicitly blocked until that decision is made
 
 ## Known Issues & Future Work
 

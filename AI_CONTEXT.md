@@ -661,6 +661,35 @@ All stages must pass. Branch protection requires CI green before merge.
 Tasks 1–26 complete. Merged to `master` as `7eba5f6` on 2026-08-26, with `ci`
 and `e2e` green on master afterwards.
 
+### Dashboard refinement — spec written 2026-08-31, not started
+
+`.kiro/specs/dashboard-refinement/`. Every requirement comes from Matt's manual
+pass over the live app against his real team data on 2026-08-30. **None of it
+was found by a test and none of it failed one** — including three defects that
+sat behind green suites.
+
+**Defects:** the profile page renders `profile.privacyMode`, a field `GET
+/api/me` never sends (privacy mode belongs to `Team`, not `TeamMember`); the
+audit log prints raw member ids under "Changed by"; a topic nobody answered is
+omitted entirely from the Latest Session panel and the topic history, so absence
+and silence are indistinguishable.
+
+**Two structural findings worth remembering.** The dashboard derives its topic
+list from the aggregates rather than from the question catalogue, so a topic with
+no responses is *unrepresentable* — which is why absence is invisible. And
+`Question.description` — the literal question a member is asked, e.g. "How well
+is the team delivering value to users and stakeholders?" — has existed since the
+first migration and is displayed nowhere. The dashboard shows `Question.title`
+throughout and calls it a question, when it is a theme.
+
+**Blocked decision:** task group 8 (removing a session) must not start until the
+design document's open question is settled. Matt's original ask was to hide an
+anomalous row; he revised it to deletion with a recorded reason after agreeing a
+dashboard that can hide a bad week can be made to lie. The design recommends
+*exclusion* over hard deletion, so the responses survive and the gap can be
+annotated, with deletion left to a future GDPR framing. He has asked to discuss
+this before it is built.
+
 ### Manager experience — COMPLETE (2026-08-30)
 
 All task groups merged to `master` (`70f6e51`). A delivery manager can navigate
