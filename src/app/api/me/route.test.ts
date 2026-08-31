@@ -141,7 +141,25 @@ describe('GET /api/me', () => {
     const res = await GET(req);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.team).toEqual({ id: team.id, name: 'Platform Squad' });
+    expect(body.team).toMatchObject({ id: team.id, name: 'Platform Squad' });
+  });
+
+  it('returns the team\'s privacy mode, which decides whether answers are attributable', async () => {
+    // The profile page displayed this before the API sent it, so it rendered
+    // an empty value. It matters to the person answering: it is what tells
+    // them whether their delivery manager can see their individual scores.
+    const team = await meRepos.team.create({ name: 'Attributed Squad', privacyMode: 'attributed' });
+    const member = await meRepos.teamMember.create({
+      teamId: team.id,
+      name: 'Tomas',
+      email: 'tomas@example.com',
+    });
+    const token = await createSession(meRepos, member.id);
+
+    const req = makeAuthRequest('GET', { cookie: token });
+    const body = await (await GET(req)).json();
+
+    expect(body.team.privacyMode).toBe('attributed');
   });
 
   it('returns the roles assigned to the member in their own team', async () => {

@@ -44,7 +44,7 @@ export const handlers = [
       currentStreak: 0,
       bestStreak: 0,
       slackLink: null,
-      team: { id: 'team-1', name: 'Platform Squad' },
+      team: { id: 'team-1', name: 'Platform Squad', privacyMode: 'anonymous' },
       roles: ['delivery_manager'],
     });
   }),

@@ -43,8 +43,13 @@ export const GET = withErrorHandling(async (request: Request) => {
   // Prisma enforces the team foreign key, so an unresolvable team is
   // unreachable in production. When it cannot be resolved the shell is told
   // nothing rather than being handed an id it cannot name.
+  // privacyMode travels with the team because it is a team setting, and
+  // because the profile page needs it to tell a member whether their
+  // individual answers can be attributed to them
   const teamRecord = await repos.team.findById(member.teamId);
-  const team = teamRecord ? { id: teamRecord.id, name: teamRecord.name } : null;
+  const team = teamRecord
+    ? { id: teamRecord.id, name: teamRecord.name, privacyMode: teamRecord.privacyMode }
+    : null;
 
   const roles = team
     ? (await repos.teamMemberRole.findByMemberAndTeam(member.id, team.id)).map((r) => r.role)

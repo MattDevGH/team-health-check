@@ -23,11 +23,26 @@ Groups 1 and 5 each end at a checkpoint.
 
 - [ ] 1. Defects found in the manual pass
 
-  - [ ] 1.1 Profile stops rendering a value it does not have
+  - [x] 1.1 Profile stops rendering a value it does not have
     - Write a failing test: the profile page renders no empty "Privacy mode" line
     - `GET /api/me` returns a `TeamMember`, which has no `privacyMode`; the field belongs to `Team`
     - Decide with the user: remove it, or show the team's mode read-only and labelled as the team's
     - _Requirements: 7.1, 7.2, 7.3_
+    - **Done — shown, not removed.** Privacy mode decides whether a member's
+      individual answers can be attributed to them, which is exactly what the
+      person answering needs to know. Removing the line would have deleted a
+      legitimate question rather than answered it.
+    - `GET /api/me` now returns `team.privacyMode`. The copy is written from the
+      answerer's point of view — "your individual answers are not shown to your
+      delivery manager" — rather than describing a mode name, and says who sets
+      it.
+    - **The mock was the reason this shipped.** `profile-page.test.tsx` mocked
+      `/api/me` with a top-level `privacyMode` the route has never sent, so the
+      page read `profile.privacyMode`, rendered nothing, and the test stayed
+      green. The mock now mirrors the real response. This is the third instance
+      of the pattern in `AGENTS.md`, and the second found by using the app.
+    - A test covers the unresolvable-team case rendering *nothing* rather than a
+      label with a blank after it — the shape of the original defect.
 
   - [ ] 1.2 Audit log attributes changes to people
     - Write failing tests for each of the four outcomes: the reader, another current member, a former member, `deleted:<hash>`
