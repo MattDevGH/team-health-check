@@ -682,13 +682,26 @@ is the team delivering value to users and stakeholders?" — has existed since t
 first migration and is displayed nowhere. The dashboard shows `Question.title`
 throughout and calls it a question, when it is a theme.
 
-**Blocked decision:** task group 8 (removing a session) must not start until the
-design document's open question is settled. Matt's original ask was to hide an
-anomalous row; he revised it to deletion with a recorded reason after agreeing a
-dashboard that can hide a bad week can be made to lie. The design recommends
-*exclusion* over hard deletion, so the responses survive and the gap can be
-annotated, with deletion left to a future GDPR framing. He has asked to discuss
-this before it is built.
+**Terminology agreed 2026-08-31: "question theme"** for the five health areas,
+in user-facing copy only. The API keeps calling them questions, because that is
+what the model is: `Question.title` is the theme, `Question.description` is the
+question text.
+
+**Session removal — decided and deliberately not scheduled.** Matt's original ask
+was to hide an anomalous row; he revised it to removal with a recorded reason
+after agreeing that a dashboard which can hide a bad week can be made to lie.
+Resolved as **exclusion over deletion** — responses are what team members wrote,
+and destroying them to tidy a chart removes the only record anyone answered —
+with hard deletion left to a future GDPR framing. Neither is scheduled; the need
+may never arise. Requirement 9 and the roadmap note in `tasks.md` hold the
+reasoning.
+
+**The schema change waits, and that is deliberate.** It was considered whether to
+add `excludedAt`/`exclusionReason` now, before live data. No: both are nullable
+and *absent* means *not excluded*, so the migration is a metadata-only
+`ALTER TABLE ADD COLUMN` with no backfill — equally cheap before or after data
+exists, on SQLite and Turso alike. An unused `excludedAt` in the schema would
+invite filtering on it before anyone had agreed what exclusion meant.
 
 ### Manager experience — COMPLETE (2026-08-30)
 

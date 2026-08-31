@@ -17,11 +17,11 @@ that needs a decision before it can be built.
 |----------|-----------|
 | Time-proportional x-axis from `closedAt` | A trend line's slope is a claim about rate of change. Even spacing makes a day-apart pair and a month-apart pair look identical. |
 | Dash pattern **and** marker shape per series | Two redundant non-colour channels. Dashes read at a glance on screen; marker shapes survive a line being short or steep. Either alone is fragile. |
-| Question catalogue added to the trends response | The dashboard already fetches trends. A per-topic request for the question text would be five round trips for five fixed rows; a separate `/api/questions` route would be a second request for data that never changes. |
+| Question catalogue added to the trends response | The dashboard already fetches trends. A request per question theme would be five round trips for five fixed rows; a separate `/api/questions` route would be a second request for data that never changes. |
 | Actor names resolved from the members the audit page already loads | The audit log stores ids, and must keep storing ids — it is append-only history, and a name at the time of writing would go stale. Resolution is presentation. |
 | Filtering held in component state, not the URL | Requirement 8.4 asks for it not to persist. State that survives a reload is state a manager has to remember they set. |
 | Session removal as **exclusion**, not deletion | Recommended, not settled — see below. |
-| Topics renamed in copy only | No stored value, API field or identifier changes. `Question.title` stays `title`; only what a manager reads changes. |
+| "Question theme" as the user-facing term | Agreed 2026-08-31. Copy only: no stored value, API field or identifier changes. `Question.title` stays `title`; the API keeps calling them questions, because that is what the model is. |
 
 ## Architecture
 
@@ -32,9 +32,9 @@ that needs a decision before it can be built.
   "sessions": [ /* unchanged */ ],
   "trendDistribution": [ /* unchanged */ ],
   "privacyMode": "attributed",
-  // New: the five fixed topics, so the dashboard can name them all and show
-  // the question behind each one
-  "topics": [
+  // New: the five fixed questions, so the dashboard can name every theme —
+  // including one nobody answered — and show the question behind it
+  "questions": [
     { "id": "q-delivering-value", "title": "Delivering Value",
       "description": "How well is the team delivering value to users and stakeholders?" }
   ]
@@ -42,9 +42,9 @@ that needs a decision before it can be built.
 ```
 
 This is what makes Requirements 3 and 4 possible at all. Today the dashboard
-derives its topic list from the union of ids that appear in the aggregates, so a
-topic nobody has ever answered does not exist as far as the page is concerned —
-which is exactly the silence Requirement 4 objects to.
+derives its list from the union of ids that appear in the aggregates, so a
+question theme nobody has ever answered does not exist as far as the page is
+concerned — which is exactly the silence Requirement 4 objects to.
 
 `questionRepo.findAll()` already exists; nothing new is needed below the route.
 
@@ -67,7 +67,7 @@ time so the spacing is not read as arbitrary.
 
 ### Series identity
 
-Each topic gets a triple: colour, dash pattern, marker shape.
+Each question theme gets a triple: colour, dash pattern, marker shape.
 
 | Series | Dash | Marker |
 |---|---|---|
@@ -101,9 +101,11 @@ case covers members removed from the team, whose audit entries survive them.
 
 Stored values do not change: Requirement 6.5 keeps the log append-only.
 
-## Session removal — the decision to make first
+## Session removal — decided, and deliberately not scheduled
 
-Requirement 9 is specified but **should not be built until this is settled.**
+**Outcome (2026-08-31): exclusion is preferred over deletion, and neither is
+scheduled.** The need may never arise. Requirement 9 stays on record so that if
+it does, this thinking does not have to be repeated.
 
 **Option A — hard delete.** The session, its responses and its aggregates are
 removed. Simple, and matches "this never should have existed". But responses are
@@ -122,12 +124,30 @@ skips a fortnight.
 then a separate action with a GDPR framing rather than a dashboard-tidying one,
 alongside the existing member data deletion.
 
-Recommendation: **B**, with C as the path if deletion is later needed.
-Exclusion requires a schema change (`excludedAt`, `exclusionReason`) and a
-migration; hard delete requires none, which is the only argument in its favour.
+**Chosen: B**, with C as the path if deletion is ever genuinely needed.
 
-Whichever is chosen, the audit entry carries the reason, the session's close
-date and the actor, and remains readable once the session is gone.
+Whichever is built, the audit entry carries the reason, the session's close date
+and the actor, and remains readable once the session is gone.
+
+### Why the schema change waits
+
+The question was raised of whether to add `excludedAt` and `exclusionReason` now,
+while there is no live data, on the assumption that a schema change gets more
+expensive later. It does not, here:
+
+- Both columns are **nullable**, and *absent* is a meaningful value — a session
+  with no `excludedAt` is simply not excluded. Nothing needs backfilling.
+- A nullable `ALTER TABLE ADD COLUMN` is a metadata-only change in SQLite, and
+  the same on Turso. It does not rewrite the table, so the row count is
+  irrelevant.
+
+Schema changes that get expensive later are the ones requiring a non-null
+default, a data transformation, or a table rewrite. This is none of them, so the
+cost is identical today and in a year.
+
+There is a cost to adding them early: an `excludedAt` sitting unused in the
+schema is a standing invitation to filter on it before anyone has agreed what
+exclusion means. The columns arrive with the feature or not at all.
 
 ## Correctness Properties
 
@@ -136,7 +156,7 @@ date and the actor, and remains readable once the session is gone.
 | 1 | For any set of session dates, x positions are monotonically non-decreasing in `closedAt`, and equal dates give equal positions | 1.1, 1.2 |
 | 2 | For any number of sessions from one upward, every plotted point falls inside the plot area | 1.3 |
 | 3 | No two series share both a dash pattern and a marker shape | 2.1 |
-| 4 | For any session and any topic, the Latest Session panel renders a row — with a score, a suppression notice, or a no-responses notice, and never two of them | 4.1, 4.2, 4.4 |
+| 4 | For any session and any question theme, the Latest Session panel renders a row — with a score, a suppression notice, or a no-responses notice, and never two of them | 4.1, 4.2, 4.4 |
 | 5 | For any actor id, exactly one attribution is produced, and a raw id is never displayed | 6.1–6.4 |
 | 6 | For any subset of hidden series, the data table's contents are unchanged | 8.3 |
 
@@ -148,7 +168,8 @@ date and the actor, and remains readable once the session is gone.
   that says the chart cannot misrepresent time for *any* set of dates, which is
   the whole point of Requirement 1.
 - **Component** — legend toggles and their `aria-pressed` state; the expanded
-  topic showing its question text; explanatory copy present with its control.
+  question theme showing its question text; explanatory copy present with its
+  control.
 - **Browser** — axe over each new state; a keyboard-only pass over the legend
   toggles; the chart at 320px.
 - **Cross-checking** — any assertion about a plotted value continues to read the

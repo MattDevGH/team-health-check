@@ -13,8 +13,8 @@ to a test failure, because none of these fail a test.
 
 Three findings are defects rather than improvements: the profile page reads a
 field its API never sends, the audit log attributes changes to a raw database
-id, and a topic nobody answered disappears from the dashboard instead of saying
-so.
+id, and a question theme nobody answered disappears from the dashboard instead of
+saying so.
 
 The rest fall into three groups: a chart that currently misrepresents time and
 depends on colour alone; naming that calls a theme a question while never
@@ -23,7 +23,7 @@ been in the conversations that produced them.
 
 ## Glossary
 
-- **Topic**: one of the five fixed health areas — "Delivering Value",
+- **Question_Theme**: one of the five fixed health areas — "Delivering Value",
   "Psychological Safety" and so on. Stored as `Question.title`. What the
   dashboard currently calls a question.
 - **Question_Text**: the sentence a team member is actually asked, stored as
@@ -31,9 +31,9 @@ been in the conversations that produced them.
   to users and stakeholders?"*. Present in the database and shown nowhere on the
   dashboard.
 - **Trend_Indicator**: the optional *improving / stable / declining* tag a
-  member may attach to a topic alongside their 1–5 score. The dashboard's Trend
+  member may attach to a question theme alongside their 1–5 score. The dashboard's Trend
   Indicators panel counts these tags.
-- **Series**: one topic's line across the trend chart.
+- **Series**: one question theme's line across the trend chart.
 - **Excluded_Session**: a closed health check a Delivery Manager has removed
   from the team's history, with a recorded reason.
 
@@ -67,7 +67,7 @@ been in the conversations that produced them.
 4. THE legend SHALL lay out so that entries are not orphaned onto a line of their own — either all on one line, or one per line.
 5. Requirement 1's spacing and this requirement's styling SHALL both survive the chart being printed in greyscale.
 
-### Requirement 3: Topics Named Honestly, With The Question Shown
+### Requirement 3: Question Themes Named Honestly, With The Question Shown
 
 **User Story:** As a delivery manager, I want to see the question my team was actually asked, so that I can interpret a score against what people were answering.
 
@@ -75,22 +75,22 @@ been in the conversations that produced them.
 
 #### Acceptance Criteria
 
-1. THE Web_Interface SHALL refer to the five health areas by a term that describes what they are, consistently across the dashboard.
-2. WHEN a Topic is expanded, THE Web_Interface SHALL display its Question_Text.
-3. THE Question_Text SHALL be available to the dashboard without a second round trip per Topic.
+1. THE Web_Interface SHALL refer to the five health areas as **question themes**, consistently across the dashboard. *(Term agreed 2026-08-31: clearer and more descriptive than "topic" or "theme" alone.)*
+2. WHEN a Question_Theme is expanded, THE Web_Interface SHALL display its Question_Text.
+3. THE Question_Text SHALL be available to the dashboard without a second round trip per Question_Theme.
 4. Renaming SHALL NOT change any stored value, API field name, or question identifier.
 
 ### Requirement 4: Absent Data Said Out Loud
 
-**User Story:** As a delivery manager, I want to see that a topic went unanswered, so that I do not mistake a missing row for a topic nobody had concerns about.
+**User Story:** As a delivery manager, I want to see that a question theme went unanswered, so that I do not mistake a missing row for a theme nobody had concerns about.
 
-*A topic with no responses in a session is currently omitted from the Latest Session panel and skipped entirely in the expanded history. Silence and absence are indistinguishable.*
+*A question theme with no responses in a session is currently omitted from the Latest Session panel and skipped entirely in the expanded history. Silence and absence are indistinguishable.*
 
 #### Acceptance Criteria
 
-1. THE Latest Session panel SHALL list every Topic the team is asked about, including those with no responses in that session.
-2. WHERE a Topic has no responses in the latest session, THE panel SHALL say so rather than omitting the row or leaving it blank.
-3. WHEN a Topic is expanded, THE history SHALL include sessions in which that Topic went unanswered, marked as such.
+1. THE Latest Session panel SHALL list every Question_Theme the team is asked about, including those with no responses in that session.
+2. WHERE a Question_Theme has no responses in the latest session, THE panel SHALL say so rather than omitting the row or leaving it blank.
+3. WHEN a Question_Theme is expanded, THE history SHALL include sessions in which it went unanswered, marked as such.
 4. THE distinction between *no responses* and *suppressed for anonymity* SHALL be clear: they are different facts and SHALL NOT share wording.
 
 ### Requirement 5: Settings A Colleague Can Understand
@@ -135,7 +135,7 @@ been in the conversations that produced them.
 
 ### Requirement 8: Filtering The Chart
 
-**User Story:** As a delivery manager, I want to focus on one or two topics at a time, so that a five-line chart does not have to be read all at once.
+**User Story:** As a delivery manager, I want to focus on one or two question themes at a time, so that a five-line chart does not have to be read all at once.
 
 #### Acceptance Criteria
 
@@ -151,10 +151,21 @@ been in the conversations that produced them.
 
 *This began as a request to hide a row. Hiding it would let the dashboard be quietly made to say something other than what the team reported; removing it with a recorded reason leaves the history honest about its own gaps.*
 
-**Open for discussion before implementation — see the design document.** The
-questions are whether removal is deletion or exclusion, what becomes of the
-responses underneath it, and whether an excluded session should remain visible
-as an annotated gap.
+**Roadmap, not scheduled — decided 2026-08-31.** Neither exclusion nor deletion
+may ever be needed, so this requirement is recorded rather than planned. It is
+kept here, in full, so that if the need arises the thinking does not have to be
+redone.
+
+Two decisions already taken:
+
+- **Exclusion is preferred over deletion.** Responses are what team members
+  wrote; destroying them to tidy a chart removes the only record that anyone
+  answered. Exclusion leaves the history honest about its own gaps.
+- **The schema change waits.** `excludedAt` and `exclusionReason` are both
+  nullable, and *absent* is a meaningful value — not excluded. That makes the
+  migration a metadata-only `ALTER TABLE ADD COLUMN` with no backfill, equally
+  cheap before or after live data exists. Adding the columns speculatively would
+  invite them to be used before anyone had agreed what exclusion means.
 
 #### Acceptance Criteria
 
@@ -163,7 +174,7 @@ as an annotated gap.
 3. THE removal SHALL be recorded in the audit log with the reason, the session's close date, and the actor.
 4. THE audit record SHALL remain readable after the session is gone.
 5. THE action SHALL require an explicit confirmation that names what is being removed.
-6. THE trend chart, data table, Latest Session panel and Topic history SHALL all stop counting a removed session.
+6. THE trend chart, data table, Latest Session panel and question-theme history SHALL all stop counting a removed session.
 7. IF removing a session would leave fewer than the two closed sessions a trend needs, THEN the dashboard SHALL return to its insufficient-data state rather than rendering a broken chart.
 
 ## Non-Functional Requirements

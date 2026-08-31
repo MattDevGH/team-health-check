@@ -17,7 +17,7 @@ All tasks follow TDD (Red → Green → Refactor) and one green behaviour per
 commit. Update AI_CONTEXT.md and README.md in the commit that changes behaviour,
 test coverage, or conventions.
 
-Groups 1, 4 and 5 each end at a checkpoint.
+Groups 1 and 5 each end at a checkpoint.
 
 ## Tasks
 
@@ -35,11 +35,11 @@ Groups 1, 4 and 5 each end at a checkpoint.
     - Resolution is presentation only; stored values do not change
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-  - [ ] 1.3 Absent topics said out loud
-    - Write failing tests: a topic with no responses appears in the Latest Session panel marked as unanswered, and appears in the expanded history marked as unanswered
-    - **Property 4: every topic yields exactly one row state — score, suppressed, or unanswered**
+  - [ ] 1.3 Absent question themes said out loud
+    - Write failing tests: a question theme with no responses appears in the Latest Session panel marked as unanswered, and appears in the expanded history marked as unanswered
+    - **Property 4: every question theme yields exactly one row state — score, suppressed, or unanswered**
     - Suppressed and unanswered must not share wording: they are different facts
-    - Depends on task 3.1, which is what makes the full topic list available
+    - Depends on task 3.1, which is what makes the full list available
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
 - [ ] 2. Checkpoint — defects
@@ -47,8 +47,9 @@ Groups 1, 4 and 5 each end at a checkpoint.
 
 - [ ] 3. A chart that tells the truth
 
-  - [ ] 3.1 Serve the topic catalogue with the trends response
-    - Write failing route tests: the response carries every topic with its id, title and description, whether or not that topic has aggregates
+  - [ ] 3.1 Serve the question catalogue with the trends response
+    - Write failing route tests: the response carries every question with its id, title and description, whether or not it has aggregates
+    - The API field is `questions`, because that is what the model is; "question theme" is the user-facing term for the title
     - Uses the existing `questionRepo.findAll()`; no new repository work
     - Update the MSW handler in the same commit — a mock that lags this contract is how the audit log page came to crash
     - _Requirements: 3.3, 4.1_
@@ -80,16 +81,16 @@ Groups 1, 4 and 5 each end at a checkpoint.
     - Confirm the legend and table remain legible with colour removed
     - _Requirements: NFR 1.1, 2.5_
 
-- [ ] 4. Topics, and the question behind them
+- [ ] 4. Question themes, and the question behind them
 
-  - [ ] 4.1 Rename the user-facing term
-    - Decide the term with the user: "topic", "theme", "question theme"
+  - [ ] 4.1 Rename the user-facing term to **question theme**
+    - Term agreed 2026-08-31: clearer and more descriptive than "topic" or "theme" alone
     - Update every user-facing string, and **every test asserting the old wording, in the same commit**
     - No stored value, API field or identifier changes
     - _Requirements: 3.1, 3.4, NFR 2.1_
 
   - [ ] 4.2 Show the question a team member was asked
-    - Write a failing test: expanding a topic displays its `description`
+    - Write a failing test: expanding a question theme displays its `description`
     - _Requirements: 3.2_
 
   - [ ] 4.3 Make the disclosure obvious
@@ -113,7 +114,7 @@ Groups 1, 4 and 5 each end at a checkpoint.
     - _Requirements: 5.4, 5.5, 5.7_
 
   - [ ] 5.5 Explain the Trend Indicators panel
-    - These are members' own assessments of direction, not a calculated trend. One respondent tagging a topic "improving" is what produces "Improving: 1"
+    - These are members' own assessments of direction, not a calculated trend. One respondent tagging a question theme "improving" is what produces "Improving: 1"
     - _Requirements: 5.6, 5.7_
 
   - [ ] 5.6 Assert the copy exists where its control is
@@ -144,35 +145,36 @@ Groups 1, 4 and 5 each end at a checkpoint.
     - Keyboard-only operation of every toggle; axe over a partially filtered chart
     - _Requirements: NFR 1.1, 1.2_
 
-- [ ] 8. Removing a session — **blocked on a decision**
-
-  Do not start until the design document's open question is settled: whether
-  removal is deletion or exclusion, what becomes of the responses underneath,
-  and whether an excluded session shows as an annotated gap.
-
-  The recommendation is exclusion, with hard deletion left to a future GDPR
-  framing rather than a dashboard-tidying one. The user has asked to discuss
-  this before it is built.
-
-  - [ ] 8.1 Record the decision in the design document before writing code
-  - [ ] 8.2 Schema and migration, if exclusion is chosen
-  - [ ] 8.3 Service: remove a session with a mandatory reason, audited atomically
-    - Reject an empty reason
-    - The audit entry carries the reason, the session's close date and the actor, and survives the session
-    - _Requirements: 9.2, 9.3, 9.4_
-  - [ ] 8.4 Route: Delivery Manager only
-    - _Requirements: 9.1_
-  - [ ] 8.5 UI: confirmation naming what is being removed, reason required
-    - _Requirements: 9.5_
-  - [ ] 8.6 Every view stops counting a removed session
-    - Chart, data table, Latest Session panel, topic history
-    - Falling below two closed sessions returns the dashboard to its insufficient-data state rather than a broken chart
-    - _Requirements: 9.6, 9.7_
-
-- [ ] 9. Reconcile and merge
+- [ ] 8. Reconcile and merge
   - Update requirements/design/tasks to match what was built, including any decision that changed during implementation
   - Update README.md and AI_CONTEXT.md
   - Run every gate, push, and merge through a green PR
+
+## Roadmap — recorded, not scheduled
+
+**Removing a session (Requirement 9).** Decided 2026-08-31: **exclusion over
+deletion**, and neither scheduled. The need may never arise — it would take a
+check opened in error, or one invalidated by events like a conference week.
+
+Kept on record so the thinking is not repeated if it does arise:
+
+- **Exclusion, not deletion.** Responses are what team members wrote. Destroying
+  them to tidy a chart removes the only record that anyone answered; exclusion
+  leaves the history honest about its own gaps, and lets the dashboard show an
+  annotated one.
+- **The schema change waits.** `excludedAt` and `exclusionReason` are nullable,
+  and *absent* means *not excluded*, so the migration is a metadata-only
+  `ALTER TABLE ADD COLUMN` with no backfill — equally cheap before or after live
+  data. Adding them speculatively would invite filtering on a column before
+  anyone had agreed what it meant.
+- **Hard deletion, if ever wanted, belongs with GDPR**, alongside the existing
+  member data deletion — not as a dashboard control.
+
+Requirement 9's acceptance criteria stand as written: Delivery Manager only, a
+mandatory reason, an audit entry carrying the reason and the session's close date
+that survives the session, an explicit confirmation, and every view ceasing to
+count it — including returning the dashboard to its insufficient-data state if
+fewer than two closed sessions remain.
 
 ## Where this came from
 
@@ -183,8 +185,8 @@ way `AGENTS.md` warns about.
 
 Two findings are worth remembering beyond this spec:
 
-- **The dashboard could not name a topic nobody had answered**, because it
-  derived its topic list from the data rather than from the catalogue. Absence
+- **The dashboard could not name a question theme nobody had answered**, because
+  it derived its list from the data rather than from the catalogue. Absence
   was unrepresentable, so it was invisible.
 - **The literal question text has existed in the database since the first
   migration** and has never been shown on the dashboard. Nothing failed; it
