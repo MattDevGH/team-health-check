@@ -661,6 +661,48 @@ All stages must pass. Branch protection requires CI green before merge.
 Tasks 1–26 complete. Merged to `master` as `7eba5f6` on 2026-08-26, with `ci`
 and `e2e` green on master afterwards.
 
+### Dashboard refinement — spec written 2026-08-31, not started
+
+`.kiro/specs/dashboard-refinement/`. Every requirement comes from Matt's manual
+pass over the live app against his real team data on 2026-08-30. **None of it
+was found by a test and none of it failed one** — including three defects that
+sat behind green suites.
+
+**Defects:** the profile page renders `profile.privacyMode`, a field `GET
+/api/me` never sends (privacy mode belongs to `Team`, not `TeamMember`); the
+audit log prints raw member ids under "Changed by"; a topic nobody answered is
+omitted entirely from the Latest Session panel and the topic history, so absence
+and silence are indistinguishable.
+
+**Two structural findings worth remembering.** The dashboard derives its topic
+list from the aggregates rather than from the question catalogue, so a topic with
+no responses is *unrepresentable* — which is why absence is invisible. And
+`Question.description` — the literal question a member is asked, e.g. "How well
+is the team delivering value to users and stakeholders?" — has existed since the
+first migration and is displayed nowhere. The dashboard shows `Question.title`
+throughout and calls it a question, when it is a theme.
+
+**Terminology agreed 2026-08-31: "question theme"** for the five health areas,
+in user-facing copy only. The API keeps calling them questions, because that is
+what the model is: `Question.title` is the theme, `Question.description` is the
+question text.
+
+**Session removal — decided and deliberately not scheduled.** Matt's original ask
+was to hide an anomalous row; he revised it to removal with a recorded reason
+after agreeing that a dashboard which can hide a bad week can be made to lie.
+Resolved as **exclusion over deletion** — responses are what team members wrote,
+and destroying them to tidy a chart removes the only record anyone answered —
+with hard deletion left to a future GDPR framing. Neither is scheduled; the need
+may never arise. Requirement 9 and the roadmap note in `tasks.md` hold the
+reasoning.
+
+**The schema change waits, and that is deliberate.** It was considered whether to
+add `excludedAt`/`exclusionReason` now, before live data. No: both are nullable
+and *absent* means *not excluded*, so the migration is a metadata-only
+`ALTER TABLE ADD COLUMN` with no backfill — equally cheap before or after data
+exists, on SQLite and Turso alike. An unused `excludedAt` in the schema would
+invite filtering on it before anyone had agreed what exclusion meant.
+
 ### Manager experience — COMPLETE (2026-08-30)
 
 All task groups merged to `master` (`70f6e51`). A delivery manager can navigate
