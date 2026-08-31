@@ -139,6 +139,20 @@ export const handlers = [
         { questionId: 'q-team-collaboration', improving: 2, stable: 3, declining: 0 },
       ],
       privacyMode: 'anonymous',
+      // The fixed catalogue the route now sends: the dashboard needs it to name
+      // a question theme that has no aggregates, and to show the question text
+      questions: [
+        {
+          id: 'q-delivering-value',
+          title: 'Delivering Value',
+          description: 'How well is the team delivering value to stakeholders?',
+        },
+        {
+          id: 'q-team-collaboration',
+          title: 'Team Collaboration',
+          description: 'How effectively does the team work together?',
+        },
+      ],
     });
   }),
 
