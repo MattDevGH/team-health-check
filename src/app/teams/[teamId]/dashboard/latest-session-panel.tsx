@@ -119,7 +119,12 @@ export function LatestSessionPanel({
         Closed on {fullDate(latest.closedAt)}, compared with the check before it.
       </p>
 
-      <div className="overflow-x-auto">
+      {/*
+        Focusable for the same reason as the chart's table: see trend-chart.
+        Named distinctly from the section around it, so a query for the panel
+        does not match this region too.
+      */}
+      <div role="region" aria-label="Scores by question theme" tabIndex={0} className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
             <tr>

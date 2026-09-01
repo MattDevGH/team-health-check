@@ -136,19 +136,39 @@ Groups 1 and 5 each end at a checkpoint.
       the rendered dashes are all different. Pinning `stroke-dasharray="6 3"`
       would assert what was typed and keep passing if two series collided.
 
-  - [ ] 3.4 Lay the legend out predictably
+  - [x] 3.4 Lay the legend out predictably
     - One row if the entries fit, one per line otherwise; never four and an orphan
     - Verify at 1280px, 375px and 320px
     - _Requirements: 2.4_
+    - **Done.** A CSS grid rather than a wrapping flex row. Wrapping produced
+      four entries and a lone fifth, which reads as a mistake; the grid gives
+      one column per entry where they fit and one per line where they do not,
+      so the arrangement always looks deliberate.
 
-  - [ ] 3.5 Make the data table read as a table
+  - [x] 3.5 Make the data table read as a table
     - Header row visually distinct from the body
     - _Requirements: 1.5_
+    - **Done.** A tinted background, a heavier rule beneath, and semibold
+      labels. The header previously shared the body’s weight and colour, so
+      the table read as an undifferentiated block.
 
-  - [ ] 3.6 Accessibility pass over the chart
+  - [x] 3.6 Accessibility pass over the chart
     - axe over the chart at 1280px and 320px
     - Confirm the legend and table remain legible with colour removed
     - _Requirements: NFR 1.1, 2.5_
+    - **Done, and it found a real defect.** Axe reported
+      `scrollable-region-focusable` on both data tables at 320px: they scroll
+      horizontally, but the scroll container was not reachable by keyboard, so
+      a keyboard user could not scroll them at all. Both now carry
+      `role="region"`, a name and `tabindex="0"`.
+    - **The defect predates this milestone.** The tables arrived with
+      manager-experience 5.3, and the 320px audit added there covered the
+      dashboard but not a viewport narrow enough to make them overflow. It
+      only bites at the widths where the content actually exceeds the box.
+    - Naming the inner region mattered: the first name collided with the
+      section around it, so `getByRole("region", { name: /latest session/i })`
+      matched two elements and two existing tests broke. Renamed rather than
+      loosening the queries.
 
 - [ ] 4. Question themes, and the question behind them
 

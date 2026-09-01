@@ -253,6 +253,67 @@ test.describe('authenticated pages', () => {
 });
 
 /**
+ * The trend chart at the widths a manager actually uses.
+ *
+ * Requirements: Dashboard Refinement 2.4, 2.5; NFR 1
+ *
+ * The legend and the data table are the parts that have to survive a narrow
+ * viewport — the drawing itself scales, but a five-column table and a
+ * five-entry legend do not.
+ */
+test.describe('the trend chart at narrow widths', () => {
+  const CHART = 'a11y-chart@e2e.invalid';
+  let chartTeamId = '';
+
+  test.beforeAll(() => {
+    const team = seedTeam({ teamName: 'A11y Chart Team', memberEmail: CHART });
+    chartTeamId = team.teamId;
+
+    // Two closed sessions with aggregates, so the chart renders in full
+    [new Date('2026-08-10T17:00:00.000Z'), new Date('2026-08-17T17:00:00.000Z')].forEach(
+      (closedAt, index) => {
+        seedSession({
+          teamId: team.teamId,
+          memberId: team.memberId,
+          index,
+          status: 'closed',
+          closedAt,
+          aggregates: [
+            aggregate('q-delivering-value', 4 + index * 0.5),
+            aggregate('q-psychological-safety', 3 + index * 0.5),
+          ],
+        });
+      },
+    );
+  });
+
+  test('does not scroll the page sideways at 320px', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await signIn(page, CHART);
+    await page.goto(`/teams/${chartTeamId}/dashboard`);
+    await expect(page.getByRole('figure', { name: /average score per question/i })).toBeVisible();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, 'horizontal overflow in CSS pixels at 320px').toBeLessThanOrEqual(0);
+
+    await expectNoViolations(page, 'trend chart at 320px');
+  });
+
+  test('keeps every legend entry readable at 320px', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await signIn(page, CHART);
+    await page.goto(`/teams/${chartTeamId}/dashboard`);
+
+    const legend = page.getByRole('list', { name: /questions plotted/i });
+    for (const name of ['Delivering Value', 'Psychological Safety']) {
+      await expect(legend.getByText(name)).toBeVisible();
+    }
+  });
+});
+
+/**
  * First-run guidance.
  *
  * Requirements: Manager Experience 4.1, 4.3, 4.5; NFR 1

@@ -228,7 +228,16 @@ export function TrendChart({ sessions }: TrendChartProps) {
         marker as its line, so a reader identifies a series without comparing
         colours at all.
       */}
-      <ul aria-label="Questions plotted" className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+      {/*
+        A grid rather than a wrapping flex row. Wrapping produced four entries
+        and a lone fifth, which reads as a mistake; the grid gives one column
+        per entry when they fit and one per line when they do not, so the
+        arrangement is always deliberate.
+      */}
+      <ul
+        aria-label="Questions plotted"
+        className="mt-3 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]"
+      >
         {lines.map((line) => (
           <li key={line.questionId} className="flex items-center gap-2 text-gray-700">
             {/*
@@ -263,16 +272,33 @@ export function TrendChart({ sessions }: TrendChartProps) {
         page rather than behind a disclosure: a table hidden by default is one
         more thing to discover, and this one is small.
       */}
-      <div className="mt-4 overflow-x-auto">
+      {/*
+        A horizontally scrolling region has to be reachable by keyboard, or a
+        keyboard user cannot scroll it at all. tabindex 0 plus a name makes it
+        a focusable, announced region — axe flags this as
+        scrollable-region-focusable, and it only bites at the widths where the
+        table actually overflows.
+      */}
+      <div
+        role="region"
+        aria-label="Scores as a table"
+        tabIndex={0}
+        className="mt-4 overflow-x-auto"
+      >
         <table className="w-full text-left text-sm" aria-labelledby={CAPTION_ID}>
           <caption className="sr-only">{caption}</caption>
-          <thead>
+          {/*
+            The header row was indistinguishable from the body, so the table
+            read as an undifferentiated block. A tinted background and a rule
+            beneath it separate the labels from the data.
+          */}
+          <thead className="border-b-2 border-gray-300 bg-gray-50">
             <tr>
-              <th scope="col" className="py-1 pr-4 font-medium text-gray-700">
+              <th scope="col" className="py-2 pr-4 font-semibold text-gray-900">
                 Session closed
               </th>
               {questionIds.map((questionId) => (
-                <th key={questionId} scope="col" className="py-1 pr-4 font-medium text-gray-700">
+                <th key={questionId} scope="col" className="py-2 pr-4 font-semibold text-gray-900">
                   {questionName(questionId)}
                 </th>
               ))}
