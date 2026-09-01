@@ -58,6 +58,52 @@ const SESSIONS: SessionData[] = [
  * a question's name and no indication that activating it revealed anything, or
  * whether it was already open.
  */
+/**
+ * Dashboard Refinement 4.3, 4.4.
+ *
+ * A session where nobody answered this theme was skipped entirely, so the
+ * history omitted it and a reader could not tell a gap from a check that never
+ * ran.
+ */
+describe('QuestionDetailView sessions with no responses', () => {
+  const MIXED: SessionData[] = [
+    {
+      sessionId: 's1',
+      closedAt: '2025-01-08T17:00:00Z',
+      averages: [{ questionId: 'q-delivering-value', averageScore: 3.5, responseCount: 5 }],
+    },
+    {
+      // This session recorded nothing for Delivering Value
+      sessionId: 's2',
+      closedAt: '2025-01-15T17:00:00Z',
+      averages: [{ questionId: 'q-team-collaboration', averageScore: 4.0, responseCount: 3 }],
+    },
+  ];
+
+  it('keeps a session in the history even when the theme went unanswered', async () => {
+    const user = userEvent.setup();
+    render(<QuestionDetailView sessions={MIXED} anonymousMode={false} />);
+
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+
+    const detail = screen.getByRole('region', { name: /delivering value/i });
+    expect(detail).toHaveTextContent('Jan 15');
+    expect(detail).toHaveTextContent(/no responses/i);
+  });
+
+  it('does not describe an unanswered session as insufficient data', async () => {
+    // "Insufficient data" means people answered and there were too few to show
+    const user = userEvent.setup();
+    render(<QuestionDetailView sessions={MIXED} anonymousMode={true} />);
+
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+
+    const detail = screen.getByRole('region', { name: /delivering value/i });
+    expect(detail).toHaveTextContent(/no responses/i);
+    expect(detail).not.toHaveTextContent(/insufficient data/i);
+  });
+});
+
 describe('QuestionDetailView disclosure semantics', () => {
   it('announces that a question expands, and that it starts collapsed', () => {
     render(<QuestionDetailView sessions={SESSIONS} anonymousMode={false} />);

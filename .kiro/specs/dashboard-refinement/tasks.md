@@ -66,21 +66,36 @@ Groups 1 and 5 each end at a checkpoint.
       "system process" case is covered by the unresolved path rather than a
       branch of its own.
 
-  - [ ] 1.3 Absent question themes said out loud
+  - [x] 1.3 Absent question themes said out loud
     - Write failing tests: a question theme with no responses appears in the Latest Session panel marked as unanswered, and appears in the expanded history marked as unanswered
     - **Property 4: every question theme yields exactly one row state — score, suppressed, or unanswered**
     - Suppressed and unanswered must not share wording: they are different facts
     - Depends on task 3.1, which is what makes the full list available
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
+    - **Done, after pulling 3.1 forward** — the catalogue is what makes absence
+      representable, so it had to land first. The task order in this plan put
+      3.1 later; the dependency note was right and the ordering was not.
+    - "No responses" and "Hidden until 3 people have answered" are deliberately
+      different sentences. One means silence; the other means people answered
+      and there were too few to show safely. A test asserts the unanswered row
+      does *not* carry the suppression wording.
+    - The catalogue prop is optional and the panel falls back to the answered
+      themes without it, so the page still renders against a trends response
+      that predates it.
 
 - [ ] 2. Checkpoint — defects
   - Full suite, `tsc --noEmit`, lint, build, E2E. Ask the user if questions arise.
 
 - [ ] 3. A chart that tells the truth
 
-  - [ ] 3.1 Serve the question catalogue with the trends response
+  - [x] 3.1 Serve the question catalogue with the trends response
     - Write failing route tests: the response carries every question with its id, title and description, whether or not it has aggregates
     - The API field is `questions`, because that is what the model is; "question theme" is the user-facing term for the title
+    - **Done, pulled forward from group 3** because task 1.3 depends on it.
+    - The question repository is read-only with a fixed five-row list, so the
+      test uses the canonical set rather than seeding one — there is no
+      `create` to call, and inventing one would have been a fixture describing
+      a repository that does not exist.
     - Uses the existing `questionRepo.findAll()`; no new repository work
     - Update the MSW handler in the same commit — a mock that lags this contract is how the audit log page came to crash
     - _Requirements: 3.3, 4.1_

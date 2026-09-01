@@ -107,4 +107,74 @@ describe('LatestSessionPanel', () => {
 
     expect(container).toBeEmptyDOMElement();
   });
+
+  /**
+   * Dashboard Refinement 4.1, 4.2, 4.4.
+   *
+   * A question theme with no responses used to be absent from this table
+   * entirely, because the rows came from the aggregates. A manager could not
+   * tell a theme nobody answered from one that was never asked.
+   */
+  describe('question themes with no responses', () => {
+    const QUESTIONS = [
+      { id: 'q-delivering-value', title: 'Delivering Value', description: 'How well…?' },
+      { id: 'q-psychological-safety', title: 'Psychological Safety', description: 'How safe…?' },
+    ];
+
+    const oneAnswered = [
+      {
+        sessionId: 's1',
+        closedAt: '2026-08-08T17:00:00.000Z',
+        averages: [{ questionId: 'q-delivering-value', averageScore: 3.9, responseCount: 6 }],
+      },
+    ];
+
+    it('lists a theme the session recorded nothing for', () => {
+      render(
+        <LatestSessionPanel sessions={oneAnswered} questions={QUESTIONS} anonymousMode={false} />,
+      );
+
+      expect(screen.getByRole('row', { name: /psychological safety/i })).toBeInTheDocument();
+    });
+
+    it('says the theme went unanswered rather than leaving it blank', () => {
+      render(
+        <LatestSessionPanel sessions={oneAnswered} questions={QUESTIONS} anonymousMode={false} />,
+      );
+
+      expect(row(/psychological safety/i).getByText(/no responses/i)).toBeInTheDocument();
+    });
+
+    it('does not confuse unanswered with hidden for anonymity', () => {
+      // Different facts: one means nobody answered, the other means people did
+      // and there were too few to show. They must not share wording.
+      render(
+        <LatestSessionPanel
+          sessions={[
+            {
+              sessionId: 's1',
+              closedAt: '2026-08-08T17:00:00.000Z',
+              averages: [
+                { questionId: 'q-delivering-value', averageScore: 4.5, responseCount: 2 },
+              ],
+            },
+          ]}
+          questions={QUESTIONS}
+          anonymousMode={true}
+        />,
+      );
+
+      expect(row(/delivering value/i).getByText(/hidden until/i)).toBeInTheDocument();
+      expect(row(/psychological safety/i).getByText(/no responses/i)).toBeInTheDocument();
+      expect(row(/psychological safety/i).queryByText(/hidden until/i)).not.toBeInTheDocument();
+    });
+
+    it('falls back to the answered themes when no catalogue is supplied', () => {
+      // Keeps the panel usable if the trends response predates the catalogue
+      render(<LatestSessionPanel sessions={oneAnswered} anonymousMode={false} />);
+
+      expect(row(/delivering value/i).getByText('3.9')).toBeInTheDocument();
+      expect(screen.queryByRole('row', { name: /psychological safety/i })).not.toBeInTheDocument();
+    });
+  });
 });

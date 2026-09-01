@@ -104,10 +104,14 @@ export function QuestionDetailView({
               <>
                 {sessions.map((session) => {
                   const avg = session.averages.find((a) => a.questionId === qId);
-                  if (!avg) return null;
 
+                  // A session where nobody answered this theme used to be
+                  // skipped, so the history silently omitted it and a reader
+                  // could not tell a gap from a check that never ran
                   const isSuppressed =
-                    anonymousMode && avg.responseCount < anonymityThreshold;
+                    avg !== undefined &&
+                    anonymousMode &&
+                    avg.responseCount < anonymityThreshold;
 
                   return (
                     <div
@@ -117,7 +121,11 @@ export function QuestionDetailView({
                       <span className="text-gray-500">
                         {formatDate(session.closedAt)}
                       </span>
-                      {isSuppressed ? (
+                      {avg === undefined ? (
+                        // Distinct from suppression on purpose: nobody
+                        // answered, rather than too few answering to show
+                        <span className="text-gray-500">No responses</span>
+                      ) : isSuppressed ? (
                         <span className="text-amber-600 italic">
                           Insufficient data
                         </span>

@@ -38,10 +38,23 @@ interface TrendDistributionData {
   declining: number;
 }
 
+/** One entry of the fixed question catalogue, from the trends response. */
+interface QuestionCatalogueEntry {
+  id: string;
+  title: string;
+  description: string;
+}
+
 interface TrendsResponse {
   sessions: SessionData[];
   trendDistribution: TrendDistributionData[];
   privacyMode?: string;
+  /**
+   * The team's question themes. Optional so the page still renders against a
+   * response that predates the catalogue, but without it a theme nobody
+   * answered cannot be named.
+   */
+  questions?: QuestionCatalogueEntry[];
 }
 
 interface PageProps {
@@ -191,7 +204,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
 
   if (!data) return null;
 
-  const { sessions, trendDistribution, privacyMode } = data;
+  const { sessions, trendDistribution, privacyMode, questions } = data;
   const hasEnoughData = sessions.length >= 2;
   const anonymousMode = privacyMode === 'anonymous';
 
@@ -257,7 +270,11 @@ export default function TrendDashboardPage({ params }: PageProps) {
           <TrendChart sessions={sessions} />
         </div>
 
-        <LatestSessionPanel sessions={sessions} anonymousMode={anonymousMode} />
+        <LatestSessionPanel
+          sessions={sessions}
+          questions={questions}
+          anonymousMode={anonymousMode}
+        />
 
         {trendDistribution.length > 0 && (
           <div className="bg-white rounded-lg shadow p-4">
