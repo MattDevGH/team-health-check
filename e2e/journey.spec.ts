@@ -313,7 +313,11 @@ test.describe.serial('team lifecycle journey', () => {
     const psychologicalSafety = stored.find(row => row.questionId === 'q-psychological-safety');
     expect(psychologicalSafety?.responseCount).toBe(1);
 
-    await page.getByRole('button', { name: /psychological safety/i }).click();
+    // Scoped to the drill-down: the legend carries a toggle of the same name
+    await page
+      .getByRole('region', { name: 'Question themes' })
+      .getByRole('button', { name: /psychological safety/i })
+      .click();
 
     // One respondent in an anonymous team is below the threshold of 3, so the
     // score must not be shown. Scoped to the drill-down by its accessible

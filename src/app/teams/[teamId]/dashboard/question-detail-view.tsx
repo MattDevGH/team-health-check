@@ -50,6 +50,10 @@ interface QuestionDetailViewProps {
 
 const DEFAULT_ANONYMITY_THRESHOLD = 3;
 
+/** Names the drill-down region, so its triggers are distinguishable from the
+ * chart legend's toggles, which carry the same question theme names. */
+const THEMES_HEADING_ID = 'question-themes-heading';
+
 export function QuestionDetailView({
   sessions,
   questions,
@@ -74,8 +78,8 @@ export function QuestionDetailView({
   }
 
   return (
-    <div className="space-y-2">
-      <h2 className="text-lg font-semibold text-gray-700 mb-3">
+    <section aria-labelledby={THEMES_HEADING_ID} className="space-y-2">
+      <h2 id={THEMES_HEADING_ID} className="text-lg font-semibold text-gray-700 mb-3">
         Question themes
       </h2>
       <div className="space-y-1">
@@ -188,7 +192,7 @@ export function QuestionDetailView({
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }
 

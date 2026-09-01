@@ -237,7 +237,10 @@ test.describe('authenticated pages', () => {
 
     // The drill-down is a distinct state: it renders content the collapsed
     // dashboard never shows
-    await page.getByRole('button', { name: /delivering value/i }).click();
+    await page
+      .getByRole('region', { name: 'Question themes' })
+      .getByRole('button', { name: /delivering value/i })
+      .click();
     await expectNoViolations(page, 'populated dashboard with question expanded');
   });
 
@@ -299,6 +302,28 @@ test.describe('the trend chart at narrow widths', () => {
     expect(overflow, 'horizontal overflow in CSS pixels at 320px').toBeLessThanOrEqual(0);
 
     await expectNoViolations(page, 'trend chart at 320px');
+  });
+
+  test('filters the chart by keyboard alone, and stays accessible', async ({ page }) => {
+    // Requirement 8.2: driven with real key presses, so a toggle reachable
+    // only by mouse fails
+    await signIn(page, CHART);
+    await page.goto(`/teams/${chartTeamId}/dashboard`);
+
+    const toggle = page
+      .getByRole('list', { name: /question themes plotted/i })
+      .getByRole('button', { name: /delivering value/i });
+    await toggle.focus();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+
+    await page.keyboard.press('Enter');
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+
+    // The table keeps every value: filtering changes the picture, not the data
+    const table = page.getByRole('table', { name: /average score per question theme/i });
+    await expect(table.getByRole('columnheader', { name: /delivering value/i })).toBeVisible();
+
+    await expectNoViolations(page, 'trend chart with a series hidden');
   });
 
   test('keeps every legend entry readable at 320px', async ({ page }) => {

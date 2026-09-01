@@ -46,7 +46,10 @@ function aggregate(overrides: Partial<SeededAggregate> & { questionId: string })
  * technology which content the button controls.
  */
 async function openQuestionDetail(page: Page, question: RegExp) {
-  const trigger = page.getByRole('button', { name: question });
+  // Scoped to the drill-down: the chart legend now carries a toggle with the
+  // same question theme name, so a page-wide lookup matches two controls
+  const themes = page.getByRole('region', { name: 'Question themes' });
+  const trigger = themes.getByRole('button', { name: question });
   await trigger.click();
   await expect(trigger).toHaveAttribute('aria-expanded', 'true');
 

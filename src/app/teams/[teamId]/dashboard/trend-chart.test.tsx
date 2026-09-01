@@ -13,6 +13,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { TrendChart } from './trend-chart';
 
@@ -142,5 +143,81 @@ describe('TrendChart series identity', () => {
     // Every marker is a path starting with a move command
     expect(markerShapes).toEqual(new Set(['M']));
     expect(svg.querySelectorAll('path').length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Dashboard Refinement 8.1, 8.2, 8.3, 8.5.
+ *
+ * A five-line chart does not have to be read all at once. Hiding a series
+ * affects the drawing only — the table keeps every value, so filtering can
+ * never remove data from the page, just from the picture.
+ */
+describe('TrendChart series filtering', () => {
+  it('offers each legend entry as a toggle that reports its state', () => {
+    render(<TrendChart sessions={SESSIONS} />);
+
+    const toggle = screen.getByRole('button', { name: /delivering value/i });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('hides a series from the drawing when its legend entry is switched off', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<TrendChart sessions={SESSIONS} />);
+
+    expect(container.querySelectorAll('polyline')).toHaveLength(2);
+
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+
+    expect(container.querySelectorAll('polyline')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /delivering value/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('brings it back when switched on again', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<TrendChart sessions={SESSIONS} />);
+
+    const toggle = screen.getByRole('button', { name: /delivering value/i });
+    await user.click(toggle);
+    await user.click(toggle);
+
+    expect(container.querySelectorAll('polyline')).toHaveLength(2);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('leaves the data table untouched, whatever is hidden', async () => {
+    const user = userEvent.setup();
+    render(<TrendChart sessions={SESSIONS} />);
+
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+
+    // Filtering changes the picture, never the data on the page
+    const table = screen.getByRole('table', { name: /average score per question theme/i });
+    expect(within(table).getByRole('columnheader', { name: /delivering value/i })).toBeInTheDocument();
+    expect(within(table).getByText(/3.5 from 5 responses/i)).toBeInTheDocument();
+  });
+
+  it('says the chart is empty rather than drawing an empty grid', async () => {
+    const user = userEvent.setup();
+    render(<TrendChart sessions={SESSIONS} />);
+
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+    await user.click(screen.getByRole('button', { name: /team collaboration/i }));
+
+    expect(screen.getByText(/every question theme is hidden/i)).toBeInTheDocument();
+  });
+
+  it('is operable by keyboard', async () => {
+    const user = userEvent.setup();
+    render(<TrendChart sessions={SESSIONS} />);
+
+    const toggle = screen.getByRole('button', { name: /delivering value/i });
+    toggle.focus();
+    await user.keyboard('{Enter}');
+
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
   });
 });

@@ -20,6 +20,10 @@
  * the table satisfies for every user rather than only for those who can hover.
  */
 
+'use client';
+
+import { useState } from 'react';
+
 import { pluralise } from '@/lib/format';
 import { sessionPositions } from './chart-geometry';
 import { markerPath, seriesStyle } from './series-style';
@@ -90,6 +94,24 @@ function fullDate(isoString: string): string {
 }
 
 export function TrendChart({ sessions }: TrendChartProps) {
+  /**
+   * Question themes the reader has switched off.
+   *
+   * Held in component state rather than the URL: a filter that survives a
+   * reload is one a manager has to remember they set, and would have them
+   * reading a partial chart without knowing it. Every visit starts with the
+   * whole picture.
+   */
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+
+  function toggleSeries(questionId: string) {
+    setHidden(current => {
+      const next = new Set(current);
+      if (!next.delete(questionId)) next.add(questionId);
+      return next;
+    });
+  }
+
   // Collect all unique question IDs across sessions
   const questionIds = Array.from(
     new Set(sessions.flatMap((s) => s.averages.map((a) => a.questionId)))
@@ -132,6 +154,8 @@ export function TrendChart({ sessions }: TrendChartProps) {
     sessions.length,
     'closed session',
   )}`;
+
+  const visibleLines = lines.filter(line => !hidden.has(line.questionId));
 
   return (
     <figure aria-labelledby={CAPTION_ID} className="m-0">
@@ -187,8 +211,8 @@ export function TrendChart({ sessions }: TrendChartProps) {
         </text>
       ))}
 
-      {/* Trend lines */}
-      {lines.map((line) => (
+      {/* Trend lines — hidden series are omitted from the drawing only */}
+      {visibleLines.map((line) => (
         <polyline
           key={line.questionId}
           points={line.points}
@@ -202,7 +226,7 @@ export function TrendChart({ sessions }: TrendChartProps) {
       ))}
 
       {/* Data points */}
-      {lines.map((line) =>
+      {visibleLines.map((line) =>
         line.points
           .split(' ')
           .filter(Boolean)
@@ -238,8 +262,21 @@ export function TrendChart({ sessions }: TrendChartProps) {
         aria-label="Question themes plotted"
         className="mt-3 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]"
       >
-        {lines.map((line) => (
-          <li key={line.questionId} className="flex items-center gap-2 text-gray-700">
+        {lines.map((line) => {
+          const shown = !hidden.has(line.questionId);
+          return (
+          <li key={line.questionId}>
+            <button
+              type="button"
+              onClick={() => toggleSeries(line.questionId)}
+              aria-pressed={shown}
+              className={`flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-gray-100 ${
+                // gray-400 was reintroduced here and failed contrast at 2.6:1 —
+                // the same class of defect this project fixed once before. The
+                // line-through carries the state; the colour only has to pass.
+                shown ? 'text-gray-700' : 'text-gray-600 line-through'
+              }`}
+            >
             {/*
               The swatch draws the same dash and marker as the line it names, so
               the mapping survives greyscale and does not depend on telling two
@@ -262,10 +299,21 @@ export function TrendChart({ sessions }: TrendChartProps) {
                 strokeWidth={line.style.marker === 'cross' ? 2 : undefined}
               />
             </svg>
-            {questionName(line.questionId)}
+              {questionName(line.questionId)}
+            </button>
           </li>
-        ))}
+          );
+        })}
       </ul>
+
+      {visibleLines.length === 0 && (
+        // An empty grid looks like missing data rather than a choice the reader
+        // made a moment ago
+        <p className="mt-3 text-sm text-gray-600">
+          Every question theme is hidden. Switch one back on above to see the
+          chart; the table below still shows every score.
+        </p>
+      )}
 
       {/*
         Every plotted value, for anyone who cannot read the drawing. Kept in the

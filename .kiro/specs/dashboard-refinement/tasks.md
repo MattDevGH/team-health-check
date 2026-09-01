@@ -264,24 +264,43 @@ Groups 1 and 5 each end at a checkpoint.
   - Ready for a colleague to try. Groups 7 (chart filtering) and 8 (reconcile)
     remain.
 
-- [ ] 7. Filtering the chart
+- [x] 7. Filtering the chart
 
-  - [ ] 7.1 Toggle a series from the legend
+  - [x] 7.1 Toggle a series from the legend
     - Write failing tests: activating a legend entry hides that line and its markers; activating it again restores them; `aria-pressed` reflects the state
     - **Property 6: for any subset of hidden series, the data table's contents are unchanged**
     - _Requirements: 8.1, 8.2, 8.3_
 
-  - [ ] 7.2 Handle the empty chart
+  - [x] 7.2 Handle the empty chart
     - Hiding every series says so rather than rendering an empty grid
     - _Requirements: 8.5_
 
-  - [ ] 7.3 Do not persist the filter
+  - [x] 7.3 Do not persist the filter
     - A manager returning to the dashboard sees the whole picture
     - _Requirements: 8.4_
 
-  - [ ] 7.4 Accessibility pass over filtering
+  - [x] 7.4 Accessibility pass over filtering
     - Keyboard-only operation of every toggle; axe over a partially filtered chart
     - _Requirements: NFR 1.1, 1.2_
+    - **Done.** Legend entries are toggles carrying `aria-pressed`, driven in
+      the browser by real key presses so a control reachable only by mouse
+      would fail.
+    - Hiding a series changes the drawing only. Property 6 and a component
+      test both assert the data table is untouched: filtering can remove a
+      line from the picture, never a value from the page.
+    - Hiding everything says so. An empty grid reads as missing data rather
+      than as a choice the reader made a moment ago.
+    - State is held in the component, not the URL. A filter that survives a
+      reload is one a manager has to remember they set, and would have them
+      reading a partial chart without knowing it.
+    - **Two problems this surfaced.** The page now has two controls per
+      question theme — a legend toggle and a drill-down trigger — with the same
+      accessible name, so six E2E tests became ambiguous. The drill-down is now
+      a named region and the queries are scoped to the control they mean.
+    - The hidden-series style used `text-gray-400`, which axe measured at
+      2.6:1 against white — below the 4.5:1 AA threshold, and the same class of
+      defect this project fixed once before and recorded in the README. The
+      line-through carries the state, so only the colour needed correcting.
 
 - [ ] 8. Reconcile and merge
   - Update requirements/design/tasks to match what was built, including any decision that changed during implementation
