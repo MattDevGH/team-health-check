@@ -167,6 +167,12 @@ project found and fixed during the security and accessibility baseline, and
 recorded in the README. Nothing prevents a reintroduction except auditing the
 new state, which is why every state added here has an axe run of its own.
 
+**A contrast value near the threshold is a defect, not a pass.** The disclosure
+hint measured 4.48:1 against the expanded row’s background, needing 4.5:1. The
+same commit passed one CI run and failed another, because a value that close to
+the line rounds differently between browser builds. The fix is headroom — the
+corrected pair measures 7.0:1 — not a re-run.
+
 **A viewport-dependent violation needs the viewport that triggers it.** Axe
 reported `scrollable-region-focusable` on both data tables only at 320px,
 where the content finally exceeds its box. The audit added with the tables

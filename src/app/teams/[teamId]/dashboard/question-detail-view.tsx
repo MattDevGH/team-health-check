@@ -116,7 +116,14 @@ export function QuestionDetailView({
                 technology is told the same by aria-expanded, so this is hidden
                 from it to avoid saying it twice.
               */}
-              <span aria-hidden="true" className="text-xs text-gray-500">
+              {/*
+                gray-600, not gray-500. On the expanded row the background
+                becomes blue-50, where gray-500 measures 4.48:1 — under the
+                4.5:1 AA threshold by a hair, which is enough to pass on one
+                browser build and fail on another. A value that close to the
+                line is a defect whichever way a given run rounds it.
+              */}
+              <span aria-hidden="true" className="text-xs text-gray-600">
                 {expanded ? 'Hide responses' : 'Show responses'}
               </span>
             </button>
