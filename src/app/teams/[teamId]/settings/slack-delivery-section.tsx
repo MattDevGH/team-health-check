@@ -59,6 +59,13 @@ export function SlackDeliverySection({
       <h2 id="slack-delivery-heading" className="text-lg font-semibold text-gray-800 mb-3">
         Slack Delivery Window
       </h2>
+      <p className="mb-3 text-sm text-gray-600">
+        Prompts and reminders are only sent through Slack inside this window,
+        in the team&rsquo;s timezone, so nobody is messaged at night or at the
+        weekend. A check that opens outside the window still opens — the
+        message waits until the window does. Answering through the web link is
+        never restricted.
+      </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>

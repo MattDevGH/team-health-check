@@ -57,6 +57,48 @@ describe('GET /api/teams/[teamId]/trends', () => {
     sessionToken = await createSession(memberId);
   });
 
+  /**
+   * Dashboard Refinement 3.3, 4.1.
+   *
+   * The dashboard derives its list of question themes from the aggregates, so a
+   * theme nobody has answered does not exist as far as the page is concerned.
+   * Sending the catalogue is what makes absence representable — and it carries
+   * the question text, which has been in the database since the first migration
+   * and displayed nowhere.
+   */
+  describe('the question catalogue', () => {
+    it('carries every question with its theme and its text', async () => {
+      const request = makeAuthRequest(`http://localhost/api/teams/${teamId}/trends`, sessionToken);
+      const res = await GET(request, { params: Promise.resolve({ teamId }) });
+      const body = await res.json();
+
+      // The five are fixed for every team — the repository is read-only
+      const canonical = await repos.question.findAll();
+      expect(body.questions).toHaveLength(canonical.length);
+
+      const delivering = body.questions.find(
+        (q: { id: string }) => q.id === 'q-delivering-value',
+      );
+      expect(delivering.title, 'the theme a manager sees').toBe('Delivering Value');
+      expect(
+        delivering.description,
+        'the question a team member is actually asked',
+      ).toMatch(/^How well is the team delivering value/);
+    });
+
+    it('carries questions no session has answered', async () => {
+      // The whole point: a team that has never run a check still needs its
+      // themes named, and a theme with no aggregates must not vanish
+      const request = makeAuthRequest(`http://localhost/api/teams/${teamId}/trends`, sessionToken);
+      const res = await GET(request, { params: Promise.resolve({ teamId }) });
+      const body = await res.json();
+
+      expect(body.requiresMoreData, 'no closed sessions in this fixture').toBe(true);
+      expect(body.sessions).toEqual([]);
+      expect(body.questions.map((q: { id: string }) => q.id)).toContain('q-psychological-safety');
+    });
+  });
+
   // ─── Auth Tests ──────────────────────────────────────────────────────────────
 
   it('returns 401 when no session cookie is present', async () => {

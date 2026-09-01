@@ -58,6 +58,52 @@ const SESSIONS: SessionData[] = [
  * a question's name and no indication that activating it revealed anything, or
  * whether it was already open.
  */
+/**
+ * Dashboard Refinement 4.3, 4.4.
+ *
+ * A session where nobody answered this theme was skipped entirely, so the
+ * history omitted it and a reader could not tell a gap from a check that never
+ * ran.
+ */
+describe('QuestionDetailView sessions with no responses', () => {
+  const MIXED: SessionData[] = [
+    {
+      sessionId: 's1',
+      closedAt: '2025-01-08T17:00:00Z',
+      averages: [{ questionId: 'q-delivering-value', averageScore: 3.5, responseCount: 5 }],
+    },
+    {
+      // This session recorded nothing for Delivering Value
+      sessionId: 's2',
+      closedAt: '2025-01-15T17:00:00Z',
+      averages: [{ questionId: 'q-team-collaboration', averageScore: 4.0, responseCount: 3 }],
+    },
+  ];
+
+  it('keeps a session in the history even when the theme went unanswered', async () => {
+    const user = userEvent.setup();
+    render(<QuestionDetailView sessions={MIXED} anonymousMode={false} />);
+
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+
+    const detail = screen.getByRole('region', { name: /delivering value/i });
+    expect(detail).toHaveTextContent('Jan 15');
+    expect(detail).toHaveTextContent(/no responses/i);
+  });
+
+  it('does not describe an unanswered session as insufficient data', async () => {
+    // "Insufficient data" means people answered and there were too few to show
+    const user = userEvent.setup();
+    render(<QuestionDetailView sessions={MIXED} anonymousMode={true} />);
+
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+
+    const detail = screen.getByRole('region', { name: /delivering value/i });
+    expect(detail).toHaveTextContent(/no responses/i);
+    expect(detail).not.toHaveTextContent(/insufficient data/i);
+  });
+});
+
 describe('QuestionDetailView disclosure semantics', () => {
   it('announces that a question expands, and that it starts collapsed', () => {
     render(<QuestionDetailView sessions={SESSIONS} anonymousMode={false} />);
@@ -243,5 +289,72 @@ describe('QuestionDetailView', () => {
       expect(screen.queryByText('3.8')).not.toBeInTheDocument();
       expect(screen.queryByText('2 responses')).not.toBeInTheDocument();
     });
+  });
+});
+
+/**
+ * Dashboard Refinement 3.1, 3.2.
+ *
+ * The dashboard called these questions while showing `Question.title`, which is
+ * a theme, and never showed `Question.description` — the sentence a member is
+ * actually asked, present in the database since the first migration.
+ */
+describe('QuestionDetailView question themes and their questions', () => {
+  const CATALOGUE = [
+    {
+      id: 'q-delivering-value',
+      title: 'Delivering Value',
+      description: 'How well is the team delivering value to stakeholders?',
+    },
+    {
+      id: 'q-team-collaboration',
+      title: 'Team Collaboration',
+      description: 'How effectively does the team work together?',
+    },
+  ];
+
+  it('calls them question themes', () => {
+    render(<QuestionDetailView sessions={SESSIONS} questions={CATALOGUE} anonymousMode={false} />);
+
+    expect(screen.getByRole('heading', { name: /question themes/i })).toBeInTheDocument();
+  });
+
+  it('shows the question a team member was actually asked', async () => {
+    const user = userEvent.setup();
+    render(<QuestionDetailView sessions={SESSIONS} questions={CATALOGUE} anonymousMode={false} />);
+
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+
+    expect(
+      screen.getByText('How well is the team delivering value to stakeholders?'),
+    ).toBeInTheDocument();
+  });
+
+  it('says what activating a theme will do', async () => {
+    // The chevron alone was reported as too subtle to read as interactive
+    const user = userEvent.setup();
+    render(<QuestionDetailView sessions={SESSIONS} questions={CATALOGUE} anonymousMode={false} />);
+
+    const trigger = screen.getByRole('button', { name: /delivering value/i });
+    expect(trigger).toHaveTextContent(/show responses/i);
+
+    await user.click(trigger);
+    expect(trigger).toHaveTextContent(/hide responses/i);
+  });
+
+  it('lists a theme no session has answered', () => {
+    // Comes from the catalogue, not from the aggregates
+    render(
+      <QuestionDetailView
+        sessions={SESSIONS}
+        questions={[
+          ...CATALOGUE,
+          { id: 'q-never-asked', title: 'Never Answered', description: 'Nobody has scored this.' },
+        ]}
+        anonymousMode={false}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /never answered/i })).toBeInTheDocument();
   });
 });

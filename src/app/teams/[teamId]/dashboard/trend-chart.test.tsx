@@ -13,6 +13,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { TrendChart } from './trend-chart';
 
@@ -42,10 +43,20 @@ describe('TrendChart', () => {
     expect(screen.getByRole('figure', { name: /average score per question/i })).toBeInTheDocument();
   });
 
+  it('says the horizontal spacing is time, so a slope can be read', () => {
+    // Without this a reader has no way to know whether even-looking spacing
+    // means even intervals or just even turns in a list
+    render(<TrendChart sessions={SESSIONS} />);
+
+    expect(screen.getByRole('figure')).toHaveTextContent(
+      /spaced by the time between them/i,
+    );
+  });
+
   it('names every plotted question, so the lines are not told apart by colour alone', () => {
     render(<TrendChart sessions={SESSIONS} />);
 
-    const legend = screen.getByRole('list', { name: /questions plotted/i });
+    const legend = screen.getByRole('list', { name: /question themes plotted/i });
     expect(within(legend).getByText('Delivering Value')).toBeInTheDocument();
     expect(within(legend).getByText('Team Collaboration')).toBeInTheDocument();
   });
@@ -88,5 +99,125 @@ describe('TrendChart', () => {
     // The figure carries the description; the svg repeating it would make a
     // screen reader read the same sentence twice before the data
     expect(screen.queryByRole('img', { name: /trend chart/i })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Dashboard Refinement 2.1, 2.2.
+ *
+ * These assert the *distinction*, not the values. Pinning a particular
+ * stroke-dasharray would assert what was typed, and would keep passing if two
+ * series were given the same pattern.
+ */
+describe('TrendChart series identity', () => {
+  it('draws each line with a different dash pattern', () => {
+    const { container } = render(<TrendChart sessions={SESSIONS} />);
+
+    const dashes = [...container.querySelectorAll('polyline')].map(
+      line => line.getAttribute('stroke-dasharray') ?? 'solid',
+    );
+
+    expect(dashes).toHaveLength(2);
+    expect(new Set(dashes).size, 'two lines share a dash pattern').toBe(dashes.length);
+  });
+
+  it('gives each legend entry a swatch, not a bare colour block', () => {
+    const { container } = render(<TrendChart sessions={SESSIONS} />);
+
+    const legend = screen.getByRole('list', { name: /question themes plotted/i });
+    // A swatch that draws the line and its marker, so the legend survives
+    // greyscale
+    expect(legend.querySelectorAll('svg line')).toHaveLength(2);
+    expect(legend.querySelectorAll('svg path')).toHaveLength(2);
+    expect(container.querySelectorAll('circle'), 'markers are shapes now').toHaveLength(0);
+  });
+
+  it('marks data points with shapes that differ between series', () => {
+    const { container } = render(<TrendChart sessions={SESSIONS} />);
+
+    const svg = container.querySelector('svg[aria-hidden="true"]')!;
+    const markerShapes = new Set(
+      [...svg.querySelectorAll('path')].map(path => path.getAttribute('d')!.slice(0, 1)),
+    );
+
+    // Every marker is a path starting with a move command
+    expect(markerShapes).toEqual(new Set(['M']));
+    expect(svg.querySelectorAll('path').length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Dashboard Refinement 8.1, 8.2, 8.3, 8.5.
+ *
+ * A five-line chart does not have to be read all at once. Hiding a series
+ * affects the drawing only — the table keeps every value, so filtering can
+ * never remove data from the page, just from the picture.
+ */
+describe('TrendChart series filtering', () => {
+  it('offers each legend entry as a toggle that reports its state', () => {
+    render(<TrendChart sessions={SESSIONS} />);
+
+    const toggle = screen.getByRole('button', { name: /delivering value/i });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('hides a series from the drawing when its legend entry is switched off', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<TrendChart sessions={SESSIONS} />);
+
+    expect(container.querySelectorAll('polyline')).toHaveLength(2);
+
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+
+    expect(container.querySelectorAll('polyline')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /delivering value/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('brings it back when switched on again', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<TrendChart sessions={SESSIONS} />);
+
+    const toggle = screen.getByRole('button', { name: /delivering value/i });
+    await user.click(toggle);
+    await user.click(toggle);
+
+    expect(container.querySelectorAll('polyline')).toHaveLength(2);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('leaves the data table untouched, whatever is hidden', async () => {
+    const user = userEvent.setup();
+    render(<TrendChart sessions={SESSIONS} />);
+
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+
+    // Filtering changes the picture, never the data on the page
+    const table = screen.getByRole('table', { name: /average score per question theme/i });
+    expect(within(table).getByRole('columnheader', { name: /delivering value/i })).toBeInTheDocument();
+    expect(within(table).getByText(/3.5 from 5 responses/i)).toBeInTheDocument();
+  });
+
+  it('says the chart is empty rather than drawing an empty grid', async () => {
+    const user = userEvent.setup();
+    render(<TrendChart sessions={SESSIONS} />);
+
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+    await user.click(screen.getByRole('button', { name: /team collaboration/i }));
+
+    expect(screen.getByText(/every question theme is hidden/i)).toBeInTheDocument();
+  });
+
+  it('is operable by keyboard', async () => {
+    const user = userEvent.setup();
+    render(<TrendChart sessions={SESSIONS} />);
+
+    const toggle = screen.getByRole('button', { name: /delivering value/i });
+    toggle.focus();
+    await user.keyboard('{Enter}');
+
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
   });
 });

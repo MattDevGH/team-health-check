@@ -9,12 +9,42 @@
  * - Entries never contain individual response scores
  */
 
-import type { AuditLogRepository } from '@/lib/repositories/types';
+import type { AuditLogRepository, TeamMemberRepository } from '@/lib/repositories/types';
 import type { AuditLogEntry } from '@/lib/repositories/entities';
 
 export interface AuditServiceDeps {
   auditLogRepo: AuditLogRepository;
+  teamMemberRepo: TeamMemberRepository;
 }
+
+/**
+ * Who made a change, resolved at read time.
+ *
+ * The log stores an id and keeps storing it: it is append-only history, and a
+ * name captured at write time would go stale the moment someone was renamed.
+ * Resolution belongs on the way out.
+ */
+export interface AuditActor {
+  /** The stored value, unchanged. */
+  id: string;
+  /** The member's name, or null when they can no longer be identified. */
+  name: string | null;
+  /** True when the actor is the member reading the log. */
+  isViewer: boolean;
+  /**
+   * True for the `deleted:<hash>` form written by the GDPR erasure path.
+   *
+   * Deliberately never resolved: the hash exists so the actor cannot be
+   * identified, and resolving it would defeat the erasure it records.
+   */
+  isErased: boolean;
+}
+
+/** An audit entry with its actor resolved. */
+export type AttributedAuditLogEntry = AuditLogEntry & { actor: AuditActor };
+
+/** Prefix written by the data-deletion path in `response.service`. */
+const ERASED_PREFIX = 'deleted:';
 
 /**
  * A page of audit entries plus the cursor to continue from.
@@ -24,7 +54,7 @@ export interface AuditServiceDeps {
  * repository supports `cursor`, but nothing could ever discover what to pass.
  */
 export interface AuditLogPage {
-  entries: AuditLogEntry[];
+  entries: AttributedAuditLogEntry[];
   nextCursor: string | null;
 }
 
@@ -39,7 +69,11 @@ export interface AuditService {
     newValue: string;
     userId: string;
   }): Promise<void>;
-  getLog(teamId: string, pagination?: { cursor?: string; limit?: number }): Promise<AuditLogPage>;
+  getLog(
+    teamId: string,
+    pagination?: { cursor?: string; limit?: number },
+    viewerId?: string,
+  ): Promise<AuditLogPage>;
 }
 
 /**
@@ -48,8 +82,32 @@ export interface AuditService {
  * Deliberately exposes only `log` (append) and `getLog` (read) —
  * no modify or delete operations per Requirement 18.3.
  */
+/**
+ * Resolves one stored actor id.
+ *
+ * Order matters: erasure is checked before the name lookup, so a `deleted:`
+ * value can never be resolved even if something else in the team happened to
+ * share its id.
+ */
+function resolveActor(
+  userId: string,
+  namesById: Map<string, string>,
+  viewerId?: string,
+): AuditActor {
+  if (userId.startsWith(ERASED_PREFIX)) {
+    return { id: userId, name: null, isViewer: false, isErased: true };
+  }
+
+  return {
+    id: userId,
+    name: namesById.get(userId) ?? null,
+    isViewer: viewerId !== undefined && userId === viewerId,
+    isErased: false,
+  };
+}
+
 export function createAuditService(deps: AuditServiceDeps): AuditService {
-  const { auditLogRepo } = deps;
+  const { auditLogRepo, teamMemberRepo } = deps;
 
   /**
    * Append a new audit log entry.
@@ -81,14 +139,25 @@ export function createAuditService(deps: AuditServiceDeps): AuditService {
    */
   async function getLog(
     teamId: string,
-    pagination?: { cursor?: string; limit?: number }
+    pagination?: { cursor?: string; limit?: number },
+    viewerId?: string,
   ): Promise<AuditLogPage> {
     const limit = pagination?.limit ?? DEFAULT_AUDIT_PAGE_SIZE;
     const entries = await auditLogRepo.findByTeamId(teamId, { ...pagination, limit });
 
+    // One lookup for the page, not one per entry: a log of fifty changes by two
+    // people is still two people
+    const members = await teamMemberRepo.findByTeamId(teamId);
+    const namesById = new Map(members.map((member) => [member.id, member.name]));
+
+    const attributed = entries.map((entry) => ({
+      ...entry,
+      actor: resolveActor(entry.userId, namesById, viewerId),
+    }));
+
     const nextCursor = entries.length === limit ? entries[entries.length - 1].id : null;
 
-    return { entries, nextCursor };
+    return { entries: attributed, nextCursor };
   }
 
   return { log, getLog };

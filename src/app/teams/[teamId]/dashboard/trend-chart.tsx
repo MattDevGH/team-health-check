@@ -7,9 +7,10 @@
  *
  * The drawing is accompanied by two things it cannot provide on its own:
  *
- * - a **legend** naming each question beside its colour, because five lines
- *   distinguished only by hue are unreadable to anyone with a colour vision
- *   deficiency, and unprintable in greyscale
+ * - a **legend** naming each question beside a swatch that repeats its dash
+ *   pattern and marker, so the mapping survives greyscale and does not rest on
+ *   telling two hues apart — blue and purple were reported as confusable on an
+ *   ordinary screen
  * - a **data table** carrying every plotted value, because `role="img"` hides
  *   the SVG's contents from assistive technology. Making the points
  *   individually focusable would mean dropping that role and hand-building a
@@ -19,7 +20,13 @@
  * the table satisfies for every user rather than only for those who can hover.
  */
 
+'use client';
+
+import { useState } from 'react';
+
 import { pluralise } from '@/lib/format';
+import { sessionPositions } from './chart-geometry';
+import { markerPath, seriesStyle } from './series-style';
 
 interface SessionAverage {
   questionId: string;
@@ -50,29 +57,21 @@ const PADDING_RIGHT = 20;
 const PADDING_TOP = 20;
 const PADDING_BOTTOM = 40;
 
-const PLOT_WIDTH = CHART_WIDTH - PADDING_LEFT - PADDING_RIGHT;
 const PLOT_HEIGHT = CHART_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 
 const Y_MIN = 1.0;
 const Y_MAX = 5.0;
-
-const LINE_COLOURS = [
-  '#3B82F6', // blue
-  '#10B981', // green
-  '#F59E0B', // amber
-  '#EF4444', // red
-  '#8B5CF6', // purple
-];
 
 function scoreToY(score: number): number {
   const ratio = (score - Y_MIN) / (Y_MAX - Y_MIN);
   return PADDING_TOP + PLOT_HEIGHT * (1 - ratio);
 }
 
-function sessionToX(index: number, total: number): number {
-  if (total <= 1) return PADDING_LEFT + PLOT_WIDTH / 2;
-  return PADDING_LEFT + (index / (total - 1)) * PLOT_WIDTH;
-}
+/**
+ * Sessions are positioned by when they closed, not by their turn in the list.
+ * See `chart-geometry.ts` — the mapping lives there so it can be exercised
+ * without rendering, including the single-session and identical-dates cases.
+ */
 
 /** Converts a question ID like "q-delivering-value" to "Delivering Value". */
 function questionName(id: string): string {
@@ -95,12 +94,31 @@ function fullDate(isoString: string): string {
 }
 
 export function TrendChart({ sessions }: TrendChartProps) {
+  /**
+   * Question themes the reader has switched off.
+   *
+   * Held in component state rather than the URL: a filter that survives a
+   * reload is one a manager has to remember they set, and would have them
+   * reading a partial chart without knowing it. Every visit starts with the
+   * whole picture.
+   */
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+
+  function toggleSeries(questionId: string) {
+    setHidden(current => {
+      const next = new Set(current);
+      if (!next.delete(questionId)) next.add(questionId);
+      return next;
+    });
+  }
+
   // Collect all unique question IDs across sessions
   const questionIds = Array.from(
     new Set(sessions.flatMap((s) => s.averages.map((a) => a.questionId)))
   );
 
-  const sessionCount = sessions.length;
+  // Horizontal position per session, proportional to elapsed time
+  const xBySession = sessionPositions(sessions.map(session => session.closedAt));
 
   // Build lines: one polyline per question
   const lines = questionIds.map((qId, qIndex) => {
@@ -109,7 +127,7 @@ export function TrendChart({ sessions }: TrendChartProps) {
     sessions.forEach((session, sIndex) => {
       const avg = session.averages.find((a) => a.questionId === qId);
       if (avg) {
-        const x = sessionToX(sIndex, sessionCount);
+        const x = xBySession[sIndex];
         const y = scoreToY(avg.averageScore);
         points.push(`${x},${y}`);
       }
@@ -117,7 +135,8 @@ export function TrendChart({ sessions }: TrendChartProps) {
 
     return {
       questionId: qId,
-      colour: LINE_COLOURS[qIndex % LINE_COLOURS.length],
+      // Colour, dash and marker: two of the three survive colour being removed
+      style: seriesStyle(qIndex),
       points: points.join(' '),
     };
   });
@@ -128,18 +147,21 @@ export function TrendChart({ sessions }: TrendChartProps) {
   // X-axis labels (session dates)
   const xLabels = sessions.map((s, i) => ({
     label: formatDate(s.closedAt),
-    x: sessionToX(i, sessionCount),
+    x: xBySession[i],
   }));
 
-  const caption = `Average score per question across the last ${pluralise(
+  const caption = `Average score per question theme across the last ${pluralise(
     sessions.length,
     'closed session',
   )}`;
 
+  const visibleLines = lines.filter(line => !hidden.has(line.questionId));
+
   return (
     <figure aria-labelledby={CAPTION_ID} className="m-0">
       <figcaption id={CAPTION_ID} className="mb-3 text-sm text-gray-700">
-        {caption}. Scores run from 1 to 5.
+        {caption}. Scores run from 1 to 5, and sessions are spaced by the time
+        between them, so the slope of a line reflects how quickly a score moved.
       </figcaption>
 
       <svg
@@ -189,13 +211,14 @@ export function TrendChart({ sessions }: TrendChartProps) {
         </text>
       ))}
 
-      {/* Trend lines */}
-      {lines.map((line) => (
+      {/* Trend lines — hidden series are omitted from the drawing only */}
+      {visibleLines.map((line) => (
         <polyline
           key={line.questionId}
           points={line.points}
           fill="none"
-          stroke={line.colour}
+          stroke={line.style.colour}
+          strokeDasharray={line.style.dash || undefined}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -203,54 +226,127 @@ export function TrendChart({ sessions }: TrendChartProps) {
       ))}
 
       {/* Data points */}
-      {lines.map((line) =>
-        line.points.split(' ').map((point, i) => {
-          const [cx, cy] = point.split(',');
-          return (
-            <circle
-              key={`${line.questionId}-${i}`}
-              cx={cx}
-              cy={cy}
-              r="4"
-              fill={line.colour}
-            />
-          );
-        })
+      {visibleLines.map((line) =>
+        line.points
+          .split(' ')
+          .filter(Boolean)
+          .map((point, i) => {
+            const [cx, cy] = point.split(',').map(Number);
+            const isCross = line.style.marker === 'cross';
+            return (
+              <path
+                key={`${line.questionId}-${i}`}
+                d={markerPath(line.style.marker, cx, cy)}
+                // A cross has no interior to fill, so it is drawn as a stroke
+                fill={isCross ? 'none' : line.style.colour}
+                stroke={isCross ? line.style.colour : 'none'}
+                strokeWidth={isCross ? 2 : undefined}
+              />
+            );
+          })
       )}
       </svg>
 
       {/*
-        The legend carries each question's name beside its colour, so the lines
-        are identified by something other than hue.
+        The legend names each question beside a swatch drawing the same dash and
+        marker as its line, so a reader identifies a series without comparing
+        colours at all.
       */}
-      <ul aria-label="Questions plotted" className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        {lines.map((line) => (
-          <li key={line.questionId} className="flex items-center gap-2 text-gray-700">
-            <span
-              aria-hidden="true"
-              className="inline-block h-3 w-3 shrink-0 rounded-sm"
-              style={{ backgroundColor: line.colour }}
-            />
-            {questionName(line.questionId)}
+      {/*
+        A grid rather than a wrapping flex row. Wrapping produced four entries
+        and a lone fifth, which reads as a mistake; the grid gives one column
+        per entry when they fit and one per line when they do not, so the
+        arrangement is always deliberate.
+      */}
+      <ul
+        aria-label="Question themes plotted"
+        className="mt-3 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]"
+      >
+        {lines.map((line) => {
+          const shown = !hidden.has(line.questionId);
+          return (
+          <li key={line.questionId}>
+            <button
+              type="button"
+              onClick={() => toggleSeries(line.questionId)}
+              aria-pressed={shown}
+              className={`flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-gray-100 ${
+                // gray-400 was reintroduced here and failed contrast at 2.6:1 —
+                // the same class of defect this project fixed once before. The
+                // line-through carries the state; the colour only has to pass.
+                shown ? 'text-gray-700' : 'text-gray-600 line-through'
+              }`}
+            >
+            {/*
+              The swatch draws the same dash and marker as the line it names, so
+              the mapping survives greyscale and does not depend on telling two
+              hues apart.
+            */}
+            <svg aria-hidden="true" width="28" height="12" className="shrink-0">
+              <line
+                x1="0"
+                y1="6"
+                x2="28"
+                y2="6"
+                stroke={line.style.colour}
+                strokeDasharray={line.style.dash || undefined}
+                strokeWidth="2"
+              />
+              <path
+                d={markerPath(line.style.marker, 14, 6, 3)}
+                fill={line.style.marker === 'cross' ? 'none' : line.style.colour}
+                stroke={line.style.marker === 'cross' ? line.style.colour : 'none'}
+                strokeWidth={line.style.marker === 'cross' ? 2 : undefined}
+              />
+            </svg>
+              {questionName(line.questionId)}
+            </button>
           </li>
-        ))}
+          );
+        })}
       </ul>
+
+      {visibleLines.length === 0 && (
+        // An empty grid looks like missing data rather than a choice the reader
+        // made a moment ago
+        <p className="mt-3 text-sm text-gray-600">
+          Every question theme is hidden. Switch one back on above to see the
+          chart; the table below still shows every score.
+        </p>
+      )}
 
       {/*
         Every plotted value, for anyone who cannot read the drawing. Kept in the
         page rather than behind a disclosure: a table hidden by default is one
         more thing to discover, and this one is small.
       */}
-      <div className="mt-4 overflow-x-auto">
+      {/*
+        A horizontally scrolling region has to be reachable by keyboard, or a
+        keyboard user cannot scroll it at all. tabindex 0 plus a name makes it
+        a focusable, announced region — axe flags this as
+        scrollable-region-focusable, and it only bites at the widths where the
+        table actually overflows.
+      */}
+      <div
+        role="region"
+        aria-label="Scores as a table"
+        tabIndex={0}
+        className="mt-4 overflow-x-auto"
+      >
         <table className="w-full text-left text-sm" aria-labelledby={CAPTION_ID}>
           <caption className="sr-only">{caption}</caption>
-          <thead>
+          {/*
+            The header row was indistinguishable from the body, so the table
+            read as an undifferentiated block. A tinted background and a rule
+            beneath it separate the labels from the data.
+          */}
+          <thead className="border-b-2 border-gray-300 bg-gray-50">
             <tr>
-              <th scope="col" className="py-1 pr-4 font-medium text-gray-700">
+              <th scope="col" className="py-2 pr-4 font-semibold text-gray-900">
                 Session closed
               </th>
               {questionIds.map((questionId) => (
-                <th key={questionId} scope="col" className="py-1 pr-4 font-medium text-gray-700">
+                <th key={questionId} scope="col" className="py-2 pr-4 font-semibold text-gray-900">
                   {questionName(questionId)}
                 </th>
               ))}

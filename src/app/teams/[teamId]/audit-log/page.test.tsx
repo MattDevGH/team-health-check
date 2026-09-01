@@ -17,13 +17,29 @@ import AuditLogPage from './page';
 
 const TEAM_ID = 'team-audit-1';
 
-const mockEntries = [
+/**
+ * Mirrors an entry as the route now returns it: the stored `userId` plus the
+ * `actor` the service resolves on the way out. `name` is nullable because a
+ * former member and an erased account genuinely cannot be named.
+ */
+interface AuditEntryFixture {
+  id: string;
+  changeType: string;
+  previousValue: string;
+  newValue: string;
+  userId: string;
+  actor: { id: string; name: string | null; isViewer: boolean; isErased: boolean };
+  timestamp: string;
+}
+
+const mockEntries: AuditEntryFixture[] = [
   {
     id: 'entry-2',
     changeType: 'privacy_mode_changed',
     previousValue: 'anonymous',
     newValue: 'attributed',
     userId: 'member-1',
+    actor: { id: 'member-1', name: 'Priya', isViewer: false, isErased: false },
     timestamp: '2025-01-16T14:00:00Z',
   },
   {
@@ -32,6 +48,7 @@ const mockEntries = [
     previousValue: 'weekly',
     newValue: 'fortnightly',
     userId: 'member-1',
+    actor: { id: 'member-1', name: 'Matt', isViewer: true, isErased: false },
     timestamp: '2025-01-15T10:30:00Z',
   },
 ];
@@ -151,13 +168,59 @@ describe('Audit Log Page', () => {
       });
     });
 
-    it('displays who made the change', async () => {
+    it('names the person who made the change, never their id', async () => {
       renderPage();
+
       await waitFor(() => {
-        // userId should appear somewhere
-        const entries = screen.getAllByRole('article');
-        expect(entries[0]).toHaveTextContent('member-1');
+        expect(screen.getAllByRole('article')[0]).toHaveTextContent('Changed by: Priya');
       });
+      // Reading the log should not require a database
+      expect(screen.getAllByRole('article')[0]).not.toHaveTextContent('member-1');
+    });
+
+    it('says "You" for the reader’s own changes', async () => {
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getAllByRole('article')[1]).toHaveTextContent('Changed by: You');
+      });
+    });
+
+    it('says a former member cannot be named, rather than showing an id', async () => {
+      setupHandlers({
+        entries: [
+          {
+            ...mockEntries[0],
+            actor: { id: 'gone', name: null, isViewer: false, isErased: false },
+          },
+        ],
+      });
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getAllByRole('article')[0]).toHaveTextContent('Changed by: A former member');
+      });
+    });
+
+    it('describes an erased account as deleted', async () => {
+      // The GDPR path stores deleted:<hash> so the actor cannot be identified;
+      // the log says so rather than printing the hash
+      setupHandlers({
+        entries: [
+          {
+            ...mockEntries[0],
+            actor: { id: 'deleted:9f8a', name: null, isViewer: false, isErased: true },
+          },
+        ],
+      });
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getAllByRole('article')[0]).toHaveTextContent(
+          'Changed by: A deleted account',
+        );
+      });
+      expect(screen.getAllByRole('article')[0]).not.toHaveTextContent('9f8a');
     });
 
     it('shows empty state when no entries exist', async () => {

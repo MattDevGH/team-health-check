@@ -661,7 +661,36 @@ All stages must pass. Branch protection requires CI green before merge.
 Tasks 1–26 complete. Merged to `master` as `7eba5f6` on 2026-08-26, with `ci`
 and `e2e` green on master afterwards.
 
-### Dashboard refinement — spec written 2026-08-31, not started
+### Dashboard refinement — COMPLETE (2026-09-01)
+
+Branch `fix/dashboard-defects`. Every requirement came from Matt’s manual pass
+over the live app on 2026-08-30; none of it was found by a test and none of it
+failed one.
+
+**Three defects fixed:** the profile read a `privacyMode` the API never sent;
+the audit log printed raw member ids; a question theme nobody answered was
+omitted entirely rather than reported.
+
+**The chart no longer misrepresents time.** Sessions are positioned by when
+they closed, not by their turn in the list, so a slope means something. Series
+carry a dash pattern and a marker shape as well as a colour, and the legend
+swatch repeats both — blue against purple was the reported failure, and naming
+colours in a legend does not help when the colours are the problem.
+
+**"Question theme" is the user-facing term**, copy only. `Question.title` is
+the theme, `Question.description` is the question a member is actually asked —
+in the database since the first migration, displayed nowhere until now.
+
+**Four findings worth reading before the next milestone**, in
+`.kiro/specs/dashboard-refinement/design.md` under *What implementation
+taught*: adding a control can make an existing one ambiguous; a fixed contrast
+defect can return through a new component; a viewport-dependent violation
+needs the viewport that triggers it; and absence has to be representable
+before it can be reported.
+
+**Session removal remains on the roadmap and unscheduled** — exclusion over
+deletion, schema change deferred deliberately. See the tasks file.
+### Dashboard refinement — original spec note (2026-08-31)
 
 `.kiro/specs/dashboard-refinement/`. Every requirement comes from Matt's manual
 pass over the live app against his real team data on 2026-08-30. **None of it

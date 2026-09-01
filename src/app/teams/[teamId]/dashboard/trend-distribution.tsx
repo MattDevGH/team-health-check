@@ -20,6 +20,15 @@ interface TrendDistributionProps {
 export function TrendDistribution({ distribution }: TrendDistributionProps) {
   return (
     <div className="space-y-3">
+      {/*
+        These counts are frequently misread as a calculated trend. They are not:
+        each is the number of people who chose that word themselves.
+      */}
+      <p className="text-sm text-gray-600">
+        Alongside a score, each person can say whether they feel a theme is
+        improving, stable or declining. These are counts of what people chose —
+        not a trend calculated from the scores.
+      </p>
       {distribution.map((item) => (
         <div key={item.questionId} className="border-b border-gray-100 pb-2 last:border-b-0">
           <p className="text-sm font-medium text-gray-700 mb-1">

@@ -390,3 +390,28 @@ describe('Trend Dashboard Page', () => {
     });
   });
 });
+
+/**
+ * Dashboard Refinement 5.6.
+ *
+ * The Trend Indicators counts were reported as unreadable: they look like a
+ * calculated trend, when each is the number of people who chose that word
+ * themselves.
+ */
+describe('Trend indicators explanation', () => {
+  it('says the counts are what people chose, not a calculation', async () => {
+    mockRoles([]);
+    mockTrendsApi({
+      sessions: [
+        { sessionId: 's1', closedAt: '2026-08-01T17:00:00Z', averages: [] },
+        { sessionId: 's2', closedAt: '2026-08-08T17:00:00Z', averages: [] },
+      ],
+      trendDistribution: [
+        { questionId: 'q-delivering-value', improving: 1, stable: 0, declining: 0 },
+      ],
+    });
+    render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+    expect(await screen.findByText(/not a trend calculated from the scores/i)).toBeInTheDocument();
+  });
+});

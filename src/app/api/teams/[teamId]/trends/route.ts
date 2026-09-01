@@ -9,6 +9,9 @@
  * - trendDistribution[]: array of { questionId, improving, stable, declining }
  * - requiresMoreData: true when fewer than 2 closed sessions
  * - privacyMode: team's privacy mode
+ * - questions[]: the fixed catalogue, so the dashboard can name every question
+ *   theme — including one nobody has answered — and show the question text
+ *   behind it. Derived from the data, absence would be unrepresentable.
  *
  * Sessions are ordered chronologically (oldest first) per Requirement 4.3.
  */
@@ -49,6 +52,21 @@ export const GET = withErrorHandling(async (request: Request, context) => {
   // Get privacy mode
   const privacyMode = await container.privacy.getMode(teamId);
 
+  /**
+   * The question catalogue: five fixed rows, the same for every team.
+   *
+   * Sent with the trends response rather than from a route of its own because
+   * the dashboard already makes this request, and this data never changes. It
+   * is what lets the dashboard name a question theme that has no aggregates —
+   * previously such a theme did not exist as far as the page was concerned.
+   */
+  const catalogue = await repos.question.findAll();
+  const questions = catalogue.map(question => ({
+    id: question.id,
+    title: question.title,
+    description: question.description,
+  }));
+
   // Get all sessions for this team to identify closed ones
   const allSessions = await repos.session.findByTeamId(teamId);
   const closedSessions = allSessions.filter(s => s.status === 'closed' && s.actualCloseAt);
@@ -59,6 +77,7 @@ export const GET = withErrorHandling(async (request: Request, context) => {
       sessions: [],
       trendDistribution: [],
       privacyMode,
+      questions,
       requiresMoreData: true,
     });
   }
@@ -105,5 +124,6 @@ export const GET = withErrorHandling(async (request: Request, context) => {
     sessions,
     trendDistribution,
     privacyMode,
+    questions,
   });
 });

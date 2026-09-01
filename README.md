@@ -117,22 +117,33 @@ sign-in is refused for this reason.
 Full multi-team membership needs an identity model above `TeamMember`, a team
 switcher, and a review of every team-scoped query. It is a separate future spec.
 
+### Dashboard refinement — complete 2026-09-01
+
+`.kiro/specs/dashboard-refinement/` came entirely from one manual pass over the
+live application against real team data. None of it was found by a test, and
+none of it failed one.
+
+- **Three defects** — a profile field the API never sent, raw member ids in the
+  audit log, and a question theme nobody answered vanishing rather than being
+  reported.
+- **A chart that tells the truth about time** — sessions are spaced by when they
+  closed, so a slope reflects how quickly a score moved.
+- **Series told apart without colour** — a dash pattern and a marker shape as
+  well as a hue, with the legend swatch repeating both.
+- **Question themes, and the question behind them** — the sentence a member is
+  actually asked has been in the database since the first migration and was
+  displayed nowhere.
+- **Settings that explain themselves** — including what happens if you change
+  nothing.
+- **A filterable chart** — focus on one theme at a time, without ever removing
+  a value from the page.
+
 ### Next milestone
 
-**Dashboard refinement** (`.kiro/specs/dashboard-refinement/`) — spec written
-2026-08-31, not started. Every requirement came from one manual pass over the
-live app against real team data; none of it was found by a test, and none of it
-failed one. It covers three defects, a chart that spaces sessions evenly
-regardless of when they closed, series distinguished only by colour, topics
-named "questions" while the real question text is never shown, and settings a
-colleague cannot interpret without having been in the conversations that
-produced them.
-
-**Then deployment** — Vercel, Turso, and the production cron trigger. The
-production database path already has execution coverage
+**Deployment** — Vercel, Turso, and the production cron trigger. The production
+database path already has execution coverage
 (`src/tests/integration/libsql-repository.test.ts`), so this is configuration
 and a cron schedule rather than new application code.
-
 ### Later milestones (not started)
 - **Delivery-manager user guide** in `docs/`, once in-app guidance exists.
 - **Slack Socket Mode:** evaluate as a development-only convenience to remove

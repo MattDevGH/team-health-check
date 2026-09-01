@@ -149,6 +149,40 @@ There is a cost to adding them early: an `excludedAt` sitting unused in the
 schema is a standing invitation to filter on it before anyone has agreed what
 exclusion means. The columns arrive with the feature or not at all.
 
+## What implementation taught
+
+Things the design had no place for, recorded because they will apply again.
+
+**Adding a control can make an existing one ambiguous.** Legend toggles carry
+the question theme name, and so do the drill-down triggers — so the page grew
+two controls per theme with the same accessible name, and six end-to-end tests
+became ambiguous at once. That is a usability problem before it is a test
+problem: a screen reader user hears the same name twice with different
+effects. The drill-down is now a named region and every query is scoped to the
+control it means.
+
+**A fixed defect can come back through a new component.** The hidden-series
+style used `text-gray-400` at 2.6:1 — the same class of contrast failure this
+project found and fixed during the security and accessibility baseline, and
+recorded in the README. Nothing prevents a reintroduction except auditing the
+new state, which is why every state added here has an axe run of its own.
+
+**A contrast value near the threshold is a defect, not a pass.** The disclosure
+hint measured 4.48:1 against the expanded row’s background, needing 4.5:1. The
+same commit passed one CI run and failed another, because a value that close to
+the line rounds differently between browser builds. The fix is headroom — the
+corrected pair measures 7.0:1 — not a re-run.
+
+**A viewport-dependent violation needs the viewport that triggers it.** Axe
+reported `scrollable-region-focusable` on both data tables only at 320px,
+where the content finally exceeds its box. The audit added with the tables
+themselves ran at a width where they fit, and passed.
+
+**Absence has to be representable before it can be reported.** The dashboard
+derived its list of question themes from the aggregates, so a theme nobody
+answered did not exist as far as the page was concerned. No amount of care at
+the render site would have fixed that; the catalogue had to arrive first.
+
 ## Correctness Properties
 
 | # | Property | Validates |

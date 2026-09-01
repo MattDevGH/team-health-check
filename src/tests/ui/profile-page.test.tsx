@@ -13,8 +13,18 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import ProfilePage from '@/app/me/page';
 
+/**
+ * Mirrors what `GET /api/me` actually returns.
+ *
+ * This previously carried a top-level `privacyMode`, which the route has never
+ * sent — privacy mode belongs to the Team, not the TeamMember. The page read
+ * `profile.privacyMode` and rendered an empty value in production while this
+ * mock kept the test green. A mock is a claim about the server; this one
+ * described a server nobody had written.
+ */
 const MOCK_PROFILE = {
   id: 'member-1',
+  teamId: 'team-1',
   name: 'Alice',
   email: 'alice@example.com',
   cadencePreference: 'session',
@@ -22,7 +32,8 @@ const MOCK_PROFILE = {
   currentStreak: 5,
   bestStreak: 8,
   slackLink: { slackUserId: 'U123' },
-  privacyMode: 'anonymous',
+  team: { id: 'team-1', name: 'Platform Squad', privacyMode: 'anonymous' },
+  roles: ['team_member'],
 };
 
 function mockProfileApi(profile = MOCK_PROFILE) {
@@ -428,15 +439,55 @@ describe('Profile Page', () => {
     });
   });
 
+  /**
+   * Requirement 14.7, and Dashboard Refinement 7.1–7.3.
+   *
+   * Privacy mode is a team setting, and it decides whether this member's
+   * individual answers can be attributed to them — which is exactly what the
+   * person answering needs to know. It is shown, labelled as the team's, and
+   * read-only.
+   */
   describe('Requirement 14.7: Privacy mode display', () => {
-    beforeEach(() => mockProfileApi());
-
-    it('displays current privacy mode', async () => {
+    it('says what anonymous mode means for the person answering', async () => {
+      mockProfileApi();
       render(<ProfilePage />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/anonymous/i)).toBeInTheDocument();
+      const privacy = await screen.findByRole('note', { name: /privacy/i });
+      expect(privacy).toHaveTextContent(/anonymous/i);
+      expect(privacy).toHaveTextContent(/not shown to your delivery manager/i);
+    });
+
+    it('says what attributed mode means instead', async () => {
+      mockProfileApi({
+        ...MOCK_PROFILE,
+        team: { ...MOCK_PROFILE.team, privacyMode: 'attributed' },
       });
+      render(<ProfilePage />);
+
+      const privacy = await screen.findByRole('note', { name: /privacy/i });
+      expect(privacy).toHaveTextContent(/attributed/i);
+      expect(privacy).toHaveTextContent(/can see who gave which answer/i);
+    });
+
+    it('names the team whose setting it is', async () => {
+      mockProfileApi();
+      render(<ProfilePage />);
+
+      expect(await screen.findByRole('note', { name: /privacy/i })).toHaveTextContent(
+        /platform squad/i,
+      );
+    });
+
+    it('renders nothing about privacy when the team could not be resolved', async () => {
+      // Rather than a label followed by a blank, which is the defect this
+      // task exists to fix
+      const { team: _team, ...withoutTeam } = MOCK_PROFILE;
+      mockProfileApi({ ...withoutTeam, team: null } as unknown as typeof MOCK_PROFILE);
+      render(<ProfilePage />);
+
+      await screen.findByText('Alice');
+      expect(screen.queryByRole('note', { name: /privacy/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/privacy mode:\s*$/i)).not.toBeInTheDocument();
     });
   });
 });

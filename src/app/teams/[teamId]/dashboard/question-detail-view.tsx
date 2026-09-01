@@ -26,8 +26,23 @@ interface SessionData {
   averages: SessionAverage[];
 }
 
+/** One entry of the fixed question catalogue, from the trends response. */
+interface QuestionCatalogueEntry {
+  id: string;
+  title: string;
+  description: string;
+}
+
 interface QuestionDetailViewProps {
   sessions: SessionData[];
+  /**
+   * The team's question themes and the questions behind them.
+   *
+   * `description` is the sentence a member is actually asked. It has been in
+   * the database since the first migration and was shown nowhere, so a manager
+   * read a score without seeing what it was a score of.
+   */
+  questions?: QuestionCatalogueEntry[];
   anonymousMode: boolean;
   /** Minimum responses required to display data in anonymous mode */
   anonymityThreshold?: number;
@@ -35,29 +50,41 @@ interface QuestionDetailViewProps {
 
 const DEFAULT_ANONYMITY_THRESHOLD = 3;
 
+/** Names the drill-down region, so its triggers are distinguishable from the
+ * chart legend's toggles, which carry the same question theme names. */
+const THEMES_HEADING_ID = 'question-themes-heading';
+
 export function QuestionDetailView({
   sessions,
+  questions,
   anonymousMode,
   anonymityThreshold = DEFAULT_ANONYMITY_THRESHOLD,
 }: QuestionDetailViewProps) {
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
 
-  // Collect unique question IDs across all sessions
-  const questionIds = Array.from(
-    new Set(sessions.flatMap((s) => s.averages.map((a) => a.questionId)))
-  );
+  /**
+   * Every theme the team is asked about, from the catalogue where it is
+   * available. Falling back to the answered ones keeps the list working
+   * against a trends response that predates the catalogue.
+   */
+  const themes =
+    questions ??
+    Array.from(new Set(sessions.flatMap((s) => s.averages.map((a) => a.questionId)))).map(
+      (id) => ({ id, title: formatQuestionId(id), description: '' }),
+    );
 
   function handleQuestionClick(questionId: string) {
     setSelectedQuestionId((prev) => (prev === questionId ? null : questionId));
   }
 
   return (
-    <div className="space-y-2">
-      <h2 className="text-lg font-semibold text-gray-700 mb-3">
-        Questions
+    <section aria-labelledby={THEMES_HEADING_ID} className="space-y-2">
+      <h2 id={THEMES_HEADING_ID} className="text-lg font-semibold text-gray-700 mb-3">
+        Question themes
       </h2>
       <div className="space-y-1">
-        {questionIds.map((qId) => {
+        {themes.map((theme) => {
+          const qId = theme.id;
           const expanded = selectedQuestionId === qId;
           const panelId = `question-detail-${qId}`;
 
@@ -79,10 +106,26 @@ export function QuestionDetailView({
                 itself as such. Hidden from assistive technology, which is told
                 the same thing by aria-expanded.
               */}
-              <span aria-hidden="true" className="inline-block w-3 text-xs">
+              <span aria-hidden="true" className="inline-block w-4 text-base leading-none">
                 {expanded ? '▾' : '▸'}
               </span>
-              {formatQuestionId(qId)}
+              <span className="flex-1">{theme.title}</span>
+              {/*
+                The chevron alone was reported as too subtle to read as
+                interactive. The words say what activating it does; assistive
+                technology is told the same by aria-expanded, so this is hidden
+                from it to avoid saying it twice.
+              */}
+              {/*
+                gray-600, not gray-500. On the expanded row the background
+                becomes blue-50, where gray-500 measures 4.48:1 — under the
+                4.5:1 AA threshold by a hair, which is enough to pass on one
+                browser build and fail on another. A value that close to the
+                line is a defect whichever way a given run rounds it.
+              */}
+              <span aria-hidden="true" className="text-xs text-gray-600">
+                {expanded ? 'Hide responses' : 'Show responses'}
+              </span>
             </button>
 
             {/*
@@ -96,18 +139,29 @@ export function QuestionDetailView({
             <div
               id={panelId}
               role="region"
-              aria-label={formatQuestionId(qId)}
+              aria-label={theme.title}
               hidden={!expanded}
               className="mt-2 ml-3 border-l-2 border-blue-200 pl-3 space-y-2"
             >
               {expanded && (
               <>
+                {/*
+                  What the team was actually asked. A score is hard to interpret
+                  without the question behind it.
+                */}
+                {theme.description && (
+                  <p className="pb-1 text-sm italic text-gray-600">{theme.description}</p>
+                )}
                 {sessions.map((session) => {
                   const avg = session.averages.find((a) => a.questionId === qId);
-                  if (!avg) return null;
 
+                  // A session where nobody answered this theme used to be
+                  // skipped, so the history silently omitted it and a reader
+                  // could not tell a gap from a check that never ran
                   const isSuppressed =
-                    anonymousMode && avg.responseCount < anonymityThreshold;
+                    avg !== undefined &&
+                    anonymousMode &&
+                    avg.responseCount < anonymityThreshold;
 
                   return (
                     <div
@@ -117,7 +171,11 @@ export function QuestionDetailView({
                       <span className="text-gray-500">
                         {formatDate(session.closedAt)}
                       </span>
-                      {isSuppressed ? (
+                      {avg === undefined ? (
+                        // Distinct from suppression on purpose: nobody
+                        // answered, rather than too few answering to show
+                        <span className="text-gray-500">No responses</span>
+                      ) : isSuppressed ? (
                         <span className="text-amber-600 italic">
                           Insufficient data
                         </span>
@@ -141,7 +199,7 @@ export function QuestionDetailView({
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }
 

@@ -28,9 +28,25 @@ interface SessionData {
   averages: SessionAverage[];
 }
 
+/** One entry of the fixed question catalogue. */
+interface QuestionCatalogueEntry {
+  id: string;
+  title: string;
+  description: string;
+}
+
 interface LatestSessionPanelProps {
   /** Closed sessions, oldest first, as the trends endpoint returns them. */
   sessions: SessionData[];
+  /**
+   * The team's question themes, from the trends response.
+   *
+   * Without this the rows come from the aggregates, so a theme nobody answered
+   * is absent rather than reported — a manager cannot tell silence from a
+   * question never asked. Optional so the panel still works against a trends
+   * response that predates the catalogue.
+   */
+  questions?: QuestionCatalogueEntry[];
   anonymousMode: boolean;
 }
 
@@ -63,7 +79,7 @@ function fullDate(isoString: string): string {
  * a bug even when the underlying floats differ.
  */
 function describeChange(current: number, previous: number | undefined): string {
-  if (previous === undefined) return 'First check for this question';
+  if (previous === undefined) return 'First check for this theme';
 
   const delta = Number((current - previous).toFixed(1));
 
@@ -71,11 +87,28 @@ function describeChange(current: number, previous: number | undefined): string {
   return `${Math.abs(delta).toFixed(1)} ${delta > 0 ? 'higher' : 'lower'}`;
 }
 
-export function LatestSessionPanel({ sessions, anonymousMode }: LatestSessionPanelProps) {
+export function LatestSessionPanel({
+  sessions,
+  questions,
+  anonymousMode,
+}: LatestSessionPanelProps) {
   if (sessions.length === 0) return null;
 
   const latest = sessions[sessions.length - 1];
   const previous = sessions[sessions.length - 2];
+
+  /**
+   * Every theme the team is asked about, not only those with answers.
+   *
+   * Falls back to the answered ones when no catalogue is supplied, which keeps
+   * the panel working rather than emptying it.
+   */
+  const rows = (questions ?? latest.averages.map(a => ({ id: a.questionId, title: questionName(a.questionId) })))
+    .map(question => ({
+      id: question.id,
+      title: question.title,
+      average: latest.averages.find(a => a.questionId === question.id),
+    }));
 
   return (
     <section aria-labelledby={HEADING_ID} className="bg-white rounded-lg shadow p-4 mb-6">
@@ -86,12 +119,17 @@ export function LatestSessionPanel({ sessions, anonymousMode }: LatestSessionPan
         Closed on {fullDate(latest.closedAt)}, compared with the check before it.
       </p>
 
-      <div className="overflow-x-auto">
+      {/*
+        Focusable for the same reason as the chart's table: see trend-chart.
+        Named distinctly from the section around it, so a query for the panel
+        does not match this region too.
+      */}
+      <div role="region" aria-label="Scores by question theme" tabIndex={0} className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
             <tr>
               <th scope="col" className="py-1 pr-4 font-medium text-gray-700">
-                Question
+                Question theme
               </th>
               <th scope="col" className="py-1 pr-4 font-medium text-gray-700">
                 Score
@@ -105,20 +143,29 @@ export function LatestSessionPanel({ sessions, anonymousMode }: LatestSessionPan
             </tr>
           </thead>
           <tbody>
-            {latest.averages.map(average => {
+            {rows.map(({ id, title, average }) => {
               const suppressed =
-                anonymousMode && average.responseCount < ANONYMITY_THRESHOLD;
+                average !== undefined &&
+                anonymousMode &&
+                average.responseCount < ANONYMITY_THRESHOLD;
               const previousScore = previous?.averages.find(
-                a => a.questionId === average.questionId,
+                a => a.questionId === id,
               )?.averageScore;
 
               return (
-                <tr key={average.questionId} className="border-t border-gray-200">
+                <tr key={id} className="border-t border-gray-200">
                   <th scope="row" className="py-1 pr-4 font-normal text-gray-800">
-                    {questionName(average.questionId)}
+                    {title}
                   </th>
 
-                  {suppressed ? (
+                  {average === undefined ? (
+                    // Nobody answered. Deliberately worded differently from
+                    // suppression: one means silence, the other means people
+                    // answered and there were too few to show safely.
+                    <td colSpan={3} className="py-1 text-gray-500">
+                      No responses
+                    </td>
+                  ) : suppressed ? (
                     // Said plainly rather than left blank: a gap reads as
                     // missing data, when in fact the team is too small for this
                     // answer to stay anonymous
