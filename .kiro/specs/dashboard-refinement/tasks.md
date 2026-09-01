@@ -118,11 +118,23 @@ Groups 1 and 5 each end at a checkpoint.
     - The caption says sessions are spaced by the time between them. Without
       it a reader cannot tell even-looking spacing from even intervals.
 
-  - [ ] 3.3 Distinguish series without colour
+  - [x] 3.3 Distinguish series without colour
     - Write failing tests: each series carries a dash pattern and a marker shape, and the legend swatch carries the same
     - **Property 3: no two series share both a dash pattern and a marker shape**
     - Assert the distinction, not the specific `stroke-dasharray` — pinning the literal value asserts what was typed
     - _Requirements: 2.1, 2.2, 2.3, 2.5_
+    - **Done.** Each series carries colour, a dash pattern and a marker shape.
+      Two of the three survive colour being removed entirely: dashes read at a
+      glance across a long line, marker shapes stay legible where a line is
+      short or steep and a dash has no room to repeat. Either alone is fragile.
+    - The legend swatch draws the same dash and marker as the line it names,
+      rather than a colour block — so the legend itself works in greyscale.
+      A legend that only names colours still fails when the colours are the
+      problem, which is exactly what was reported for blue against purple.
+    - **The tests assert the distinction, not the values.** Property 3 checks
+      no two series share both a dash and a marker; the component tests check
+      the rendered dashes are all different. Pinning `stroke-dasharray="6 3"`
+      would assert what was typed and keep passing if two series collided.
 
   - [ ] 3.4 Lay the legend out predictably
     - One row if the entries fit, one per line otherwise; never four and an orphan

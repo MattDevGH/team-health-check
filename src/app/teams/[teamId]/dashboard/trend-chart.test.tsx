@@ -100,3 +100,47 @@ describe('TrendChart', () => {
     expect(screen.queryByRole('img', { name: /trend chart/i })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Dashboard Refinement 2.1, 2.2.
+ *
+ * These assert the *distinction*, not the values. Pinning a particular
+ * stroke-dasharray would assert what was typed, and would keep passing if two
+ * series were given the same pattern.
+ */
+describe('TrendChart series identity', () => {
+  it('draws each line with a different dash pattern', () => {
+    const { container } = render(<TrendChart sessions={SESSIONS} />);
+
+    const dashes = [...container.querySelectorAll('polyline')].map(
+      line => line.getAttribute('stroke-dasharray') ?? 'solid',
+    );
+
+    expect(dashes).toHaveLength(2);
+    expect(new Set(dashes).size, 'two lines share a dash pattern').toBe(dashes.length);
+  });
+
+  it('gives each legend entry a swatch, not a bare colour block', () => {
+    const { container } = render(<TrendChart sessions={SESSIONS} />);
+
+    const legend = screen.getByRole('list', { name: /questions plotted/i });
+    // A swatch that draws the line and its marker, so the legend survives
+    // greyscale
+    expect(legend.querySelectorAll('svg line')).toHaveLength(2);
+    expect(legend.querySelectorAll('svg path')).toHaveLength(2);
+    expect(container.querySelectorAll('circle'), 'markers are shapes now').toHaveLength(0);
+  });
+
+  it('marks data points with shapes that differ between series', () => {
+    const { container } = render(<TrendChart sessions={SESSIONS} />);
+
+    const svg = container.querySelector('svg[aria-hidden="true"]')!;
+    const markerShapes = new Set(
+      [...svg.querySelectorAll('path')].map(path => path.getAttribute('d')!.slice(0, 1)),
+    );
+
+    // Every marker is a path starting with a move command
+    expect(markerShapes).toEqual(new Set(['M']));
+    expect(svg.querySelectorAll('path').length).toBeGreaterThan(0);
+  });
+});

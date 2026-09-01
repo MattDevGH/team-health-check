@@ -7,9 +7,10 @@
  *
  * The drawing is accompanied by two things it cannot provide on its own:
  *
- * - a **legend** naming each question beside its colour, because five lines
- *   distinguished only by hue are unreadable to anyone with a colour vision
- *   deficiency, and unprintable in greyscale
+ * - a **legend** naming each question beside a swatch that repeats its dash
+ *   pattern and marker, so the mapping survives greyscale and does not rest on
+ *   telling two hues apart — blue and purple were reported as confusable on an
+ *   ordinary screen
  * - a **data table** carrying every plotted value, because `role="img"` hides
  *   the SVG's contents from assistive technology. Making the points
  *   individually focusable would mean dropping that role and hand-building a
@@ -21,6 +22,7 @@
 
 import { pluralise } from '@/lib/format';
 import { sessionPositions } from './chart-geometry';
+import { markerPath, seriesStyle } from './series-style';
 
 interface SessionAverage {
   questionId: string;
@@ -55,14 +57,6 @@ const PLOT_HEIGHT = CHART_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 
 const Y_MIN = 1.0;
 const Y_MAX = 5.0;
-
-const LINE_COLOURS = [
-  '#3B82F6', // blue
-  '#10B981', // green
-  '#F59E0B', // amber
-  '#EF4444', // red
-  '#8B5CF6', // purple
-];
 
 function scoreToY(score: number): number {
   const ratio = (score - Y_MIN) / (Y_MAX - Y_MIN);
@@ -101,7 +95,7 @@ export function TrendChart({ sessions }: TrendChartProps) {
     new Set(sessions.flatMap((s) => s.averages.map((a) => a.questionId)))
   );
 
-    // Horizontal position per session, proportional to elapsed time
+  // Horizontal position per session, proportional to elapsed time
   const xBySession = sessionPositions(sessions.map(session => session.closedAt));
 
   // Build lines: one polyline per question
@@ -119,7 +113,8 @@ export function TrendChart({ sessions }: TrendChartProps) {
 
     return {
       questionId: qId,
-      colour: LINE_COLOURS[qIndex % LINE_COLOURS.length],
+      // Colour, dash and marker: two of the three survive colour being removed
+      style: seriesStyle(qIndex),
       points: points.join(' '),
     };
   });
@@ -198,7 +193,8 @@ export function TrendChart({ sessions }: TrendChartProps) {
           key={line.questionId}
           points={line.points}
           fill="none"
-          stroke={line.colour}
+          stroke={line.style.colour}
+          strokeDasharray={line.style.dash || undefined}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -207,33 +203,56 @@ export function TrendChart({ sessions }: TrendChartProps) {
 
       {/* Data points */}
       {lines.map((line) =>
-        line.points.split(' ').map((point, i) => {
-          const [cx, cy] = point.split(',');
-          return (
-            <circle
-              key={`${line.questionId}-${i}`}
-              cx={cx}
-              cy={cy}
-              r="4"
-              fill={line.colour}
-            />
-          );
-        })
+        line.points
+          .split(' ')
+          .filter(Boolean)
+          .map((point, i) => {
+            const [cx, cy] = point.split(',').map(Number);
+            const isCross = line.style.marker === 'cross';
+            return (
+              <path
+                key={`${line.questionId}-${i}`}
+                d={markerPath(line.style.marker, cx, cy)}
+                // A cross has no interior to fill, so it is drawn as a stroke
+                fill={isCross ? 'none' : line.style.colour}
+                stroke={isCross ? line.style.colour : 'none'}
+                strokeWidth={isCross ? 2 : undefined}
+              />
+            );
+          })
       )}
       </svg>
 
       {/*
-        The legend carries each question's name beside its colour, so the lines
-        are identified by something other than hue.
+        The legend names each question beside a swatch drawing the same dash and
+        marker as its line, so a reader identifies a series without comparing
+        colours at all.
       */}
       <ul aria-label="Questions plotted" className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
         {lines.map((line) => (
           <li key={line.questionId} className="flex items-center gap-2 text-gray-700">
-            <span
-              aria-hidden="true"
-              className="inline-block h-3 w-3 shrink-0 rounded-sm"
-              style={{ backgroundColor: line.colour }}
-            />
+            {/*
+              The swatch draws the same dash and marker as the line it names, so
+              the mapping survives greyscale and does not depend on telling two
+              hues apart.
+            */}
+            <svg aria-hidden="true" width="28" height="12" className="shrink-0">
+              <line
+                x1="0"
+                y1="6"
+                x2="28"
+                y2="6"
+                stroke={line.style.colour}
+                strokeDasharray={line.style.dash || undefined}
+                strokeWidth="2"
+              />
+              <path
+                d={markerPath(line.style.marker, 14, 6, 3)}
+                fill={line.style.marker === 'cross' ? 'none' : line.style.colour}
+                stroke={line.style.marker === 'cross' ? line.style.colour : 'none'}
+                strokeWidth={line.style.marker === 'cross' ? 2 : undefined}
+              />
+            </svg>
             {questionName(line.questionId)}
           </li>
         ))}
