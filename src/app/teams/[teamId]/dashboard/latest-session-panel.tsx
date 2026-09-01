@@ -79,7 +79,7 @@ function fullDate(isoString: string): string {
  * a bug even when the underlying floats differ.
  */
 function describeChange(current: number, previous: number | undefined): string {
-  if (previous === undefined) return 'First check for this question';
+  if (previous === undefined) return 'First check for this theme';
 
   const delta = Number((current - previous).toFixed(1));
 
@@ -129,7 +129,7 @@ export function LatestSessionPanel({
           <thead>
             <tr>
               <th scope="col" className="py-1 pr-4 font-medium text-gray-700">
-                Question
+                Question theme
               </th>
               <th scope="col" className="py-1 pr-4 font-medium text-gray-700">
                 Score

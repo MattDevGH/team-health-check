@@ -291,3 +291,70 @@ describe('QuestionDetailView', () => {
     });
   });
 });
+
+/**
+ * Dashboard Refinement 3.1, 3.2.
+ *
+ * The dashboard called these questions while showing `Question.title`, which is
+ * a theme, and never showed `Question.description` — the sentence a member is
+ * actually asked, present in the database since the first migration.
+ */
+describe('QuestionDetailView question themes and their questions', () => {
+  const CATALOGUE = [
+    {
+      id: 'q-delivering-value',
+      title: 'Delivering Value',
+      description: 'How well is the team delivering value to stakeholders?',
+    },
+    {
+      id: 'q-team-collaboration',
+      title: 'Team Collaboration',
+      description: 'How effectively does the team work together?',
+    },
+  ];
+
+  it('calls them question themes', () => {
+    render(<QuestionDetailView sessions={SESSIONS} questions={CATALOGUE} anonymousMode={false} />);
+
+    expect(screen.getByRole('heading', { name: /question themes/i })).toBeInTheDocument();
+  });
+
+  it('shows the question a team member was actually asked', async () => {
+    const user = userEvent.setup();
+    render(<QuestionDetailView sessions={SESSIONS} questions={CATALOGUE} anonymousMode={false} />);
+
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+
+    expect(
+      screen.getByText('How well is the team delivering value to stakeholders?'),
+    ).toBeInTheDocument();
+  });
+
+  it('says what activating a theme will do', async () => {
+    // The chevron alone was reported as too subtle to read as interactive
+    const user = userEvent.setup();
+    render(<QuestionDetailView sessions={SESSIONS} questions={CATALOGUE} anonymousMode={false} />);
+
+    const trigger = screen.getByRole('button', { name: /delivering value/i });
+    expect(trigger).toHaveTextContent(/show responses/i);
+
+    await user.click(trigger);
+    expect(trigger).toHaveTextContent(/hide responses/i);
+  });
+
+  it('lists a theme no session has answered', () => {
+    // Comes from the catalogue, not from the aggregates
+    render(
+      <QuestionDetailView
+        sessions={SESSIONS}
+        questions={[
+          ...CATALOGUE,
+          { id: 'q-never-asked', title: 'Never Answered', description: 'Nobody has scored this.' },
+        ]}
+        anonymousMode={false}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /never answered/i })).toBeInTheDocument();
+  });
+});

@@ -21,7 +21,7 @@ Groups 1 and 5 each end at a checkpoint.
 
 ## Tasks
 
-- [ ] 1. Defects found in the manual pass
+- [x] 1. Defects found in the manual pass
 
   - [x] 1.1 Profile stops rendering a value it does not have
     - Write a failing test: the profile page renders no empty "Privacy mode" line
@@ -86,7 +86,7 @@ Groups 1 and 5 each end at a checkpoint.
 - [ ] 2. Checkpoint — defects
   - Full suite, `tsc --noEmit`, lint, build, E2E. Ask the user if questions arise.
 
-- [ ] 3. A chart that tells the truth
+- [x] 3. A chart that tells the truth
 
   - [x] 3.1 Serve the question catalogue with the trends response
     - Write failing route tests: the response carries every question with its id, title and description, whether or not it has aggregates
@@ -170,22 +170,39 @@ Groups 1 and 5 each end at a checkpoint.
       matched two elements and two existing tests broke. Renamed rather than
       loosening the queries.
 
-- [ ] 4. Question themes, and the question behind them
+- [x] 4. Question themes, and the question behind them
 
-  - [ ] 4.1 Rename the user-facing term to **question theme**
+  - [x] 4.1 Rename the user-facing term to **question theme**
     - Term agreed 2026-08-31: clearer and more descriptive than "topic" or "theme" alone
     - Update every user-facing string, and **every test asserting the old wording, in the same commit**
     - No stored value, API field or identifier changes
     - _Requirements: 3.1, 3.4, NFR 2.1_
+    - **Done.** "Question themes" as the drill-down heading, "Question theme"
+      as the Latest Session column, "Question themes plotted" as the legend,
+      and "average score per question theme" in the chart caption.
+    - Every test asserting the old wording was updated in the same commit,
+      including the E2E legend lookup. A half-renamed suite passes while the
+      page says two different things.
+    - Nothing stored changed: `Question.title` is still `title`, the API still
+      returns `questions`, and no identifier moved.
 
-  - [ ] 4.2 Show the question a team member was asked
+  - [x] 4.2 Show the question a team member was asked
     - Write a failing test: expanding a question theme displays its `description`
     - _Requirements: 3.2_
+    - **Done.** The question text has been in the database since the first
+      migration and was displayed nowhere — a manager read a score without
+      seeing what it was a score of.
+    - The drill-down now lists themes from the catalogue rather than from the
+      aggregates, so a theme nobody has ever answered still appears.
 
-  - [ ] 4.3 Make the disclosure obvious
+  - [x] 4.3 Make the disclosure obvious
     - The chevron alone was reported as too subtle; add text such as "Show responses"
     - Keep `aria-expanded` and `aria-controls` as they are — this is about what a sighted user notices, not what is announced
     - _Requirements: 3.2_
+    - **Done.** "Show responses" / "Hide responses" beside a larger chevron.
+      Both are `aria-hidden`: assistive technology is already told the same
+      thing by `aria-expanded`, and repeating it would announce the state
+      twice.
 
 - [ ] 5. Explanatory copy
 

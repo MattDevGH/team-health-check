@@ -55,7 +55,7 @@ describe('TrendChart', () => {
   it('names every plotted question, so the lines are not told apart by colour alone', () => {
     render(<TrendChart sessions={SESSIONS} />);
 
-    const legend = screen.getByRole('list', { name: /questions plotted/i });
+    const legend = screen.getByRole('list', { name: /question themes plotted/i });
     expect(within(legend).getByText('Delivering Value')).toBeInTheDocument();
     expect(within(legend).getByText('Team Collaboration')).toBeInTheDocument();
   });
@@ -123,7 +123,7 @@ describe('TrendChart series identity', () => {
   it('gives each legend entry a swatch, not a bare colour block', () => {
     const { container } = render(<TrendChart sessions={SESSIONS} />);
 
-    const legend = screen.getByRole('list', { name: /questions plotted/i });
+    const legend = screen.getByRole('list', { name: /question themes plotted/i });
     // A swatch that draws the line and its marker, so the legend survives
     // greyscale
     expect(legend.querySelectorAll('svg line')).toHaveLength(2);

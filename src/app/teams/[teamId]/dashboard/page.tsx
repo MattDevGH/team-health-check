@@ -286,7 +286,11 @@ export default function TrendDashboardPage({ params }: PageProps) {
         )}
 
         <div className="bg-white rounded-lg shadow p-4 mt-6">
-          <QuestionDetailView sessions={sessions} anonymousMode={anonymousMode} />
+          <QuestionDetailView
+            sessions={sessions}
+            questions={questions}
+            anonymousMode={anonymousMode}
+          />
         </div>
       </div>
     </div>

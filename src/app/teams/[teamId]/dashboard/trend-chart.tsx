@@ -128,7 +128,7 @@ export function TrendChart({ sessions }: TrendChartProps) {
     x: xBySession[i],
   }));
 
-  const caption = `Average score per question across the last ${pluralise(
+  const caption = `Average score per question theme across the last ${pluralise(
     sessions.length,
     'closed session',
   )}`;
@@ -235,7 +235,7 @@ export function TrendChart({ sessions }: TrendChartProps) {
         arrangement is always deliberate.
       */}
       <ul
-        aria-label="Questions plotted"
+        aria-label="Question themes plotted"
         className="mt-3 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]"
       >
         {lines.map((line) => (

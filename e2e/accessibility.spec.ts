@@ -306,7 +306,7 @@ test.describe('the trend chart at narrow widths', () => {
     await signIn(page, CHART);
     await page.goto(`/teams/${chartTeamId}/dashboard`);
 
-    const legend = page.getByRole('list', { name: /questions plotted/i });
+    const legend = page.getByRole('list', { name: /question themes plotted/i });
     for (const name of ['Delivering Value', 'Psychological Safety']) {
       await expect(legend.getByText(name)).toBeVisible();
     }
