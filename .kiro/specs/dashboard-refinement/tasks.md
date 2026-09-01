@@ -244,10 +244,25 @@ Groups 1 and 5 each end at a checkpoint.
       explanation also matches. Scoped to the current-mode readout rather than
       loosened — they were asserting page load, and now say so.
 
-- [ ] 6. Checkpoint — legibility and copy
+- [x] 6. Checkpoint — legibility and copy
   - Full suite, `tsc --noEmit`, lint, build, E2E. This is the natural point to
     share the app with a colleague and see whether it survives someone who was
     not in these conversations.
+  - **Gates:** 1366 Vitest tests across 166 files, `tsc --noEmit`, lint with
+    zero warnings, production build, 55 Playwright tests with zero skips, and
+    `git diff --check`.
+  - **One real accessibility defect found, and it predates this milestone.**
+    Axe reported `scrollable-region-focusable` on both data tables at 320px:
+    they scroll horizontally but the container was not keyboard-reachable, so
+    a keyboard user could not scroll them at all. The tables arrived with
+    manager-experience 5.3, whose 320px audit covered the dashboard but not a
+    width narrow enough to make them overflow.
+  - **Five existing tests broke across this group and every one was right to.**
+    Two asserted a legend name that changed; three used a word as a
+    page-loaded signal that new explanatory copy also contains. Each was made
+    more specific rather than looser.
+  - Ready for a colleague to try. Groups 7 (chart filtering) and 8 (reconcile)
+    remain.
 
 - [ ] 7. Filtering the chart
 
