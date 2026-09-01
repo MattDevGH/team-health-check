@@ -88,6 +88,12 @@ export function ScheduleSection({ teamId, schedule, onUpdated }: ScheduleSection
       <h2 id="schedule-heading" className="text-lg font-semibold text-gray-800 mb-3">
         Schedule
       </h2>
+      <p className="mb-3 text-sm text-gray-600">
+        The schedule opens and closes health checks for you, and decides when
+        prompts go out. Without one, nothing happens automatically — you open
+        and close each check yourself from the dashboard, which is a reasonable
+        way to run this if your team&rsquo;s rhythm varies.
+      </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>

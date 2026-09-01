@@ -204,28 +204,45 @@ Groups 1 and 5 each end at a checkpoint.
       thing by `aria-expanded`, and repeating it would announce the state
       twice.
 
-- [ ] 5. Explanatory copy
+- [x] 5. Explanatory copy
 
-  - [ ] 5.1 Explain Privacy Mode, including the anonymity threshold
+  - [x] 5.1 Explain Privacy Mode, including the anonymity threshold
     - _Requirements: 5.1, 5.7_
 
-  - [ ] 5.2 Explain the Schedule, and what happens without one
+  - [x] 5.2 Explain the Schedule, and what happens without one
     - _Requirements: 5.2, 5.7_
 
-  - [ ] 5.3 Explain the Slack Delivery Window
+  - [x] 5.3 Explain the Slack Delivery Window
     - _Requirements: 5.3, 5.7_
 
-  - [ ] 5.4 Explain roles, and what "Slack not linked" means
+  - [x] 5.4 Explain roles, and what "Slack not linked" means
     - Include how a member resolves it: the pairing code on their profile
     - _Requirements: 5.4, 5.5, 5.7_
 
-  - [ ] 5.5 Explain the Trend Indicators panel
+  - [x] 5.5 Explain the Trend Indicators panel
     - These are members' own assessments of direction, not a calculated trend. One respondent tagging a question theme "improving" is what produces "Improving: 1"
     - _Requirements: 5.6, 5.7_
 
-  - [ ] 5.6 Assert the copy exists where its control is
+  - [x] 5.6 Assert the copy exists where its control is
     - Tests assert the text a manager reads, not a test id
     - _Requirements: 5.7_
+    - **Done.** Copy sits with each control rather than on a help page, and
+      is written for someone who was not present when this was built.
+    - Each explanation says what the setting does **and what happens without
+      it**, which is the half usually missing: the schedule section says you
+      open checks yourself without one, and the Slack window says answering
+      through the web link is never restricted — the distinction that stops a
+      delivery window being read as a blackout.
+    - "Slack not linked" now says the member can still answer everything, and
+      that only they can resolve it, with the pairing code on their own
+      profile. It read as a fault to be fixed by the manager.
+    - The trend indicators panel says the counts are what people chose, not a
+      trend calculated from the scores. That was the specific misreading
+      reported.
+    - **Three existing privacy-mode tests broke and were right to.** They used
+      `getByText(/anonymous/i)` as a page-loaded signal, which the new
+      explanation also matches. Scoped to the current-mode readout rather than
+      loosened — they were asserting page load, and now say so.
 
 - [ ] 6. Checkpoint — legibility and copy
   - Full suite, `tsc --noEmit`, lint, build, E2E. This is the natural point to

@@ -54,6 +54,13 @@ export function PrivacyModeSection({ teamId, privacyMode, onUpdated }: PrivacyMo
       <h2 id="privacy-mode-heading" className="text-lg font-semibold text-gray-800 mb-3">
         Privacy Mode
       </h2>
+      <p className="mb-3 text-sm text-gray-600">
+        Anonymous mode hides who gave which answer, and hides a question theme
+        entirely until at least 3 people have answered it — so a small team
+        cannot be identified by elimination. Attributed mode shows individual
+        answers to delivery managers. Changing this affects how future results
+        are shown; it does not re-open answers already given.
+      </p>
 
       <p className="text-sm text-gray-600 mb-2">
         Current mode: <span className="font-medium">{privacyMode}</span>

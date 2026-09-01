@@ -103,6 +103,21 @@ export function MembersSection({ teamId, members, onMembersChanged }: MembersSec
   return (
     <section aria-labelledby="members-heading">
       <h2 id="members-heading" className="text-lg font-semibold text-gray-800 mb-3">Members</h2>
+      <p className="mb-3 text-sm text-gray-600">
+        A <strong>delivery manager</strong> can open and close health checks,
+        change these settings, add and remove members, and read the audit log. A
+        <strong> team member</strong> answers checks and sees the team&rsquo;s
+        trends. Every team needs at least one delivery manager, so the last one
+        cannot be removed or demoted.
+      </p>
+      <p className="mb-3 text-sm text-gray-600">
+        <strong>Slack not linked</strong> means that person has not connected
+        their Slack account, so prompts and reminders reach them by email link
+        only — they can still answer everything. To link it, they run
+        <code className="mx-1 rounded bg-gray-100 px-1">/healthcheck</code> in
+        Slack and enter the pairing code shown on their own profile page. Only
+        they can do this; it is not something you can set on their behalf.
+      </p>
       {actionError && <p className="mb-3 text-sm text-red-600" role="alert">{actionError}</p>}
 
       <div className="space-y-2 mb-4">

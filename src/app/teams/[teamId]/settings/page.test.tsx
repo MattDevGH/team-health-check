@@ -102,6 +102,55 @@ describe('Team Settings Page', () => {
    * Manager Experience 4.1, 4.2, 4.6. Guidance about members and the schedule
    * lives here because this is the page that does both jobs.
    */
+  /**
+   * Dashboard Refinement 5.1–5.5, 5.7.
+   *
+   * Written for a delivery manager who was not present when this was built.
+   * Each explanation sits with the control it describes, not on a help page.
+   * The tests assert the text a manager reads, not a test id.
+   */
+  describe('explaining what each setting does', () => {
+    it('says what privacy mode changes, including the anonymity threshold', async () => {
+      renderPage();
+
+      const section = await screen.findByRole('region', { name: /privacy mode/i });
+      expect(section).toHaveTextContent(/at least 3 people have answered/i);
+      expect(section).toHaveTextContent(/hides who gave which answer/i);
+    });
+
+    it('says what happens without a schedule, not only what one does', async () => {
+      renderPage();
+
+      const section = await screen.findByRole('region', { name: /schedule/i });
+      expect(section).toHaveTextContent(/without one, nothing happens automatically/i);
+    });
+
+    it('says what the Slack delivery window does and does not restrict', async () => {
+      renderPage();
+
+      const section = await screen.findByRole('region', { name: /slack delivery/i });
+      expect(section).toHaveTextContent(/only sent through slack inside this window/i);
+      // The distinction that stops the window being read as a blackout
+      expect(section).toHaveTextContent(/answering through the web link is never restricted/i);
+    });
+
+    it('says what each role permits', async () => {
+      renderPage();
+
+      const section = await screen.findByRole('region', { name: /members/i });
+      expect(section).toHaveTextContent(/open and close health checks/i);
+      expect(section).toHaveTextContent(/at least one delivery manager/i);
+    });
+
+    it('says what "Slack not linked" means and how a member resolves it', async () => {
+      renderPage();
+
+      const section = await screen.findByRole('region', { name: /members/i });
+      expect(section).toHaveTextContent(/they can still answer everything/i);
+      expect(section).toHaveTextContent(/pairing code shown on their own profile/i);
+    });
+  });
+
   describe('first-run guidance', () => {
     it('prompts a manager whose team is still just themselves', async () => {
       server.use(
@@ -182,7 +231,9 @@ describe('Team Settings Page', () => {
     it('displays current privacy mode', async () => {
       renderPage();
       await waitFor(() => {
-        expect(screen.getByText(/anonymous/i)).toBeInTheDocument();
+        // Scoped to the current-mode readout: the section now also explains
+        // what anonymous mode does, so a bare text search matches both
+        expect(screen.getByText(/current mode:/i)).toHaveTextContent('anonymous');
       });
     });
 
@@ -191,7 +242,9 @@ describe('Team Settings Page', () => {
       renderPage();
 
       await waitFor(() => {
-        expect(screen.getByText(/anonymous/i)).toBeInTheDocument();
+        // Scoped to the current-mode readout: the section now also explains
+        // what anonymous mode does, so a bare text search matches both
+        expect(screen.getByText(/current mode:/i)).toHaveTextContent('anonymous');
       });
 
       const toggleBtn = screen.getByRole('button', { name: /switch to attributed/i });
@@ -205,7 +258,9 @@ describe('Team Settings Page', () => {
       renderPage();
 
       await waitFor(() => {
-        expect(screen.getByText(/anonymous/i)).toBeInTheDocument();
+        // Scoped to the current-mode readout: the section now also explains
+        // what anonymous mode does, so a bare text search matches both
+        expect(screen.getByText(/current mode:/i)).toHaveTextContent('anonymous');
       });
 
       const toggleBtn = screen.getByRole('button', { name: /switch to attributed/i });
