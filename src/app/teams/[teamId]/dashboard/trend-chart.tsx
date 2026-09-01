@@ -20,6 +20,7 @@
  */
 
 import { pluralise } from '@/lib/format';
+import { sessionPositions } from './chart-geometry';
 
 interface SessionAverage {
   questionId: string;
@@ -50,7 +51,6 @@ const PADDING_RIGHT = 20;
 const PADDING_TOP = 20;
 const PADDING_BOTTOM = 40;
 
-const PLOT_WIDTH = CHART_WIDTH - PADDING_LEFT - PADDING_RIGHT;
 const PLOT_HEIGHT = CHART_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 
 const Y_MIN = 1.0;
@@ -69,10 +69,11 @@ function scoreToY(score: number): number {
   return PADDING_TOP + PLOT_HEIGHT * (1 - ratio);
 }
 
-function sessionToX(index: number, total: number): number {
-  if (total <= 1) return PADDING_LEFT + PLOT_WIDTH / 2;
-  return PADDING_LEFT + (index / (total - 1)) * PLOT_WIDTH;
-}
+/**
+ * Sessions are positioned by when they closed, not by their turn in the list.
+ * See `chart-geometry.ts` — the mapping lives there so it can be exercised
+ * without rendering, including the single-session and identical-dates cases.
+ */
 
 /** Converts a question ID like "q-delivering-value" to "Delivering Value". */
 function questionName(id: string): string {
@@ -100,7 +101,8 @@ export function TrendChart({ sessions }: TrendChartProps) {
     new Set(sessions.flatMap((s) => s.averages.map((a) => a.questionId)))
   );
 
-  const sessionCount = sessions.length;
+    // Horizontal position per session, proportional to elapsed time
+  const xBySession = sessionPositions(sessions.map(session => session.closedAt));
 
   // Build lines: one polyline per question
   const lines = questionIds.map((qId, qIndex) => {
@@ -109,7 +111,7 @@ export function TrendChart({ sessions }: TrendChartProps) {
     sessions.forEach((session, sIndex) => {
       const avg = session.averages.find((a) => a.questionId === qId);
       if (avg) {
-        const x = sessionToX(sIndex, sessionCount);
+        const x = xBySession[sIndex];
         const y = scoreToY(avg.averageScore);
         points.push(`${x},${y}`);
       }
@@ -128,7 +130,7 @@ export function TrendChart({ sessions }: TrendChartProps) {
   // X-axis labels (session dates)
   const xLabels = sessions.map((s, i) => ({
     label: formatDate(s.closedAt),
-    x: sessionToX(i, sessionCount),
+    x: xBySession[i],
   }));
 
   const caption = `Average score per question across the last ${pluralise(
@@ -139,7 +141,8 @@ export function TrendChart({ sessions }: TrendChartProps) {
   return (
     <figure aria-labelledby={CAPTION_ID} className="m-0">
       <figcaption id={CAPTION_ID} className="mb-3 text-sm text-gray-700">
-        {caption}. Scores run from 1 to 5.
+        {caption}. Scores run from 1 to 5, and sessions are spaced by the time
+        between them, so the slope of a line reflects how quickly a score moved.
       </figcaption>
 
       <svg

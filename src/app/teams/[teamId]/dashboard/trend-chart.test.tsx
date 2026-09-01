@@ -42,6 +42,16 @@ describe('TrendChart', () => {
     expect(screen.getByRole('figure', { name: /average score per question/i })).toBeInTheDocument();
   });
 
+  it('says the horizontal spacing is time, so a slope can be read', () => {
+    // Without this a reader has no way to know whether even-looking spacing
+    // means even intervals or just even turns in a list
+    render(<TrendChart sessions={SESSIONS} />);
+
+    expect(screen.getByRole('figure')).toHaveTextContent(
+      /spaced by the time between them/i,
+    );
+  });
+
   it('names every plotted question, so the lines are not told apart by colour alone', () => {
     render(<TrendChart sessions={SESSIONS} />);
 

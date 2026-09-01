@@ -100,12 +100,23 @@ Groups 1 and 5 each end at a checkpoint.
     - Update the MSW handler in the same commit — a mock that lags this contract is how the audit log page came to crash
     - _Requirements: 3.3, 4.1_
 
-  - [ ] 3.2 Position sessions by when they closed
+  - [x] 3.2 Position sessions by when they closed
     - Write failing unit tests for the x-position mapping, including one session, two sessions closed at the same instant, and an uneven spread
     - **Property 1: x positions are monotonically non-decreasing in `closedAt`, and equal dates give equal positions**
     - **Property 2: for any session count from one upward, every point falls inside the plot area**
     - Axis labels become dates; the caption says the axis is time
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
+    - **Done.** The mapping lives in `chart-geometry.ts`, apart from the
+      component, so the cases a rendered chart makes awkward to reach can be
+      exercised directly: one session, and several closed at the same instant.
+      Both would otherwise divide by a zero range.
+    - **Property 1 asserts more than monotonicity.** A third property checks
+      that the *ratio* of gaps is preserved — a point one-tenth of the way
+      through the elapsed time sits one-tenth of the way across the plot. That
+      is what makes a slope mean anything; monotonic-but-arbitrary spacing
+      would satisfy the first two properties and still misrepresent the rate.
+    - The caption says sessions are spaced by the time between them. Without
+      it a reader cannot tell even-looking spacing from even intervals.
 
   - [ ] 3.3 Distinguish series without colour
     - Write failing tests: each series carries a dash pattern and a marker shape, and the legend swatch carries the same
