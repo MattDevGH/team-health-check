@@ -302,10 +302,17 @@ Groups 1 and 5 each end at a checkpoint.
       defect this project fixed once before and recorded in the README. The
       line-through carries the state, so only the colour needed correcting.
 
-- [ ] 8. Reconcile and merge
+- [x] 8. Reconcile and merge
   - Update requirements/design/tasks to match what was built, including any decision that changed during implementation
   - Update README.md and AI_CONTEXT.md
   - Run every gate, push, and merge through a green PR
+  - **Done.** Requirement 8.5 records the strike-through added to hidden
+    legend entries; `design.md` gains a **What implementation taught**
+    section carrying the four findings worth keeping.
+  - **Task 3.1 was pulled forward** ahead of 1.3, which depends on it. The
+    plan noted the dependency but ordered the work the other way.
+  - Groups 2 and 6 were checkpoints; group 8 of the original numbering
+    (session removal) is on the roadmap and was never scheduled.
 
 ## Roadmap — recorded, not scheduled
 

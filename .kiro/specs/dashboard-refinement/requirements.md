@@ -145,6 +145,11 @@ been in the conversations that produced them.
 4. Filtering SHALL NOT persist between visits — a manager returning to the dashboard SHALL see the whole picture.
 5. IF every Series is hidden, THEN the chart SHALL say so rather than rendering an empty grid.
 
+*As built: hiding a series also strikes through its legend entry and dims it,
+so the state is visible as well as announced. The first attempt used a grey
+that failed contrast at 2.6:1; the strike-through carries the state, so only
+the colour needed correcting.*
+
 ### Requirement 9: Removing A Session, With A Reason
 
 **User Story:** As a delivery manager, I want to remove a health check that was opened in error or invalidated by events, so that our history reflects what actually happened.
