@@ -82,11 +82,20 @@ claiming it works.
   does it.
 - **Ambiguous-identity guard** — see the limitation below.
 
-Two defects were found by *using* the app rather than by testing it, and fixed
-outside the plan: a magic link was claimed twice, reporting a successful sign-in
-as expired; and the Audit Log page crashed because its route returned a bare
-array while the page expected an envelope — each side tested, each side green,
-no test crossing between them.
+Three defects were found by *using* the app rather than by testing it, and
+fixed outside the plan: a magic link was claimed twice, reporting a successful
+sign-in as expired; the Audit Log page crashed because its route returned a
+bare array while the page expected an envelope — each side tested, each side
+green, no test crossing between them; and **signing in landed nowhere**.
+
+That last one is worth reading twice. Magic-link verification and genesis both
+redirect to `/`, which was a static marketing page whose primary action was
+"Sign in with magic link" — so a successful sign-in delivered the member to an
+invitation to sign in, and the only way onward was to already know a URL. The
+end-to-end suite asserted the landing URL was `/` and called that a pass, then
+read the team id out of the database and navigated directly. It navigated by
+URLs it looked up, so it never asked the question a person asks: *can I get in
+from here?* `/` now sends a signed-in visitor to their dashboard.
 
 ### Known limitation: one team per person
 

@@ -201,12 +201,21 @@ test.describe.serial('team lifecycle journey', () => {
     await page.getByLabel('Team name').fill(TEAM_NAME);
     await page.getByRole('button', { name: /create team/i }).click();
 
-    // Genesis returns to the home page once the session is established
-    await expect(page).toHaveURL(/\/$/);
-
     const team = findTeamByName(TEAM_NAME);
     expect(team, 'team should exist in the E2E database').toBeTruthy();
     state.teamId = team!.id;
+
+    /*
+     * Signing in must arrive somewhere usable.
+     *
+     * This asserted a bare homepage URL until 2026-09-10 and
+     * called that a pass, then read the team id out of the database and
+     * goto-ed the dashboard, as every later test still does. So the suite
+     * navigated by URLs it looked up, and never once asked whether a
+     * signed-in person could reach the app by clicking. The homepage was a
+     * marketing page offering "Sign in with magic link", so they could not.
+     */
+    await expect(page).toHaveURL(new RegExp(`/teams/${team!.id}/dashboard$`));
   });
 
   test('holds a session cookie set by the server, not injected by the test', async () => {

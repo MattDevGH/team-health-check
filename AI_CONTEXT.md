@@ -656,6 +656,36 @@ All stages must pass. Branch protection requires CI green before merge.
 
 ## Outstanding Work
 
+### Sign-in destination — fixed 2026-09-10
+
+Found by Matt in a manual pass, three times in one sitting, each time losing
+his place. `src/app/auth/magic/[token]/page.tsx` and the genesis form both
+`push('/')` once the session cookie is set, and `src/app/page.tsx` was a static
+marketing page with no auth check whose primary action was "Sign in with magic
+link". A successful sign-in therefore delivered the member to an invitation to
+sign in. The magic page's own header comment claimed it "redirects to
+dashboard"; it never did.
+
+`/` now resolves the session first and sends a signed-in visitor to
+`/teams/<id>/dashboard`. Fixing it at the destination rather than at each
+redirect covers magic link, genesis, and anyone who types the bare address.
+`replace`, not `push`, so Back does not bounce forward into a trap. Only a team
+the server actually resolved earns a redirect — a guessed id 404s.
+
+**Why nothing caught it.** `e2e/journey.spec.ts` asserted `toHaveURL(//$/)`
+after sign-in and called that a pass, then read the team id from the database
+and `page.goto`-ed the dashboard, as every later test still does. The suite
+navigates by URLs it looks up, so it never asked whether a signed-in person can
+reach the app by clicking. It also only ever exercised **genesis**; the
+returning-user `status === 'authenticated'` branch — the broken one — had no
+end-to-end coverage at all. `src/tests/ui/page.test.tsx` was still the starter
+template's "renders without crashing" placeholder.
+
+**Transferable:** a redirect assertion proves where the browser stopped, not
+that the member arrived anywhere useful. Assert what is on the page they land
+on, and reach it the way they do.
+
+
 ### Integration hardening — closed
 
 Tasks 1–26 complete. Merged to `master` as `7eba5f6` on 2026-08-26, with `ci`
