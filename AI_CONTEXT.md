@@ -686,6 +686,14 @@ record it is the same move as hiding a bad week, which this project already
 rejected when it chose exclusion over deletion. What is prevented is the
 *accident*: closing a check with no responses now warns first.
 
+**Closing an unanswered check now warns first.** The confirmation dialog says
+what is about to be recorded when the responded count is known to be zero —
+known, not merely absent, because unknown is not zero and a guess dressed as a
+fact teaches the reader to ignore the warning. Both empty checks in the live
+database came from lifecycle testing, closed without anyone noticing they were
+empty; the warning guards the accident without the tool ever deciding a silent
+team is not worth recording.
+
 **Transferable:** absence has to be visible in the medium the reader is using.
 Stating it in the table satisfied a screen reader and left the person looking at
 the picture unable to tell missing data from a broken chart. And a marker that

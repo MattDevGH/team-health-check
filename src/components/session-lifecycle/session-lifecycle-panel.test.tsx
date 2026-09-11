@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 
@@ -431,5 +431,75 @@ describe('SessionLifecyclePanel', () => {
     renderPanel();
 
     expect(await screen.findByRole('region', { name: /health check/i })).toBeInTheDocument();
+  });
+});
+
+/**
+ * Closing a check that nobody has answered.
+ * Requirements: Dashboard Refinement 4.5
+ *
+ * A check nobody answered is real information — disengagement, bad timing, a
+ * team underwater — so the tool records it rather than refusing to. What it
+ * guards against is the *accident*: both of the empty checks in the live
+ * database came from lifecycle testing, closed without anyone noticing there was
+ * nothing in them. The confirmation already exists; it just has to say what is
+ * about to be recorded.
+ */
+describe('SessionLifecyclePanel closing a check nobody answered', () => {
+  const openSession = wireSession({
+    id: 'open-1',
+    status: 'open',
+    actualOpenAt: '2026-09-01T09:00:00.000Z',
+    actualCloseAt: null,
+    scheduledCloseAt: '2026-09-08T17:00:00.000Z',
+  });
+
+  async function openConfirmation() {
+    const user = userEvent.setup();
+    renderPanel();
+    await user.click(await screen.findByRole('button', { name: /^close the health check$/i }));
+    return { user, dialog: await screen.findByRole('dialog', { name: /close this health check/i }) };
+  }
+
+  it('says what closing an unanswered check will record', async () => {
+    mockParticipation('open-1', { totalCount: 8, respondedCount: 0 });
+    mockSessions({ initial: [openSession] });
+
+    const { dialog } = await openConfirmation();
+
+    expect(dialog).toHaveTextContent(/nobody has answered/i);
+  });
+
+  it('does not warn when someone has answered', async () => {
+    // A warning on every close is a warning nobody reads
+    mockParticipation('open-1', { totalCount: 8, respondedCount: 1 });
+    mockSessions({ initial: [openSession] });
+
+    const { dialog } = await openConfirmation();
+
+    expect(dialog).not.toHaveTextContent(/nobody has answered/i);
+  });
+
+  it('claims nothing when participation cannot be read', async () => {
+    // Unknown is not zero. Asserting an empty check we cannot see would be a
+    // guess dressed as a fact, and would train the reader to ignore it
+    mockParticipation('open-1', { status: 500 });
+    mockSessions({ initial: [openSession] });
+
+    const { dialog } = await openConfirmation();
+
+    expect(dialog).not.toHaveTextContent(/nobody has answered/i);
+  });
+
+  it('still closes when the warning is confirmed', async () => {
+    // The warning informs the decision; it does not take it away
+    mockParticipation('open-1', { totalCount: 8, respondedCount: 0 });
+    mockSessions({ initial: [openSession] });
+    const countPatches = mockClose('open-1');
+
+    const { user } = await openConfirmation();
+    await user.click(screen.getByRole('button', { name: /yes, close it/i }));
+
+    await waitFor(() => expect(countPatches()).toBe(1));
   });
 });
