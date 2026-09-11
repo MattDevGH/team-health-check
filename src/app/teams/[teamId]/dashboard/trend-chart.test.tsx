@@ -15,6 +15,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import { sessionPositions } from './chart-geometry';
 import { TrendChart } from './trend-chart';
 
 const SESSIONS = [
@@ -219,5 +220,86 @@ describe('TrendChart series filtering', () => {
     await user.keyboard('{Enter}');
 
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
+/**
+ * A health check that closed with nobody answering.
+ *
+ * Requirements: Dashboard Refinement 4.1, 4.4
+ *
+ * The table beneath the chart has said "Not answered" since the dashboard
+ * refinement, but the drawing said nothing at all: the lines simply stopped and
+ * resumed, and the only trace was a date on the axis with no point above it.
+ * Matt hit this on 2026-09-10 with two empty checks among four, which pushed
+ * every real value into the leftmost fraction of the plot and made a working
+ * chart look broken. A reader cannot tell a check nobody answered from a
+ * rendering fault unless the chart says which it is.
+ */
+describe('TrendChart marking checks that nobody answered', () => {
+  const EMPTY_SESSION = {
+    sessionId: 's-empty',
+    closedAt: '2026-08-05T17:00:00.000Z',
+    averages: [],
+  };
+
+  const WITH_EMPTY = [SESSIONS[0], EMPTY_SESSION, SESSIONS[1]];
+
+  function markers(container: HTMLElement) {
+    return [...container.querySelectorAll('[data-unanswered-session]')];
+  }
+
+  it('marks the date of a check that closed with no responses', () => {
+    const { container } = render(<TrendChart sessions={WITH_EMPTY} />);
+
+    expect(
+      container.querySelector('[data-unanswered-session="s-empty"]'),
+    ).toBeInTheDocument();
+  });
+
+  it('marks only the checks that nobody answered', () => {
+    const { container } = render(<TrendChart sessions={WITH_EMPTY} />);
+
+    expect(markers(container).map(m => m.getAttribute('data-unanswered-session'))).toEqual([
+      's-empty',
+    ]);
+  });
+
+  it('stands the mark at that check’s own date', () => {
+    // Cross-checked against the geometry rather than against a number copied
+    // out of the component, so a marker drawn at the wrong session fails
+    const { container } = render(<TrendChart sessions={WITH_EMPTY} />);
+
+    const expected = sessionPositions(WITH_EMPTY.map(s => s.closedAt))[1];
+    const marker = container.querySelector('[data-unanswered-session="s-empty"]')!;
+
+    expect(Number(marker.getAttribute('x1'))).toBeCloseTo(expected, 5);
+    expect(Number(marker.getAttribute('x2'))).toBeCloseTo(expected, 5);
+  });
+
+  it('tells the reader what the mark means', () => {
+    render(<TrendChart sessions={WITH_EMPTY} />);
+
+    expect(screen.getByRole('figure')).toHaveTextContent(/nobody answering/i);
+  });
+
+  it('says nothing about unanswered checks when every check was answered', () => {
+    // Explaining a mark that is not drawn is noise, and invites the reader to
+    // look for something that is not there
+    render(<TrendChart sessions={SESSIONS} />);
+
+    expect(screen.getByRole('figure')).not.toHaveTextContent(/nobody answering/i);
+  });
+
+  it('leaves the marker out of the accessibility tree, which the table serves', () => {
+    // The drawing is aria-hidden in full; the table is what a screen reader
+    // reads, and it already reports the same absence as "Not answered"
+    const { container } = render(<TrendChart sessions={WITH_EMPTY} />);
+
+    const marker = container.querySelector('[data-unanswered-session="s-empty"]')!;
+    expect(marker.closest('svg[aria-hidden="true"]')).not.toBeNull();
+
+    const table = screen.getByRole('table');
+    expect(within(table).getAllByText(/not answered/i).length).toBeGreaterThan(0);
   });
 });

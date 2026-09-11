@@ -656,6 +656,28 @@ All stages must pass. Branch protection requires CI green before merge.
 
 ## Outstanding Work
 
+### Unanswered checks marked on the chart — 2026-09-11
+
+Raised by Matt in the manual pass. The table beneath the chart had said
+"Not answered" since the dashboard refinement, but the drawing said nothing:
+the lines simply stopped and resumed, and the only trace of a check nobody
+answered was a date on the axis with no point above it. With two empty checks
+among four, every real value was pushed into the leftmost fraction of the plot
+and a working chart looked broken.
+
+A dashed grey vertical line now stands at each such date, explained in the
+figure caption — and only when one is drawn, since explaining an absent mark
+invites the reader to hunt for it. #6B7280 at 4.83:1 on white: the mark carries
+meaning, so it is held to WCAG 1.4.11’s 3:1 rather than treated as decoration,
+with headroom rather than a value near the line. The SVG stays `aria-hidden` in
+full; the table is what assistive technology reads and it already reports the
+same absence.
+
+**Transferable:** absence has to be visible in the same medium the reader is
+using. Stating it in the table satisfied the screen reader and left the person
+looking at the picture with no way to tell missing data from a broken chart.
+
+
 ### Sign-in destination — fixed 2026-09-10
 
 Found by Matt in a manual pass, three times in one sitting, each time losing

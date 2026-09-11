@@ -141,6 +141,18 @@ export function TrendChart({ sessions }: TrendChartProps) {
     };
   });
 
+  /**
+   * Checks that closed with nobody answering.
+   *
+   * They still occupy their place on the axis, because they happened and the
+   * time between checks is what the spacing means. What they lack is any
+   * plotted point, so without a mark the lines simply stop and resume and the
+   * reader cannot tell an unanswered check from a rendering fault.
+   */
+  const unanswered = sessions
+    .map((session, index) => ({ session, x: xBySession[index] }))
+    .filter(({ session }) => session.averages.length === 0);
+
   // Y-axis labels (1.0, 2.0, 3.0, 4.0, 5.0)
   const yLabels = [1, 2, 3, 4, 5];
 
@@ -162,6 +174,8 @@ export function TrendChart({ sessions }: TrendChartProps) {
       <figcaption id={CAPTION_ID} className="mb-3 text-sm text-gray-700">
         {caption}. Scores run from 1 to 5, and sessions are spaced by the time
         between them, so the slope of a line reflects how quickly a score moved.
+        {unanswered.length > 0 &&
+          ' A dashed vertical line marks a check that closed with nobody answering.'}
       </figcaption>
 
       <svg
@@ -196,6 +210,27 @@ export function TrendChart({ sessions }: TrendChartProps) {
           </g>
         );
       })}
+
+      {/*
+        A check nobody answered. Dashed so it cannot be mistaken for an axis,
+        and grey so it does not compete with a series for attention.
+        gray-500 (#6B7280) measures 4.83:1 on white — the mark carries meaning,
+        so it is held to the 3:1 of WCAG 1.4.11 rather than treated as
+        decoration, with headroom rather than a value near the line.
+      */}
+      {unanswered.map(({ session, x }) => (
+        <line
+          key={session.sessionId}
+          data-unanswered-session={session.sessionId}
+          x1={x}
+          y1={PADDING_TOP}
+          x2={x}
+          y2={PADDING_TOP + PLOT_HEIGHT}
+          stroke="#6B7280"
+          strokeWidth="1.5"
+          strokeDasharray="3 3"
+        />
+      ))}
 
       {/* X-axis labels */}
       {xLabels.map((item, i) => (

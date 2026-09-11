@@ -97,6 +97,10 @@ read the team id out of the database and navigated directly. It navigated by
 URLs it looked up, so it never asked the question a person asks: *can I get in
 from here?* `/` now sends a signed-in visitor to their dashboard.
 
+A fourth was raised in the same way on 2026-09-11: a health check that closed
+with nobody answering left no trace on the chart, so its lines stopped and
+resumed with nothing to say why. A dashed vertical line now marks the date.
+
 ### Known limitation: one team per person
 
 **A person can belong to only one team.** Colleagues sharing this tool should
