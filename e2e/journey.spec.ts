@@ -201,21 +201,28 @@ test.describe.serial('team lifecycle journey', () => {
     await page.getByLabel('Team name').fill(TEAM_NAME);
     await page.getByRole('button', { name: /create team/i }).click();
 
+    /*
+     * Signing in must arrive somewhere usable.
+     *
+     * This asserted the bare homepage until 2026-09-11 and called that a pass,
+     * then read the team id out of the database and navigated there directly,
+     * as every later test still does. So the suite went by URLs it looked up
+     * and never asked whether a signed-in person could reach the app by
+     * clicking; the homepage was a marketing page offering "Sign in with magic
+     * link", so they could not.
+     *
+     * Asserted before the database is read, and deliberately so: waiting for
+     * the destination is what lets the genesis POST finish. Reading the team
+     * first raced it, and lost under a full suite run while passing alone.
+     */
+    await expect(page).toHaveURL(/\/teams\/[^/]+\/dashboard$/);
+
     const team = findTeamByName(TEAM_NAME);
     expect(team, 'team should exist in the E2E database').toBeTruthy();
     state.teamId = team!.id;
 
-    /*
-     * Signing in must arrive somewhere usable.
-     *
-     * This asserted a bare homepage URL until 2026-09-10 and
-     * called that a pass, then read the team id out of the database and
-     * goto-ed the dashboard, as every later test still does. So the suite
-     * navigated by URLs it looked up, and never once asked whether a
-     * signed-in person could reach the app by clicking. The homepage was a
-     * marketing page offering "Sign in with magic link", so they could not.
-     */
-    await expect(page).toHaveURL(new RegExp(`/teams/${team!.id}/dashboard$`));
+    // ...and it is *their* team, not merely some dashboard
+    expect(page.url()).toContain(`/teams/${team!.id}/dashboard`);
   });
 
   test('holds a session cookie set by the server, not injected by the test', async () => {

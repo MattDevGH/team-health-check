@@ -656,6 +656,47 @@ All stages must pass. Branch protection requires CI green before merge.
 
 ## Outstanding Work
 
+### Anonymity suppression: a state no test could reach — 2026-09-11
+
+`text-amber-600` on the "Insufficient data" label measured **3.19:1** against
+white. Not borderline — failing AA outright, for as long as it had existed.
+
+**It survived because nothing put a page into the state.** The label renders
+only for a team in *anonymous* mode with a theme under the three-response
+threshold; every seeded team in the E2E suite is attributed, and jsdom’s axe
+cannot evaluate colour at all. Same shape as the skip link and the sign-out
+failure message: not a rule the audit lacked, but a state nothing reached.
+
+`e2e/accessibility.spec.ts` now seeds an anonymous team with a suppressed theme
+and audits it. Proven both ways in a real browser: with amber-600 it reports
+3.19:1 and fails; with amber-800 (7.09:1) it passes. It asserts the notice is
+visible **before** auditing, so a seeding or threshold change fails loudly
+rather than quietly auditing the wrong page — which is what the first run did,
+because the chart legend carries a button with the same theme name and comes
+first in the DOM.
+
+### The E2E suite caught two things the unit suite could not — 2026-09-11
+
+Both were consequences of the sign-in destination change, and both were found
+only by running Playwright:
+
+1. **`e2e/sign-in.ts` carried the same stale `toHaveURL(//$/)`** that
+   `journey.spec.ts` did. Every spec signs in through that helper, so the whole
+   suite would have failed on merge. It now waits for the member’s dashboard,
+   which keeps the helper honest: it fails if sign-in ever stops delivering
+   people into the app.
+2. **Reading the database immediately after the genesis click raced the POST.**
+   The old `toHaveURL` was doing double duty as a synchronisation point, and
+   moving it after the read removed that. It passed alone and failed under a
+   full run. The URL assertion is back in front of the read, deliberately.
+
+**The landing page now probes `/api/me` and is told 401 when nobody is signed
+in.** That is the server answering correctly, and the two tests that land on
+`/` anonymously scope that one expectation rather than widening the global
+allowlist. The alternative — a server render and a database read on every visit
+to a public page — costs more than one expected rejection, and `/` stays static.
+
+
 ### Unanswered checks: marked, or left out — 2026-09-11
 
 Two passes on the same day. The first marked every check nobody answered with
