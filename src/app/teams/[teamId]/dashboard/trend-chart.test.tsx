@@ -65,7 +65,7 @@ describe('TrendChart', () => {
   it('exposes every plotted value in a table', () => {
     render(<TrendChart sessions={SESSIONS} />);
 
-    const table = screen.getByRole('table', { name: /average score per question/i });
+    const table = screen.getByRole('table', { name: /every closed health check/i });
 
     // A row per session, plus the header row
     expect(within(table).getAllByRole('row')).toHaveLength(SESSIONS.length + 1);
@@ -79,7 +79,7 @@ describe('TrendChart', () => {
   it('gives each value its score and how many people it represents', () => {
     render(<TrendChart sessions={SESSIONS} />);
 
-    const table = screen.getByRole('table', { name: /average score per question/i });
+    const table = screen.getByRole('table', { name: /every closed health check/i });
 
     expect(within(table).getByText(/3\.5 from 5 responses/i)).toBeInTheDocument();
     // The count agrees in number: a value from one person is not "1 responses"
@@ -89,7 +89,7 @@ describe('TrendChart', () => {
   it('identifies each session by the date it closed', () => {
     render(<TrendChart sessions={SESSIONS} />);
 
-    const table = screen.getByRole('table', { name: /average score per question/i });
+    const table = screen.getByRole('table', { name: /every closed health check/i });
     expect(within(table).getByRole('rowheader', { name: /1 august 2026/i })).toBeInTheDocument();
     expect(within(table).getByRole('rowheader', { name: /8 august 2026/i })).toBeInTheDocument();
   });
@@ -196,7 +196,7 @@ describe('TrendChart series filtering', () => {
     await user.click(screen.getByRole('button', { name: /delivering value/i }));
 
     // Filtering changes the picture, never the data on the page
-    const table = screen.getByRole('table', { name: /average score per question theme/i });
+    const table = screen.getByRole('table', { name: /every closed health check/i });
     expect(within(table).getByRole('columnheader', { name: /delivering value/i })).toBeInTheDocument();
     expect(within(table).getByText(/3.5 from 5 responses/i)).toBeInTheDocument();
   });
@@ -301,5 +301,104 @@ describe('TrendChart marking checks that nobody answered', () => {
 
     const table = screen.getByRole('table');
     expect(within(table).getAllByText(/not answered/i).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Unanswered checks at either end of the history.
+ * Requirements: Dashboard Refinement 1.4, 4.4
+ *
+ * Marking every unanswered check turned out to be the wrong rule. A mark earns
+ * its place when it explains a gap between data; at the end of the history
+ * there is no gap, only an edge, and the check stretches the axis into space no
+ * data will ever occupy. Two real checks followed by two empty ones put every
+ * plotted value inside a twentieth of the plot.
+ *
+ * They are not hidden: the table below lists every closed check, and the
+ * latest-session panel is built from the most recent one whether or not anybody
+ * answered it.
+ */
+describe('TrendChart with unanswered checks at the ends', () => {
+  const trailing = {
+    sessionId: 's-trailing',
+    closedAt: '2026-09-20T17:00:00.000Z',
+    averages: [],
+  };
+  const leading = {
+    sessionId: 's-leading',
+    closedAt: '2026-07-04T17:00:00.000Z',
+    averages: [],
+  };
+
+  function axisLabels(container: HTMLElement) {
+    const svg = container.querySelector('svg[aria-hidden="true"]')!;
+    return [...svg.querySelectorAll('text')].map(t => t.textContent);
+  }
+
+  it('does not give a trailing unanswered check a place on the axis', () => {
+    const { container } = render(<TrendChart sessions={[...SESSIONS, trailing]} />);
+
+    expect(axisLabels(container)).not.toContain('Sep 20');
+  });
+
+  it('does not mark a trailing unanswered check either', () => {
+    // Drawing the mark but not the date would explain nothing
+    const { container } = render(<TrendChart sessions={[...SESSIONS, trailing]} />);
+
+    expect(container.querySelector('[data-unanswered-session]')).toBeNull();
+  });
+
+  it('does not give a leading unanswered check a place on the axis', () => {
+    const { container } = render(<TrendChart sessions={[leading, ...SESSIONS]} />);
+
+    expect(axisLabels(container)).not.toContain('Jul 4');
+  });
+
+  it('still marks an unanswered check between two answered ones', () => {
+    const between = {
+      sessionId: 's-between',
+      closedAt: '2026-08-05T17:00:00.000Z',
+      averages: [],
+    };
+    const { container } = render(
+      <TrendChart sessions={[leading, SESSIONS[0], between, SESSIONS[1], trailing]} />,
+    );
+
+    expect(
+      [...container.querySelectorAll('[data-unanswered-session]')].map(m =>
+        m.getAttribute('data-unanswered-session'),
+      ),
+    ).toEqual(['s-between']);
+  });
+
+  it('counts what it plots, not every check that closed', () => {
+    // Saying "the last 3 closed sessions" over a two-point chart is a lie the
+    // reader can see
+    render(<TrendChart sessions={[...SESSIONS, trailing]} />);
+
+    expect(screen.getByRole('figure')).toHaveTextContent(/last 2 closed sessions/i);
+  });
+
+  it('keeps every closed check in the table, including the ones it does not plot', () => {
+    // The chart is a trend view; the table is the record. They differ in
+    // emphasis, never in what they contain
+    render(<TrendChart sessions={[...SESSIONS, trailing]} />);
+
+    const table = screen.getByRole('table');
+    expect(within(table).getByRole('rowheader', { name: /20 september 2026/i })).toBeInTheDocument();
+  });
+
+  it('says so rather than drawing an empty grid when nothing was answered', () => {
+    render(<TrendChart sessions={[leading, trailing]} />);
+
+    expect(screen.getByText(/no health check has been answered yet/i)).toBeInTheDocument();
+  });
+
+  it('still lists the unanswered checks in the table when none were answered', () => {
+    render(<TrendChart sessions={[leading, trailing]} />);
+
+    const table = screen.getByRole('table');
+    expect(within(table).getByRole('rowheader', { name: /4 july 2026/i })).toBeInTheDocument();
+    expect(within(table).getByRole('rowheader', { name: /20 september 2026/i })).toBeInTheDocument();
   });
 });

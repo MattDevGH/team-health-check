@@ -656,28 +656,40 @@ All stages must pass. Branch protection requires CI green before merge.
 
 ## Outstanding Work
 
-### Unanswered checks marked on the chart — 2026-09-11
+### Unanswered checks: marked, or left out — 2026-09-11
 
-Raised by Matt in the manual pass. The table beneath the chart had said
-"Not answered" since the dashboard refinement, but the drawing said nothing:
-the lines simply stopped and resumed, and the only trace of a check nobody
-answered was a date on the axis with no point above it. With two empty checks
-among four, every real value was pushed into the leftmost fraction of the plot
-and a working chart looked broken.
+Two passes on the same day. The first marked every check nobody answered with
+a dashed vertical line. Matt then asked the better question: should they be
+drawn at all, and should they be allowed to happen?
 
-A dashed grey vertical line now stands at each such date, explained in the
-figure caption — and only when one is drawn, since explaining an absent mark
-invites the reader to hunt for it. #6B7280 at 4.83:1 on white: the mark carries
-meaning, so it is held to WCAG 1.4.11’s 3:1 rather than treated as decoration,
-with headroom rather than a value near the line. The SVG stays `aria-hidden` in
-full; the table is what assistive technology reads and it already reports the
-same absence.
+**The rule that came out of it: a mark earns its place when it explains a gap
+between data.** An unanswered check between two answered ones does that. One at
+either end does not — there is no gap, only an edge, and it stretches the axis
+into space no data will ever occupy. That is how two real checks ended up
+inside a twentieth of the plot.
 
-**Transferable:** absence has to be visible in the same medium the reader is
-using. Stating it in the table satisfied the screen reader and left the person
-looking at the picture with no way to tell missing data from a broken chart.
+`answeredSpan` in `chart-geometry.ts` holds the decision as a rule over
+answered-ness rather than over sessions, so it reads and tests as the rule it
+is. The chart draws first-answered to last-answered inclusive; the caption
+counts what it plots, because naming every closed check over a chart that draws
+a subset is a lie the reader can see.
 
+**Nothing is hidden by this.** The table lists every closed check and now names
+itself as that record — it no longer borrows the figure’s caption, because the
+two describe different things. The latest-session panel reports the most recent
+check whether or not anybody answered it. With nothing answered at all the
+figure says so instead of drawing an empty grid.
 
+**Empty checks are not banned, deliberately.** A check nobody answered is real
+information — disengagement, bad timing, a team underwater — and refusing to
+record it is the same move as hiding a bad week, which this project already
+rejected when it chose exclusion over deletion. What is prevented is the
+*accident*: closing a check with no responses now warns first.
+
+**Transferable:** absence has to be visible in the medium the reader is using.
+Stating it in the table satisfied a screen reader and left the person looking at
+the picture unable to tell missing data from a broken chart. And a marker that
+explains nothing is worse than no marker: it costs axis space to say so.
 ### Sign-in destination — fixed 2026-09-10
 
 Found by Matt in a manual pass, three times in one sitting, each time losing

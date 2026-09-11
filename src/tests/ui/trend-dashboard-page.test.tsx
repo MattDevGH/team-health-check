@@ -205,8 +205,9 @@ describe('Trend Dashboard Page', () => {
       render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
 
       // Anchor on content the page always renders, so the absence is asserted
-      // against a loaded dashboard
-      await screen.findByRole('figure', { name: /average score per question/i });
+      // against a loaded dashboard. Both checks here closed unanswered, so the
+      // figure names that state rather than a score it cannot plot.
+      await screen.findByRole('figure', { name: /no health check has been answered yet/i });
       expect(screen.queryByRole('region', { name: /next steps/i })).not.toBeInTheDocument();
     });
   });

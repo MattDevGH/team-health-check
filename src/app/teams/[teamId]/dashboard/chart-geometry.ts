@@ -41,3 +41,24 @@ export function sessionPositions(closedAt: string[]): number[] {
 
   return times.map(time => PLOT_LEFT + ((time - earliest) / span) * (PLOT_RIGHT - PLOT_LEFT));
 }
+
+/**
+ * The span of checks the chart draws: the first answered check to the last,
+ * inclusive. `null` when no check was answered and there is nothing to draw.
+ *
+ * An unanswered check between two answered ones is kept, because it explains
+ * why they sit far apart. One at either end is dropped, because it stretches
+ * the axis into space no data will ever occupy — which is how two real checks
+ * ended up inside a twentieth of the plot. Dropping it from the drawing loses
+ * nothing: the table lists every closed check, and the latest-session panel
+ * reports the most recent one whether or not anybody answered it.
+ *
+ * Takes answered-ness rather than the sessions themselves so the decision can
+ * be read and tested as the rule it is.
+ */
+export function answeredSpan(answered: boolean[]): { start: number; end: number } | null {
+  const start = answered.indexOf(true);
+  if (start === -1) return null;
+
+  return { start, end: answered.lastIndexOf(true) };
+}

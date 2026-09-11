@@ -25,7 +25,7 @@
 import { useState } from 'react';
 
 import { pluralise } from '@/lib/format';
-import { sessionPositions } from './chart-geometry';
+import { answeredSpan, sessionPositions } from './chart-geometry';
 import { markerPath, seriesStyle } from './series-style';
 
 interface SessionAverage {
@@ -117,14 +117,26 @@ export function TrendChart({ sessions }: TrendChartProps) {
     new Set(sessions.flatMap((s) => s.averages.map((a) => a.questionId)))
   );
 
+  /**
+   * The checks the drawing covers: the first answered one to the last.
+   *
+   * An unanswered check between two answered ones is kept, because it explains
+   * why they sit far apart. One at either end is dropped, because it stretches
+   * the axis into space no data will ever occupy. Nothing is hidden by this —
+   * the table below lists every closed check, and the latest-session panel
+   * reports the most recent one whether or not anybody answered it.
+   */
+  const span = answeredSpan(sessions.map(session => session.averages.length > 0));
+  const plotted = span === null ? [] : sessions.slice(span.start, span.end + 1);
+
   // Horizontal position per session, proportional to elapsed time
-  const xBySession = sessionPositions(sessions.map(session => session.closedAt));
+  const xBySession = sessionPositions(plotted.map(session => session.closedAt));
 
   // Build lines: one polyline per question
   const lines = questionIds.map((qId, qIndex) => {
     const points: string[] = [];
 
-    sessions.forEach((session, sIndex) => {
+    plotted.forEach((session, sIndex) => {
       const avg = session.averages.find((a) => a.questionId === qId);
       if (avg) {
         const x = xBySession[sIndex];
@@ -149,7 +161,7 @@ export function TrendChart({ sessions }: TrendChartProps) {
    * plotted point, so without a mark the lines simply stop and resume and the
    * reader cannot tell an unanswered check from a rendering fault.
    */
-  const unanswered = sessions
+  const unanswered = plotted
     .map((session, index) => ({ session, x: xBySession[index] }))
     .filter(({ session }) => session.averages.length === 0);
 
@@ -157,27 +169,45 @@ export function TrendChart({ sessions }: TrendChartProps) {
   const yLabels = [1, 2, 3, 4, 5];
 
   // X-axis labels (session dates)
-  const xLabels = sessions.map((s, i) => ({
+  const xLabels = plotted.map((s, i) => ({
     label: formatDate(s.closedAt),
     x: xBySession[i],
   }));
 
-  const caption = `Average score per question theme across the last ${pluralise(
-    sessions.length,
-    'closed session',
-  )}`;
+  const nothingAnswered = plotted.length === 0;
+
+  // Counts what the chart plots. Naming every closed check over a chart that
+  // draws a subset is a lie the reader can see.
+  const caption = nothingAnswered
+    ? 'No health check has been answered yet'
+    : `Average score per question theme across the last ${pluralise(
+        plotted.length,
+        'closed session',
+      )}`;
 
   const visibleLines = lines.filter(line => !hidden.has(line.questionId));
 
   return (
     <figure aria-labelledby={CAPTION_ID} className="m-0">
       <figcaption id={CAPTION_ID} className="mb-3 text-sm text-gray-700">
-        {caption}. Scores run from 1 to 5, and sessions are spaced by the time
-        between them, so the slope of a line reflects how quickly a score moved.
-        {unanswered.length > 0 &&
-          ' A dashed vertical line marks a check that closed with nobody answering.'}
+        {nothingAnswered ? (
+          'No health check has been answered yet. The table below lists every check that has closed.'
+        ) : (
+          <>
+            {caption}. Scores run from 1 to 5, and sessions are spaced by the time
+            between them, so the slope of a line reflects how quickly a score moved.
+            {unanswered.length > 0 &&
+              ' A dashed vertical line marks a check that closed with nobody answering.'}
+          </>
+        )}
       </figcaption>
 
+      {/*
+        With nothing answered there is no trend to draw. An empty grid reads as
+        a fault; the caption says what happened and the table keeps the record.
+      */}
+      {!nothingAnswered && (
+      <>
       <svg
         aria-hidden="true"
         viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
@@ -349,6 +379,8 @@ export function TrendChart({ sessions }: TrendChartProps) {
           chart; the table below still shows every score.
         </p>
       )}
+      </>
+      )}
 
       {/*
         Every plotted value, for anyone who cannot read the drawing. Kept in the
@@ -368,8 +400,15 @@ export function TrendChart({ sessions }: TrendChartProps) {
         tabIndex={0}
         className="mt-4 overflow-x-auto"
       >
-        <table className="w-full text-left text-sm" aria-labelledby={CAPTION_ID}>
-          <caption className="sr-only">{caption}</caption>
+        {/*
+          Named by its own caption rather than the figure’s. The two no longer
+          describe the same thing: the chart plots the answered span, the table
+          is the complete record of what closed.
+        */}
+        <table className="w-full text-left text-sm">
+          <caption className="sr-only">
+            Every closed health check, including any that nobody answered
+          </caption>
           {/*
             The header row was indistinguishable from the body, so the table
             read as an undifferentiated block. A tinted background and a rule
