@@ -656,6 +656,119 @@ All stages must pass. Branch protection requires CI green before merge.
 
 ## Outstanding Work
 
+### Anonymity suppression: a state no test could reach — 2026-09-11
+
+`text-amber-600` on the "Insufficient data" label measured **3.19:1** against
+white. Not borderline — failing AA outright, for as long as it had existed.
+
+**It survived because nothing put a page into the state.** The label renders
+only for a team in *anonymous* mode with a theme under the three-response
+threshold; every seeded team in the E2E suite is attributed, and jsdom’s axe
+cannot evaluate colour at all. Same shape as the skip link and the sign-out
+failure message: not a rule the audit lacked, but a state nothing reached.
+
+`e2e/accessibility.spec.ts` now seeds an anonymous team with a suppressed theme
+and audits it. Proven both ways in a real browser: with amber-600 it reports
+3.19:1 and fails; with amber-800 (7.09:1) it passes. It asserts the notice is
+visible **before** auditing, so a seeding or threshold change fails loudly
+rather than quietly auditing the wrong page — which is what the first run did,
+because the chart legend carries a button with the same theme name and comes
+first in the DOM.
+
+### The E2E suite caught two things the unit suite could not — 2026-09-11
+
+Both were consequences of the sign-in destination change, and both were found
+only by running Playwright:
+
+1. **`e2e/sign-in.ts` carried the same stale `toHaveURL(//$/)`** that
+   `journey.spec.ts` did. Every spec signs in through that helper, so the whole
+   suite would have failed on merge. It now waits for the member’s dashboard,
+   which keeps the helper honest: it fails if sign-in ever stops delivering
+   people into the app.
+2. **Reading the database immediately after the genesis click raced the POST.**
+   The old `toHaveURL` was doing double duty as a synchronisation point, and
+   moving it after the read removed that. It passed alone and failed under a
+   full run. The URL assertion is back in front of the read, deliberately.
+
+**The landing page now probes `/api/me` and is told 401 when nobody is signed
+in.** That is the server answering correctly, and the two tests that land on
+`/` anonymously scope that one expectation rather than widening the global
+allowlist. The alternative — a server render and a database read on every visit
+to a public page — costs more than one expected rejection, and `/` stays static.
+
+
+### Unanswered checks: marked, or left out — 2026-09-11
+
+Two passes on the same day. The first marked every check nobody answered with
+a dashed vertical line. Matt then asked the better question: should they be
+drawn at all, and should they be allowed to happen?
+
+**The rule that came out of it: a mark earns its place when it explains a gap
+between data.** An unanswered check between two answered ones does that. One at
+either end does not — there is no gap, only an edge, and it stretches the axis
+into space no data will ever occupy. That is how two real checks ended up
+inside a twentieth of the plot.
+
+`answeredSpan` in `chart-geometry.ts` holds the decision as a rule over
+answered-ness rather than over sessions, so it reads and tests as the rule it
+is. The chart draws first-answered to last-answered inclusive; the caption
+counts what it plots, because naming every closed check over a chart that draws
+a subset is a lie the reader can see.
+
+**Nothing is hidden by this.** The table lists every closed check and now names
+itself as that record — it no longer borrows the figure’s caption, because the
+two describe different things. The latest-session panel reports the most recent
+check whether or not anybody answered it. With nothing answered at all the
+figure says so instead of drawing an empty grid.
+
+**Empty checks are not banned, deliberately.** A check nobody answered is real
+information — disengagement, bad timing, a team underwater — and refusing to
+record it is the same move as hiding a bad week, which this project already
+rejected when it chose exclusion over deletion. What is prevented is the
+*accident*: closing a check with no responses now warns first.
+
+**Closing an unanswered check now warns first.** The confirmation dialog says
+what is about to be recorded when the responded count is known to be zero —
+known, not merely absent, because unknown is not zero and a guess dressed as a
+fact teaches the reader to ignore the warning. Both empty checks in the live
+database came from lifecycle testing, closed without anyone noticing they were
+empty; the warning guards the accident without the tool ever deciding a silent
+team is not worth recording.
+
+**Transferable:** absence has to be visible in the medium the reader is using.
+Stating it in the table satisfied a screen reader and left the person looking at
+the picture unable to tell missing data from a broken chart. And a marker that
+explains nothing is worse than no marker: it costs axis space to say so.
+### Sign-in destination — fixed 2026-09-10
+
+Found by Matt in a manual pass, three times in one sitting, each time losing
+his place. `src/app/auth/magic/[token]/page.tsx` and the genesis form both
+`push('/')` once the session cookie is set, and `src/app/page.tsx` was a static
+marketing page with no auth check whose primary action was "Sign in with magic
+link". A successful sign-in therefore delivered the member to an invitation to
+sign in. The magic page's own header comment claimed it "redirects to
+dashboard"; it never did.
+
+`/` now resolves the session first and sends a signed-in visitor to
+`/teams/<id>/dashboard`. Fixing it at the destination rather than at each
+redirect covers magic link, genesis, and anyone who types the bare address.
+`replace`, not `push`, so Back does not bounce forward into a trap. Only a team
+the server actually resolved earns a redirect — a guessed id 404s.
+
+**Why nothing caught it.** `e2e/journey.spec.ts` asserted `toHaveURL(//$/)`
+after sign-in and called that a pass, then read the team id from the database
+and `page.goto`-ed the dashboard, as every later test still does. The suite
+navigates by URLs it looks up, so it never asked whether a signed-in person can
+reach the app by clicking. It also only ever exercised **genesis**; the
+returning-user `status === 'authenticated'` branch — the broken one — had no
+end-to-end coverage at all. `src/tests/ui/page.test.tsx` was still the starter
+template's "renders without crashing" placeholder.
+
+**Transferable:** a redirect assertion proves where the browser stopped, not
+that the member arrived anywhere useful. Assert what is on the page they land
+on, and reach it the way they do.
+
+
 ### Integration hardening — closed
 
 Tasks 1–26 complete. Merged to `master` as `7eba5f6` on 2026-08-26, with `ci`

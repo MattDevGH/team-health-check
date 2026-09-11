@@ -413,6 +413,26 @@ export function SessionLifecyclePanel({
                     prepared.
                   </p>
 
+                  {/*
+                    Only when the count is known to be zero. Unknown is not zero:
+                    asserting an empty check we cannot see would be a guess dressed
+                    as a fact, and would teach the reader to ignore the warning.
+
+                    An unanswered check is recorded, not refused — a team that says
+                    nothing is telling you something. What this guards against is
+                    the accident of closing one without noticing it was empty.
+
+                    amber-900 on amber-50 measures 8.75:1, and the border 4.84:1
+                    against the same ground, so both clear their thresholds with
+                    room rather than sitting on the line.
+                  */}
+                  {currentParticipation?.respondedCount === 0 && (
+                    <p className="mt-3 max-w-sm rounded border border-amber-700 bg-amber-50 p-3 text-sm text-amber-900">
+                      Nobody has answered this health check. Closing it now records a check
+                      with no responses, which will show in the record as unanswered.
+                    </p>
+                  )}
+
                   <div className="mt-4 flex gap-3">
                     <button
                       type="button"

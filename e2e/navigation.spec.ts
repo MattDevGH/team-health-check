@@ -12,7 +12,7 @@
  * overflow, or a session revoked in the database behind a click.
  */
 
-import { test, expect } from './fixtures';
+import { allowConsoleErrors, test, expect } from './fixtures';
 import { countUserSessions, seedAuditEntry, seedMember, seedSession, seedTeam } from './db';
 import { signIn } from './sign-in';
 
@@ -79,6 +79,21 @@ test.describe('the shell is mounted on authenticated routes', () => {
 
 test.describe('the shell is absent from unauthenticated routes', () => {
   test('the home page has no navigation', async ({ page }) => {
+    /*
+     * A 401 here is the server answering correctly, not a failure.
+     *
+     * The landing page asks /api/me whether the visitor is already signed in,
+     * so it can send a member to their dashboard rather than offering them a
+     * sign-in button they do not need. For an anonymous visitor the honest
+     * answer is 401, and the browser logs every 4xx. Keeping the page static
+     * and cacheable is worth one expected rejection; the alternative is a
+     * server render and a database read on every visit to a public page.
+     *
+     * Scoped to this test rather than added to the global allowlist, so a real
+     * 401 anywhere else still fails the run.
+     */
+    allowConsoleErrors(page, /401/);
+
     await page.goto('/');
     await expect(page.getByRole('navigation', { name: 'Main' })).toHaveCount(0);
   });
@@ -209,6 +224,10 @@ test.describe('using the shell', () => {
   });
 
   test('signs the member out and revokes the session in the database', async ({ page }) => {
+    // Signing out lands on the public homepage, which probes /api/me and is
+    // told 401 — see the note on the home-page test above.
+    allowConsoleErrors(page, /401/);
+
     const email = emailFor('sign-out');
     await signIn(page, email);
     await page.goto('/me');

@@ -56,8 +56,10 @@
         "vite-tsconfig-paths": "^6.1.1",
         "vitest": "^4.1.5"
     },
-    "_overrides_note": "deepmerge-ts is forced to 8.x because @prisma/config pins 7.1.5, which has a stack-exhaustion advisory (GHSA, deepmerge-ts <8.0.0). npm's only suggested fix was downgrading Prisma to 6.12.0, a major downgrade. The override is exercised by the E2E suite, which runs `prisma migrate deploy` through @prisma/config. Remove it once @prisma/config depends on 8.x itself.",
+    "_overrides_note": "Transitive pins for advisories with no non-breaking upstream fix; npm offered only a major Prisma downgrade for each. deepmerge-ts: @prisma/config pins 7.1.5, stack exhaustion on recursive graphs (GHSA-ggr8-5vv4-36mx). mysql2: reached through @prisma/client -> prisma and never loaded here, since this app uses SQLite and Turso (GHSA-3f6p-5ww8-9rcr, GHSA-rgwj-5xj2-c3m3). baseline-browser-mapping: browserslist data pulled in by next (GHSA-w5vr-8v7q-w6rv). All three are exercised by the gates -- the E2E suite runs prisma migrate through @prisma/config, and the build resolves browserslist data. Drop each one once its parent depends on a patched version itself.",
     "overrides": {
+        "mysql2": "^3.24.4",
+        "baseline-browser-mapping": "^2.11.22",
         "deepmerge-ts": "^8.0.0"
     }
 }

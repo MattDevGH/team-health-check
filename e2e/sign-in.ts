@@ -28,8 +28,19 @@ export async function signIn(page: Page, email: string): Promise<void> {
   const { token } = await captured.json();
   await page.goto(`/auth/magic/${token}`);
 
-  // The verify page redirects home once the cookie is established
-  await expect(page).toHaveURL(/\/$/);
+  /*
+   * Signing in must arrive somewhere a person can use.
+   *
+   * This asserted the bare homepage until 2026-09-11, which was true and
+   * useless: / was a marketing page offering "Sign in with magic link", so the
+   * assertion passed while a signed-in member stood on an invitation to sign
+   * in. Every spec then navigated by a URL it had looked up in the database,
+   * so nothing noticed.
+   *
+   * Waiting for the dashboard keeps this helper honest: it fails if sign-in
+   * ever stops delivering people into the app.
+   */
+  await expect(page).toHaveURL(/\/teams\/[^/]+\/dashboard$/);
 
   const cookies = await page.context().cookies();
   expect(

@@ -11,7 +11,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { sessionPositions, PLOT_LEFT, PLOT_RIGHT } from './chart-geometry';
+import { answeredSpan, sessionPositions, PLOT_LEFT, PLOT_RIGHT } from './chart-geometry';
 
 const day = (n: number) => new Date(Date.UTC(2026, 0, n)).toISOString();
 
@@ -66,5 +66,55 @@ describe('sessionPositions', () => {
 
     expect(xs[0]).toBe(PLOT_RIGHT);
     expect(xs[1]).toBe(PLOT_LEFT);
+  });
+});
+
+/**
+ * Which checks the chart draws.
+ * Requirements: Dashboard Refinement 1.4, 4.4
+ *
+ * A check nobody answered still happened, and when it sits between two answered
+ * checks it explains why they are far apart — that is worth drawing. At either
+ * end it explains nothing: it stretches the axis into space no data will ever
+ * occupy, which is how two real checks ended up inside 5% of the plot.
+ *
+ * So the drawing spans the first answered check to the last, and unanswered
+ * checks outside that span are left to the table and the latest-session panel,
+ * both of which report them in full.
+ */
+describe('answeredSpan', () => {
+  it('keeps every check when they were all answered', () => {
+    expect(answeredSpan([true, true, true])).toEqual({ start: 0, end: 2 });
+  });
+
+  it('drops checks nobody answered from the end', () => {
+    // The case that prompted this: two real checks, then two empty ones
+    expect(answeredSpan([true, true, false, false])).toEqual({ start: 0, end: 1 });
+  });
+
+  it('drops checks nobody answered from the start', () => {
+    // The mirror image, which stretches the axis left into the same dead space
+    expect(answeredSpan([false, false, true, true])).toEqual({ start: 2, end: 3 });
+  });
+
+  it('keeps an unanswered check that sits between two answered ones', () => {
+    // This one earns its place: it explains the gap
+    expect(answeredSpan([true, false, true])).toEqual({ start: 0, end: 2 });
+  });
+
+  it('trims both ends at once while keeping the middle', () => {
+    expect(answeredSpan([false, true, false, true, false])).toEqual({ start: 1, end: 3 });
+  });
+
+  it('has nothing to draw when no check was answered', () => {
+    expect(answeredSpan([false, false])).toBeNull();
+  });
+
+  it('has nothing to draw when there are no checks at all', () => {
+    expect(answeredSpan([])).toBeNull();
+  });
+
+  it('spans a single answered check', () => {
+    expect(answeredSpan([false, true, false])).toEqual({ start: 1, end: 1 });
   });
 });

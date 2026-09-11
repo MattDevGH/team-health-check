@@ -176,7 +176,15 @@ export function QuestionDetailView({
                         // answered, rather than too few answering to show
                         <span className="text-gray-500">No responses</span>
                       ) : isSuppressed ? (
-                        <span className="text-amber-600 italic">
+                        /*
+                          amber-800, not amber-600. amber-600 measures 3.19:1 on
+                          white and 2.95:1 on the expanded row — failing AA, not
+                          borderline. It survived because this label renders only
+                          for an anonymous team with a theme under the threshold,
+                          and no test put a page into that state; jsdom’s axe
+                          cannot judge colour either way. amber-800 gives 7.09:1.
+                        */
+                        <span className="text-amber-800 italic">
                           Insufficient data
                         </span>
                       ) : (

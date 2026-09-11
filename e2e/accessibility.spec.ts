@@ -66,6 +66,21 @@ function aggregate(questionId: string, averageScore: number): SeededAggregate {
 
 test.describe('unauthenticated pages', () => {
   test('homepage', async ({ page }) => {
+    /*
+     * A 401 here is the server answering correctly, not a failure.
+     *
+     * The landing page asks /api/me whether the visitor is already signed in,
+     * so it can send a member to their dashboard rather than offering them a
+     * sign-in button they do not need. For an anonymous visitor the honest
+     * answer is 401, and the browser logs every 4xx. Keeping the page static
+     * and cacheable is worth one expected rejection; the alternative is a
+     * server render and a database read on every visit to a public page.
+     *
+     * Scoped to this test rather than added to the global allowlist, so a real
+     * 401 anywhere else still fails the run.
+     */
+    allowConsoleErrors(page, /401/);
+
     await page.goto('/');
     await expectNoViolations(page, 'homepage');
   });
@@ -320,7 +335,7 @@ test.describe('the trend chart at narrow widths', () => {
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 
     // The table keeps every value: filtering changes the picture, not the data
-    const table = page.getByRole('table', { name: /average score per question theme/i });
+    const table = page.getByRole('table', { name: /every closed health check/i });
     await expect(table.getByRole('columnheader', { name: /delivering value/i })).toBeVisible();
 
     await expectNoViolations(page, 'trend chart with a series hidden');
@@ -482,5 +497,83 @@ test.describe('navigation shell states', () => {
     expect(overflow, 'horizontal overflow in CSS pixels at 320px').toBeLessThanOrEqual(0);
 
     await expectNoViolations(page, 'dashboard at 320px');
+  });
+});
+
+/**
+ * Anonymity suppression, which no other test reaches.
+ *
+ * Requirements: Dashboard Refinement 4.2; Original 9.1
+ *
+ * "Insufficient data" renders only when a team is in **anonymous** mode and a
+ * question theme has fewer than three responses. Every other team in this suite
+ * is attributed, so the label had never been rendered in a real browser — and
+ * jsdom's axe cannot evaluate colour at all. It sat at 3.19:1 against white,
+ * failing AA by a wide margin, for as long as it had existed.
+ *
+ * That is the same shape as the skip link and the sign-out failure message: not
+ * a rule the audit lacks, but a state nothing put the page into.
+ */
+test.describe('a theme suppressed for anonymity', () => {
+  const SUPPRESSED = 'a11y-suppressed@e2e.invalid';
+  let suppressedTeamId = '';
+
+  test.beforeAll(() => {
+    const team = seedTeam({
+      teamName: 'A11y Anonymous Team',
+      memberEmail: SUPPRESSED,
+      privacyMode: 'anonymous',
+    });
+    suppressedTeamId = team.teamId;
+
+    // Two closed sessions so the chart renders rather than asking for more
+    // data. Psychological Safety carries two responses against a threshold of
+    // three, so it is suppressed while Delivering Value is shown — the contrast
+    // between the two states is the point.
+    [new Date('2026-08-10T17:00:00.000Z'), new Date('2026-08-17T17:00:00.000Z')].forEach(
+      (closedAt, index) => {
+        seedSession({
+          teamId: team.teamId,
+          memberId: team.memberId,
+          index,
+          status: 'closed',
+          closedAt,
+          aggregates: [
+            aggregate('q-delivering-value', 4 + index * 0.5),
+            { ...aggregate('q-psychological-safety', 3 + index * 0.5), responseCount: 2 },
+          ],
+        });
+      },
+    );
+  });
+
+  test('renders the suppression notice without violations', async ({ page }) => {
+    await signIn(page, SUPPRESSED);
+    await page.goto(`/teams/${suppressedTeamId}/dashboard`);
+
+    /*
+     * Scoped to the drill-down rather than taken as the first match.
+     *
+     * The chart legend carries a toggle with the same question theme name and
+     * comes first in the DOM, so the first match hides the series instead of
+     * expanding the theme — and the audit then runs against a page that never
+     * entered the state. That is exactly what the first run of this test did.
+     */
+    await page
+      .getByRole('region', { name: /question themes/i })
+      .getByRole('button', { name: /psychological safety/i })
+      .click();
+
+    /*
+     * The state must actually be on screen before it is audited.
+     *
+     * Auditing a page that never entered the state reports a pass for work it
+     * did not do — which is exactly how this label went unchecked. If the
+     * seeding or the threshold ever changes so the notice stops rendering, this
+     * fails here rather than quietly passing an audit of the wrong page.
+     */
+    await expect(page.getByText(/insufficient data/i).first()).toBeVisible();
+
+    await expectNoViolations(page, 'dashboard with a theme suppressed for anonymity');
   });
 });
