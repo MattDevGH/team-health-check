@@ -70,6 +70,11 @@ export default defineConfig({
       ...process.env,
       DATABASE_URL,
       TEST_MODE: 'true',
+      // Marks this as a local end-to-end run rather than a deployment.
+      //  sets NODE_ENV=production here too, so the startup guard
+      // in src/lib/startup-guards.ts cannot tell the two apart without it.
+      // Set here and nowhere else; never set it in a deployed environment.
+      E2E_LOCAL_RUN: 'true',
       NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
       CRON_SECRET: E2E_CRON_SECRET,
     },

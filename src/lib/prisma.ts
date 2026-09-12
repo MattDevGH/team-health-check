@@ -19,6 +19,14 @@ import { resolveSqliteFileUrl } from "@/lib/database-url";
  * where these packages may not be needed.
  */
 export function createPrismaClient(): PrismaClient {
+  // The production database check is NOT here.
+  //
+  // It lived in this factory first, and `npm run build` rejected it: Next
+  // imports every route with NODE_ENV=production to collect page data, so a
+  // module-load guard fails the build rather than the deployment. It now runs
+  // from the `register` hook in src/instrumentation.ts, which Next calls once
+  // per server instance and which must complete before requests are served.
+  // See src/lib/startup-guards.ts.
   if (process.env.TURSO_DATABASE_URL) {
     // Production: Turso via libSQL adapter.
     //

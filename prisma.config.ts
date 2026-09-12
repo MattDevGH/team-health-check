@@ -1,6 +1,6 @@
 import { defineConfig } from "prisma/config";
 
-import { resolveSqliteFileUrl } from "./src/lib/database-url";
+import { resolveCliDatasourceUrl } from "./src/lib/database-url";
 
 /**
  * Prisma CLI configuration.
@@ -17,6 +17,6 @@ export default defineConfig({
     seed: "npx tsx prisma/seed.ts",
   },
   datasource: {
-    url: resolveSqliteFileUrl(),
+    url: resolveCliDatasourceUrl(),
   },
 });

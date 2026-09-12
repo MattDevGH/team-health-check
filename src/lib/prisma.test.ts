@@ -85,7 +85,11 @@ describe('src/lib/prisma.ts - environment-aware initialization', () => {
 
   it('exported prisma does not cache to globalThis in production', async () => {
     (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
-    delete process.env.TURSO_DATABASE_URL;
+    // Configured with a real libSQL target so this exercises the production
+    // branch of the factory rather than the local-SQLite fallback. The startup
+    // guard that requires this in production lives in src/instrumentation.ts,
+    // not here — see src/lib/startup-guards.ts.
+    process.env.TURSO_DATABASE_URL = 'file:./prisma/cache-probe.db';
 
     const g = globalThis as unknown as { prisma: unknown };
     delete g.prisma;
