@@ -601,12 +601,30 @@ coverage nobody claimed. Note what the check can and cannot do — commit
 MySQL driver, and the gate accepted it. It greps for a shape, not a truth: a
 prompt to think, never proof that anyone did.
 
-**There is no branch protection on `master`.** This file claimed otherwise
-until 2026-09-12; checked against the API, the branch has no protection rule
-and no ruleset, so nothing enforces a green run before a merge. The discipline
-has been entirely manual — and it has slipped at least once, when PR #9 was
-merged with Requirement Coverage failing. Worth fixing before the tool holds a
-real team’s data.
+**`master` is protected as of 2026-09-12.** Until that day nothing enforced a
+green run before a merge — this file claimed otherwise and was wrong, and the
+discipline had already slipped once, when PR #9 was merged with Requirement
+Coverage failing. Four checks are now required:
+
+- `Lint, Type Check, Test, Build`
+- `Audit Production Dependencies`
+- `Playwright E2E Tests`
+- `Analyze (javascript-typescript)` (CodeQL)
+
+`Requirement Coverage Check` is deliberately **not** required, because it is
+skipped for Dependabot. A required check that never reports can leave a pull
+request unmergeable, and deadlocking every dependency bump to enforce a grep
+for a text pattern is a poor trade. It still runs and is still visible; it is
+a prompt, and prompts do not need teeth.
+
+`strict` is on, so a branch must be up to date with `master` before merging.
+That is the setting that would have caught `e2e/sign-in.ts` — a helper every
+spec depends on, left stale by a change on another branch.
+
+Force pushes and deletions are blocked, and conversation resolution is
+required. `enforce_admins` is **off**: this is a single-maintainer repository,
+and locking the only admin out of an emergency fix protects nothing. It is the
+setting to revisit first if anyone else gains write access.
 
 ---
 
