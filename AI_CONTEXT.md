@@ -800,6 +800,23 @@ for `create`: two tests fail. They also cover the libSQL adapter, which
 Run for real and read back rather than trusted: two consecutive runs against a
 libSQL file left 5 questions, 19 tables and 3 ledger rows.
 
+**Phase 3 as built.** `docs/deployment.md` is the configuration reference:
+every variable the application reads, whether it is secret, what happens when
+it is wrong, and a rotation table naming both places each secret lives.
+`.env.example` gained the four database variables it never had, and a section
+listing `TEST_MODE` and `E2E_LOCAL_RUN` as things to recognise rather than use.
+
+**Two README claims were wrong and are corrected.** It recommended piping one
+migration file through `turso db shell` — which applies only the *first* of
+three migrations and records nothing, so a database set up by following the
+README would have been missing two schema changes with no way to tell. And it
+listed Vercel Cron among services that can call the tick every 1–5 minutes,
+which the Hobby plan cannot.
+
+`CRON_SECRET` is called out as the secret most easily half-rotated: changing it
+in Vercel without changing it in the cron service stops the scheduler silently,
+because a refused tick looks exactly like no tick at all.
+
 Three things can only be proven in production — that Turso answers, that the
 trigger fires, that email reaches a non-owner address. Those are not a gap to
 close with more tests; they are where this project’s defects have always lived.
