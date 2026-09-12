@@ -765,6 +765,41 @@ created. The same was confirmed for `TEST_MODE`.
 `scripts/migrate-production.ts`. Verified through the real CLI: `prisma
 validate` fails with the message, and still validates without it.
 
+**Phase 2 as built.** `scripts/migrate-production.ts` applies the committed
+migrations to Turso through `@libsql/client.executeMultiple` and then seeds the
+question catalogue through the libSQL adapter. One command, because the
+catalogue is reference data the application cannot work without — not sample
+data — and a second command is one someone forgets.
+
+`applyMigrations` in `src/lib/migrations/apply-migrations.ts` keeps an
+`_applied_migration` ledger and skips what is in it. **The ledger row is
+written after the migration, not before, and the order is the decision.** A
+crash between the two leaves a migration applied but unrecorded, so the next
+run tries to re-apply it and SQLite refuses — loud, and fixable with one manual
+insert. Recording first would invert that: a crash would mark a migration done
+that never ran, silently skipped forever and found later as a missing column in
+production. There is a test for the loud failure, so it is a choice rather than
+an accident.
+
+The ledger is deliberately **not** Prisma’s `_prisma_migrations`: that table
+carries a checksum whose derivation we would be guessing at, and a mismatch
+makes Prisma tooling refuse to proceed — for a table no Prisma command can read
+here anyway. Cost recorded in the source: moving this database somewhere Prisma
+*can* migrate needs the history reconciled by hand.
+
+**One test was wrong before the code was.** It simulated a partial run by
+deleting a ledger row — which describes a migration that ran but was not
+recorded, a different state entirely. It now builds a genuine partial run, and
+the deleted-row case became the loud-failure test.
+
+The seed already upserted, so its idempotence tests passed on first write —
+which this project treats as suspicious. Mutation-checked by swapping `upsert`
+for `create`: two tests fail. They also cover the libSQL adapter, which
+`createSeedClient` does not use, so the production path had no coverage at all.
+
+Run for real and read back rather than trusted: two consecutive runs against a
+libSQL file left 5 questions, 19 tables and 3 ledger rows.
+
 Three things can only be proven in production — that Turso answers, that the
 trigger fires, that email reaches a non-owner address. Those are not a gap to
 close with more tests; they are where this project’s defects have always lived.

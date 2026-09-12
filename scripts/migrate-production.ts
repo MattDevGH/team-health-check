@@ -20,8 +20,11 @@
  */
 
 import { createClient } from '@libsql/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 
+import { PrismaClient } from '../src/generated/prisma';
 import { applyMigrations } from '../src/lib/migrations/apply-migrations';
+import { seedQuestions } from '../prisma/seed';
 
 /** Hides everything but the host, so a token in the URL cannot reach a log. */
 function describeTarget(url: string): string {
@@ -55,18 +58,38 @@ async function main(): Promise<void> {
     for (const name of applied) console.log(`  applied                    ${name}`);
 
     if (applied.length === 0) {
-      console.log('\nNothing to apply. The database is up to date.');
-      return;
+      console.log('\nNothing to apply. The schema is up to date.');
+    } else {
+      console.log(`\nApplied ${applied.length} migration(s).`);
     }
-
-    console.log(`\nApplied ${applied.length} migration(s).`);
-    console.log(
-      'Verify the schema by reading it back before trusting this — see ' +
-        '.kiro/specs/deployment/tasks.md, task 4.2.',
-    );
   } finally {
     client.close();
   }
+
+  /*
+   * The question catalogue is reference data the application cannot work
+   * without — not sample data — so it belongs in the same deliberate step as the
+   * schema rather than in a second command someone can forget. It upserts, so
+   * running it again is safe and puts back anything edited by hand.
+   *
+   * Through the libSQL adapter, not the better-sqlite3 one createSeedClient
+   * builds: that client cannot reach Turso.
+   */
+  const prisma = new PrismaClient({
+    adapter: new PrismaLibSql({ url, authToken: process.env.TURSO_AUTH_TOKEN }),
+  });
+
+  try {
+    const seeded = await seedQuestions(prisma);
+    console.log(`Seeded ${seeded} fixed questions.`);
+  } finally {
+    await prisma.$disconnect();
+  }
+
+  console.log(
+    '\nVerify the schema and the catalogue by reading them back before trusting ' +
+      'this. See .kiro/specs/deployment/tasks.md, task 4.2.',
+  );
 }
 
 main().catch((error: unknown) => {
