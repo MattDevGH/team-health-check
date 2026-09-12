@@ -727,14 +727,43 @@ sign-in tokens; "do not set it in production" is a hope, not a control. The
 guard goes at module load, because a process that can serve tokens should not
 be running.
 
-**Phase 1 as built.** `createPrismaClient()` throws when `NODE_ENV` is
-`production` and `TURSO_DATABASE_URL` is absent, naming the variable and saying
-what the fallback would have cost — a local SQLite file a serverless deployment
-cannot persist. Thrown from the factory, which runs at module load, so the
-process fails to boot rather than failing one request at a time. One existing
-test in `src/lib/prisma.test.ts` asserted production behaviour with no database
-configured, which is now a state that cannot boot; it was given a real `file:`
-libSQL target, so it exercises production as production actually is.
+**Phase 1 as built — and it moved twice before it was right.**
+
+`assertProductionReady` in `src/lib/startup-guards.ts` holds both rules, called
+from `register` in `src/instrumentation.ts`. It takes the environment as an
+argument, so the rules are exercised directly rather than through module
+resets, and one test asserts the hook actually calls it.
+
+**It started in the client factory, at module load, and `npm run build` threw
+it out.** `next build` imports every route with `NODE_ENV=production` to
+collect page data, so the check fired during compilation — the difference
+between "this deployment will not go live" and "this project will not
+compile". tsc, lint and the whole suite had passed; none of them import a
+route the way the build does.
+
+**Then the E2E suite threw it out again.** `NODE_ENV` cannot tell a deployment
+from a local end-to-end run: `next start` sets production on a laptop too, and
+the suite runs the production build deliberately so CI and a local run
+exercise the same artifact — with `TEST_MODE` on, which is the point of the
+token capture. The run now marks itself with `E2E_LOCAL_RUN`, set in
+`playwright.config.ts` and nowhere else.
+
+That marker is an opt-out on a security control, which is worth justifying: it
+**fails closed**. Absent the marker every production process is checked,
+including on a host setting none of the variables we might otherwise have keyed
+on. Detecting the deployment instead — `VERCEL_ENV`, say — fails *open* the
+moment the host changes or the variable is missing, the worse direction for a
+guard against an authentication bypass.
+
+**Measured, not assumed.** A production `next start` with no database logs
+"Failed to prepare server", keeps listening, and answers every request with
+500 — not literally a refusal to bind a port, and the comment says so. What
+matters held: no request reached a handler and no local database file was
+created. The same was confirmed for `TEST_MODE`.
+
+`resolveCliDatasourceUrl` refuses while `TURSO_DATABASE_URL` is set and names
+`scripts/migrate-production.ts`. Verified through the real CLI: `prisma
+validate` fails with the message, and still validates without it.
 
 Three things can only be proven in production — that Turso answers, that the
 trigger fires, that email reaches a non-owner address. Those are not a gap to

@@ -29,6 +29,8 @@
 export interface StartupEnvironment {
   NODE_ENV?: string;
   TURSO_DATABASE_URL?: string;
+  TEST_MODE?: string;
+  E2E_LOCAL_RUN?: string;
 }
 
 /**
@@ -39,6 +41,26 @@ export interface StartupEnvironment {
  */
 export function assertProductionReady(env: StartupEnvironment): void {
   if (env.NODE_ENV !== 'production') return;
+
+  /**
+   * The end-to-end suite is not a deployment, and `NODE_ENV` cannot tell them
+   * apart: `next start` sets it to production locally too, and the suite runs
+   * the production build on purpose so that CI and a laptop exercise the same
+   * artifact. It also needs TEST_MODE, which is the entire point of the token
+   * capture that replaced a scenario the suite used to skip.
+   *
+   * So the run marks itself, in `playwright.config.ts` and nowhere else.
+   *
+   * This is an opt-out on a security control, which deserves justifying. It
+   * fails **closed**: absent the marker every production process is checked,
+   * including on a host that sets none of the variables we might otherwise
+   * have keyed on. Detecting the deployment instead — `VERCEL_ENV`, say —
+   * fails open the moment the host changes or the variable is missing, which
+   * is the worse direction for a guard whose job is to prevent an
+   * authentication bypass. Switching TEST_MODE on in production now takes two
+   * deliberate mistakes rather than one.
+   */
+  if (env.E2E_LOCAL_RUN === 'true') return;
 
   /**
    * Without a Turso URL the application opens a local SQLite file. A serverless
@@ -53,6 +75,26 @@ export function assertProductionReady(env: StartupEnvironment): void {
         'local SQLite file, which a serverless deployment cannot persist: responses ' +
         'would be lost on the next deploy and would not be shared between instances. ' +
         'Set TURSO_DATABASE_URL to the production database.',
+    );
+  }
+
+  /**
+   * `/api/test/magic-link` returns a live magic-link token when TEST_MODE is
+   * enabled — a complete authentication bypass for anyone who can reach it.
+   *
+   * Broader than the route’s own predicate, deliberately. The route enables on
+   * exactly "true", so `TEST_MODE=1` would be harmless; but it is still someone
+   * trying to switch this on in production, and a deployment that survives the
+   * attempt teaches the wrong lesson about whether the switch exists here. An
+   * empty value is treated as absent, because platforms materialise unset
+   * variables that way.
+   */
+  if (env.TEST_MODE) {
+    throw new Error(
+      `TEST_MODE is set to "${env.TEST_MODE}" in production. It exposes live sign-in ` +
+        'tokens through /api/test/magic-link, which is an authentication bypass for ' +
+        'anyone who can reach the URL. Remove TEST_MODE from the production ' +
+        'environment entirely; it exists for the end-to-end suite.',
     );
   }
 }
