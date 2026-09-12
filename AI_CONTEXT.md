@@ -727,6 +727,15 @@ sign-in tokens; "do not set it in production" is a hope, not a control. The
 guard goes at module load, because a process that can serve tokens should not
 be running.
 
+**Phase 1 as built.** `createPrismaClient()` throws when `NODE_ENV` is
+`production` and `TURSO_DATABASE_URL` is absent, naming the variable and saying
+what the fallback would have cost — a local SQLite file a serverless deployment
+cannot persist. Thrown from the factory, which runs at module load, so the
+process fails to boot rather than failing one request at a time. One existing
+test in `src/lib/prisma.test.ts` asserted production behaviour with no database
+configured, which is now a state that cannot boot; it was given a real `file:`
+libSQL target, so it exercises production as production actually is.
+
 Three things can only be proven in production — that Turso answers, that the
 trigger fires, that email reaches a non-owner address. Those are not a gap to
 close with more tests; they are where this project’s defects have always lived.

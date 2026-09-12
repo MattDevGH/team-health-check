@@ -85,7 +85,11 @@ describe('src/lib/prisma.ts - environment-aware initialization', () => {
 
   it('exported prisma does not cache to globalThis in production', async () => {
     (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
-    delete process.env.TURSO_DATABASE_URL;
+    // A production process now refuses to start without a database, so reaching
+    // production behaviour means configuring it. A file: URL is a real libSQL
+    // target, which makes this exercise production as production actually is
+    // rather than as a half-configured process that could never boot.
+    process.env.TURSO_DATABASE_URL = 'file:./prisma/cache-probe.db';
 
     const g = globalThis as unknown as { prisma: unknown };
     delete g.prisma;
