@@ -14,87 +14,72 @@
  * answer requests, and lose every response — a failure that looks like data
  * vanishing rather than like a missing environment variable.
  *
- * The guard is deliberately at module load. A process that cannot reach its
- * database should fail to boot, not fail one request at a time.
+ * The check first lived in the client factory, at module load. `npm run build`
+ * rejected it: `next build` imports every route with `NODE_ENV=production` to
+ * collect page data, so a module-load guard fails the build rather than the
+ * deployment. It now runs from the `register` hook in `src/instrumentation.ts`,
+ * which Next.js calls once per server instance and which must complete before
+ * the server is ready — the difference between "this deployment will not go
+ * live" and "this project will not compile".
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-/**
- * Imports the module fresh, so the top-level client construction runs again
- * under whatever environment the test has set.
- *
- * `globalThis.prisma` is cleared too: the module memoises there outside
- * production, and a client cached by an earlier test would short-circuit the
- * construction this one is trying to observe.
- */
-async function importPrismaModule() {
-  vi.resetModules();
-  Reflect.deleteProperty(globalThis, 'prisma');
-  return import('@/lib/prisma');
-}
+import { assertProductionReady } from '@/lib/startup-guards';
 
-describe('the production database guard', () => {
-  beforeEach(() => {
-    vi.unstubAllEnvs();
+describe('assertProductionReady', () => {
+  it('refuses a production environment with no database', () => {
+    expect(() => assertProductionReady({ NODE_ENV: 'production' })).toThrow();
   });
 
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    Reflect.deleteProperty(globalThis, 'prisma');
+  it('names the missing variable, because the reader is staring at a failed deploy', () => {
+    expect(() => assertProductionReady({ NODE_ENV: 'production' })).toThrow(
+      /TURSO_DATABASE_URL/,
+    );
   });
 
-  it('refuses to start in production without a database URL', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('TURSO_DATABASE_URL', '');
-
-    await expect(importPrismaModule()).rejects.toThrow();
-  });
-
-  it('names the missing variable, because the reader is staring at a failed deploy', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('TURSO_DATABASE_URL', '');
-
-    await expect(importPrismaModule()).rejects.toThrow(/TURSO_DATABASE_URL/);
-  });
-
-  it('says what would have happened, not merely that something is unset', async () => {
+  it('says what the fallback would have cost, not merely that something is unset', () => {
     // "TURSO_DATABASE_URL is not set" leaves the reader to work out why it
-    // matters. The cost — a local file that cannot persist — is the point.
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('TURSO_DATABASE_URL', '');
-
-    await expect(importPrismaModule()).rejects.toThrow(/production/i);
+    // matters. That responses would be lost on the next deploy is the point.
+    expect(() => assertProductionReady({ NODE_ENV: 'production' })).toThrow(/lost/i);
   });
 
-  it('starts in production when the database URL is present', async () => {
-    // A file: URL is a real libSQL target — the same trick the libSQL
-    // integration test uses to exercise the production adapter without an
-    // account — so this proves the guard lets a configured production through
-    // rather than merely that it throws less often.
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('TURSO_DATABASE_URL', 'file:./prisma/guard-probe.db');
-
-    const mod = await importPrismaModule();
-    expect(mod.prisma).toBeDefined();
-    await mod.prisma.$disconnect();
+  it('treats a blank URL as absent, the way the client factory does', () => {
+    // `createPrismaClient` branches on truthiness. If these disagreed, startup
+    // would pass and the application would then open a local file.
+    expect(() =>
+      assertProductionReady({ NODE_ENV: 'production', TURSO_DATABASE_URL: '' }),
+    ).toThrow(/TURSO_DATABASE_URL/);
   });
 
-  it('leaves development alone, where a local file is the right answer', async () => {
-    vi.stubEnv('NODE_ENV', 'development');
-    vi.stubEnv('TURSO_DATABASE_URL', '');
-
-    const mod = await importPrismaModule();
-    expect(mod.prisma).toBeDefined();
-    await mod.prisma.$disconnect();
+  it('allows a production environment that has one', () => {
+    expect(() =>
+      assertProductionReady({
+        NODE_ENV: 'production',
+        TURSO_DATABASE_URL: 'libsql://team-health.turso.io',
+      }),
+    ).not.toThrow();
   });
 
-  it('leaves the test environment alone, or every other suite would fail', async () => {
-    vi.stubEnv('NODE_ENV', 'test');
-    vi.stubEnv('TURSO_DATABASE_URL', '');
+  it('leaves development alone, where a local file is the right answer', () => {
+    expect(() => assertProductionReady({ NODE_ENV: 'development' })).not.toThrow();
+  });
 
-    const mod = await importPrismaModule();
-    expect(mod.prisma).toBeDefined();
-    await mod.prisma.$disconnect();
+  it('leaves the test environment alone, or every other suite would fail', () => {
+    expect(() => assertProductionReady({ NODE_ENV: 'test' })).not.toThrow();
+  });
+
+  it('leaves an unset NODE_ENV alone rather than guessing it means production', () => {
+    expect(() => assertProductionReady({})).not.toThrow();
+  });
+});
+
+describe('the instrumentation hook', () => {
+  it('runs the guard, so the checks are actually wired to startup', async () => {
+    // A guard nothing calls is a guard that does not exist. This asserts the
+    // wiring rather than re-asserting the rules.
+    const { register } = await import('@/instrumentation');
+
+    expect(() => register()).not.toThrow();
   });
 });

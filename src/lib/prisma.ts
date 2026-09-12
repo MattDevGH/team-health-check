@@ -19,27 +19,14 @@ import { resolveSqliteFileUrl } from "@/lib/database-url";
  * where these packages may not be needed.
  */
 export function createPrismaClient(): PrismaClient {
-  /**
-   * Production must not fall back to a local file.
-   *
-   * A serverless function has no persistent filesystem: the file does not
-   * exist, is not shared between concurrent instances, and is destroyed on the
-   * next deploy. Without this the application would start, answer requests and
-   * lose every response — a failure that reads as data vanishing rather than
-   * as a missing environment variable.
-   *
-   * Thrown from the factory, which runs at module load, so a process that
-   * cannot reach its database fails to boot rather than failing one request at
-   * a time.
-   *
-   * Requirements: Deployment 2.1, 2.3
-   */
-  if (process.env.NODE_ENV === 'production' && !process.env.TURSO_DATABASE_URL) {
-    throw new Error(
-      'TURSO_DATABASE_URL is not set. In production this would open a local SQLite file, which a serverless deployment cannot persist: the data would be lost on the next deploy and would not be shared between instances. Set TURSO_DATABASE_URL to the production database.',
-    );
-  }
-
+  // The production database check is NOT here.
+  //
+  // It lived in this factory first, and `npm run build` rejected it: Next
+  // imports every route with NODE_ENV=production to collect page data, so a
+  // module-load guard fails the build rather than the deployment. It now runs
+  // from the `register` hook in src/instrumentation.ts, which Next calls once
+  // per server instance and which must complete before requests are served.
+  // See src/lib/startup-guards.ts.
   if (process.env.TURSO_DATABASE_URL) {
     // Production: Turso via libSQL adapter.
     //
