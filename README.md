@@ -153,10 +153,23 @@ none of it failed one.
 
 ### Next milestone
 
-**Deployment** — Vercel, Turso, and the production cron trigger. The production
-database path already has execution coverage
-(`src/tests/integration/libsql-repository.test.ts`), so this is configuration
-and a cron schedule rather than new application code.
+**Deployment** — Vercel, Turso, and the production cron trigger. Specced in
+`.kiro/specs/deployment/`; phases 1–3 are done.
+
+It was expected to be configuration rather than code, because the production
+database path already had execution coverage. Two assumptions turned out to be
+false and cost real work:
+
+- **Vercel’s Hobby plan cannot run this scheduler.** Its cron jobs run once a
+  day, and a finer expression fails at deployment. The tick is triggered
+  externally instead.
+- **`prisma migrate deploy` cannot reach Turso** — and worse, it would have
+  migrated a local file and exited zero. The CLI now refuses, and
+  `scripts/migrate-production.ts` applies migrations and seeds the catalogue.
+
+Three startup guards were added so a wrong configuration cannot be held
+quietly: no database in production, the CLI aimed at production, and `TEST_MODE`
+in a deployment. Configuration reference: `docs/deployment.md`.
 ### Later milestones (not started)
 - **Delivery-manager user guide** in `docs/`, once in-app guidance exists.
 - **Slack Socket Mode:** evaluate as a development-only convenience to remove
@@ -295,7 +308,23 @@ curl -X POST https://your-domain.com/api/scheduler/tick \
   -H "Authorization: Bearer $CRON_SECRET"
 ```
 
-For production, use a cron service (e.g. GitHub Actions, AWS EventBridge, Vercel Cron) to call this endpoint at regular intervals (every 1–5 minutes). The scheduler checks team schedules and opens/closes sessions at the configured times.
+For production, an **external** cron service calls this endpoint every few
+minutes. The scheduler checks team schedules and opens or closes sessions at the
+configured times.
+
+**Not Vercel Cron on the Hobby plan.** Its cron jobs run once per day at ±59
+minutes, and a more frequent expression fails at deployment rather than
+degrading — which is no use to a scheduler that opens sessions at wall-clock
+times, waits 30 seconds after a close to materialise, and backs off Slack
+retries at 30s/2m/8m/20m. Vercel Pro lifts the limit to once per minute.
+
+**Not GitHub Actions either**, on reflection: its scheduled runs can be dropped
+under load, and scheduled workflows are disabled automatically after 60 days
+without repository activity on a public repo — which bites hardest once the
+project is finished and quietly relied upon.
+
+The tick is idempotent and reconciles state, so a missed trigger costs a delay
+rather than a lost session. See docs/deployment.md.
 
 ### Local Development with Slack
 
@@ -405,10 +434,22 @@ TURSO_AUTH_TOKEN="your-turso-auth-token"
 2. Add `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` for the **Production** (and optionally Preview) environments
 3. Deploy — the app detects `TURSO_DATABASE_URL` at runtime and switches to the libSQL adapter automatically
 
-> **Note:** Push your schema to Turso before the first deploy:
+> **Apply the schema to Turso before the first deploy:**
+>
 > ```bash
-> turso db shell team-health-check < prisma/migrations/20260620233208_init/migration.sql
+> TURSO_DATABASE_URL="libsql://…" TURSO_AUTH_TOKEN="…" npx tsx scripts/migrate-production.ts
 > ```
+>
+> This replaces piping one migration file through `turso db shell`, which this
+> README recommended until 2026-09-12. That command applied only the **first**
+> of three migrations and recorded nothing, so a database set up by following
+> it would have been missing two schema changes with no way to tell.
+>
+> The script applies every migration not yet recorded, in order, then seeds the
+> question catalogue. Both are safe to run again.
+>
+> `prisma migrate deploy` cannot reach Turso, and now refuses rather than
+> migrating a local file and reporting success. See docs/deployment.md.
 
 ## Architecture
 
