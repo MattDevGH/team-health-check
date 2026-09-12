@@ -695,6 +695,43 @@ setting to revisit first if anyone else gains write access.
 
 ## Outstanding Work
 
+### Deployment — spec written 2026-09-12, not yet implemented
+
+`.kiro/specs/deployment/`. Two findings shaped it before any of it was written,
+and both were verified against source rather than assumed.
+
+**The Vercel Hobby plan cannot run this scheduler.** Hobby cron jobs are limited
+to once per day at ±59 minutes, and a finer cron expression *fails at
+deployment* rather than degrading. Every timing behaviour here is finer-grained
+than a day. Agreed with Matt: an **external cron service** POSTs
+`/api/scheduler/tick` with `CRON_SECRET`, keeping hosting free and changing no
+application code. GitHub Actions was rejected — its scheduled runs can be
+dropped under load, and scheduled workflows auto-disable after 60 days without
+repository activity, which bites hardest once the project is finished and
+quietly relied upon. The tick being idempotent is what makes an external
+trigger acceptable at all.
+
+**Migrations have no path to production, and `prisma migrate deploy` cannot be
+given one.** Prisma’s `Datasource` takes only a url string, the provider is
+`sqlite`, and Prisma’s own docs send Turso users elsewhere. The hazard is not
+that the CLI cannot reach Turso — it is that `prisma.config.ts` resolves through
+`resolveSqliteFileUrl()`, which ignores `TURSO_DATABASE_URL` and returns a local
+path, so the command migrates a local file and exits zero. So the CLI will
+**throw** when `TURSO_DATABASE_URL` is set, and `scripts/migrate-production.ts`
+will apply migrations through `@libsql/client.executeMultiple` — the mechanism
+already proven in `src/tests/integration/libsql-repository.test.ts` — with its
+own `_applied_migration` ledger rather than a guessed-at Prisma checksum.
+
+**`TEST_MODE` becomes impossible rather than merely unset.** It serves live
+sign-in tokens; "do not set it in production" is a hope, not a control. The
+guard goes at module load, because a process that can serve tokens should not
+be running.
+
+Three things can only be proven in production — that Turso answers, that the
+trigger fires, that email reaches a non-owner address. Those are not a gap to
+close with more tests; they are where this project’s defects have always lived.
+
+
 ### Anonymity suppression: a state no test could reach — 2026-09-11
 
 `text-amber-600` on the "Insufficient data" label measured **3.19:1** against
