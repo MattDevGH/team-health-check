@@ -35,3 +35,39 @@ export function resolveSqliteFileUrl(
   // Forward slashes keep the URL valid on Windows
   return `file:${absolute.replace(/\\/g, '/')}`;
 }
+
+/**
+ * The datasource the Prisma CLI is permitted to use.
+ *
+ * `prisma migrate deploy` cannot target Turso and cannot be made to: Prisma's
+ * `Datasource` config accepts only a url string, this schema's provider is
+ * `sqlite`, and Prisma's own documentation directs Turso users to generate SQL
+ * and apply it with other tooling.
+ *
+ * The danger was never that limitation. It was that `prisma.config.ts` resolved
+ * its url through `resolveSqliteFileUrl()`, which ignores TURSO_DATABASE_URL and
+ * returns a local path — so running the CLI with production credentials in the
+ * environment migrated a local file and exited zero, reporting success for work
+ * it had not done.
+ *
+ * Refusing is therefore the safe answer, and the message names the way forward
+ * so nobody has to go looking for it.
+ *
+ * Truthiness matches `createPrismaClient`, deliberately: if the two disagreed
+ * about what counts as configured, one would refuse while the other opened a
+ * local file.
+ *
+ * Requirements: Deployment 3.1, 3.2
+ */
+export function resolveCliDatasourceUrl(): string {
+  if (process.env.TURSO_DATABASE_URL) {
+    throw new Error(
+      'TURSO_DATABASE_URL is set, and the Prisma CLI cannot reach a Turso database — ' +
+        'its datasource takes a plain url and this schema targets sqlite. Left to resolve, ' +
+        'it would migrate a local file and report success. Run scripts/migrate-production.ts ' +
+        'to apply migrations to Turso, or unset TURSO_DATABASE_URL to work locally.',
+    );
+  }
+
+  return resolveSqliteFileUrl();
+}
