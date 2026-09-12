@@ -581,11 +581,32 @@ session close/team binding, and closed-link initial-render regressions.
 
 ## CI Pipeline (GitHub Actions)
 
-**Job 1 (`ci`):** Install → Lint → Type Check → Unit+Property Tests → Build
-**Job 2 (`e2e`):** Install → Build → Playwright E2E Tests (depends on `ci`)
-**Job 3 (`requirement-coverage`):** PR description coverage check (on PRs only)
+**`ci`:** Install → Prisma generate → Lint → Type Check → Unit+Property Tests → Build
+**`audit`:** `npm audit --omit=dev --audit-level=high`, in parallel with `ci`
+**`e2e`:** Install → Build → Playwright E2E Tests (depends on `ci`)
+**`requirement-coverage`:** PR description check, on pull requests, not for Dependabot
 
-All stages must pass. Branch protection requires CI green before merge.
+**The audit runs as a job of its own (2026-09-12).** It used to be the first
+step of `ci`, so a newly disclosed advisory in an unchanged dependency skipped
+Lint, Type check, Run tests and Build, and took `e2e` with it — CI then
+reported nothing at all about the code under review. That happened on PR #20,
+for a MySQL driver this app never loads. A supply-chain advisory and a broken
+change are different failures; neither should silence the other.
+
+**`requirement-coverage` is skipped for Dependabot.** It greps the PR body for
+`Requirement N.N`, which a bot never writes and has no honest one to write.
+Auto-filling a number was considered and rejected: the gate would then report
+coverage nobody claimed. Note what the check can and cannot do — commit
+`25fcce6` is tagged `NFR 2.1`, which is *Accessibility*, for a change pinning a
+MySQL driver, and the gate accepted it. It greps for a shape, not a truth: a
+prompt to think, never proof that anyone did.
+
+**There is no branch protection on `master`.** This file claimed otherwise
+until 2026-09-12; checked against the API, the branch has no protection rule
+and no ruleset, so nothing enforces a green run before a merge. The discipline
+has been entirely manual — and it has slipped at least once, when PR #9 was
+merged with Requirement Coverage failing. Worth fixing before the tool holds a
+real team’s data.
 
 ---
 

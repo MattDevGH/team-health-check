@@ -44,12 +44,6 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      # Scoped to production dependencies and high severity. Dev-only advisories
-      # are reported by Dependabot but do not block a pull request, since they
-      # cannot be reached by a deployed application.
-      - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
-
       - name: Lint
         run: npm run lint
 
@@ -61,6 +55,38 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # Deliberately a job of its own, running alongside `ci` rather than inside it.
+  #
+  # It used to be the first step of `ci`, which meant a newly disclosed advisory
+  # in an unchanged dependency skipped Lint, Type check, Run tests and Build, and
+  # took `e2e` with it — so CI reported nothing whatsoever about the code under
+  # review. That happened on PR #20, for a MySQL driver this app never loads.
+  #
+  # A supply-chain advisory and a broken change are different failures, arriving
+  # on different days for different reasons. Neither should silence the other.
+  audit:
+    name: Audit Production Dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Scoped to production dependencies and high severity. Dev-only advisories
+      # are reported by Dependabot but do not block a pull request, since they
+      # cannot be reached by a deployed application.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
   e2e:
     name: Playwright E2E Tests
@@ -124,10 +150,19 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
+  # Skipped for Dependabot, which never writes a requirement reference and has no
+  # honest one to write: a dependency bump serves the dependency tree, not a
+  # requirement. Auto-filling a number on its behalf was considered and rejected —
+  # the gate would then report coverage nobody claimed.
+  #
+  # This check greps the description for a *shape*, not a *truth*. Commit 25fcce6
+  # is tagged NFR 2.1 — Accessibility — for a change pinning a MySQL driver, and
+  # the gate accepted it. It is a prompt to think, never proof that anyone did,
+  # and filling it in automatically would remove the only value it has.
   requirement-coverage:
     name: Requirement Coverage Check
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
 
     steps:
       - name: Checkout code
