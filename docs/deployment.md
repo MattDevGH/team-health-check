@@ -169,6 +169,13 @@ you have confirmed the migration really did apply.
 | Production branch | `master` — a merge deploys |
 | Production URL | https://team-health-check-pi.vercel.app |
 | Database | Turso, eu-west-1 (Dublin) |
+| First deployed | 2026-09-13 |
+
+Verified live after the first deploy: `/` and `/auth/login` return 200, and
+`/api/me` returns **401**. That 401 is the one worth checking — if
+`TURSO_DATABASE_URL` were missing the startup guard would abort and *every*
+request would be 500, because the guard runs at server start rather than at
+build. A clean refusal means the app is running and reached its configuration.
 
 **Environment variables are scoped to Production only**, deliberately. A
 preview deployment therefore starts with none of them, hits the
@@ -193,9 +200,17 @@ nothing. It needs a redeploy.
 links and Slack links would then point at a machine that is not there. Nothing
 fails; the build is green.
 
-**It decides whether session cookies are `Secure`.** `session-cookie.ts` sets
-that flag by checking whether this value starts with `https://`. Left unset,
-production issues session cookies without it.
+**It is a *fallback* for the `Secure` cookie flag, not the decider.**
+`session-cookie.ts` sets `secure` when `NODE_ENV === 'production'` **or** when
+this value starts with `https://`. On a real deployment the first condition is
+already true, so `Secure` does not depend on this variable.
+
+This document claimed the opposite until 2026-09-13 — that leaving the variable
+unset would cost production its `Secure` cookies. It would not. The `https://`
+check only matters where `NODE_ENV` is not production and the app is served
+over TLS anyway: a tunnel, or a self-hosted preview. Corrected rather than
+quietly deleted, because a security claim that turns out to be false is worth
+knowing was ever made.
 
 It must also have **no trailing slash**: `production-notification-sink.ts`
 appends `/session/<token>` directly, and a trailing slash produces a double
