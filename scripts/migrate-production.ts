@@ -26,6 +26,27 @@ import { PrismaClient } from '../src/generated/prisma';
 import { applyMigrations } from '../src/lib/migrations/apply-migrations';
 import { seedQuestions } from '../prisma/seed';
 
+/**
+ * Load `.env`, the way the application does.
+ *
+ * Next.js loads it for the app, but a standalone script gets no such help, so
+ * this command failed with "TURSO_DATABASE_URL is not set" for someone who had
+ * set it correctly — documented instructions that did not work. Found by
+ * running it rather than by any test.
+ *
+ * `loadEnvFile` does not overwrite a value already in the environment, so an
+ * explicit `TURSO_DATABASE_URL=… npx tsx …` still wins over the file. That
+ * precedence matters: targeting a different database for one run must not
+ * require editing `.env` and remembering to put it back.
+ *
+ * Absent `.env` is fine — CI and a deploy host supply the environment directly.
+ */
+try {
+  process.loadEnvFile();
+} catch {
+  // No .env; the environment is expected to be supplied some other way
+}
+
 /** Hides everything but the host, so a token in the URL cannot reach a log. */
 function describeTarget(url: string): string {
   try {

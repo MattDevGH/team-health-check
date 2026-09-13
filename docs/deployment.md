@@ -108,6 +108,26 @@ you have confirmed the migration really did apply.
 
 ---
 
+## Backups
+
+The production database is **eu-west-1 (Dublin)**.
+
+**Stated position as of 2026-09-13: there is no automatic backup, and no
+point-in-time restore on the current plan.** The dashboard offers a manual
+**export** and nothing else. That is recorded rather than assumed, which is
+what NFR 3.2 asks for — "none" is an acceptable answer for a tool trialling
+with one team, provided nobody later believes otherwise.
+
+What this means in practice: **a mistaken delete or a bad migration is
+unrecoverable** unless an export was taken first. The two moments that warrant
+one are before running `scripts/migrate-production.ts` against a database that
+already holds responses, and before any manual `DELETE` or `UPDATE`.
+
+Revisit if the tool is adopted beyond a trial. A team’s candid feedback is not
+data you can ask them to re-enter.
+
+---
+
 ## The scheduler
 
 **Vercel's Hobby plan cannot run this.** Its cron jobs are limited to **once per
