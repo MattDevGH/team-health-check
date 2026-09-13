@@ -50,6 +50,42 @@ by hand.
 
 ---
 
+## Which file does a value belong in?
+
+Next.js loads exactly five sources, first match winning, so earlier entries
+override later ones:
+
+| | Source | Loaded when |
+|---|---|---|
+| 1 | the real environment | always — a shell variable beats every file |
+| 2 | `.env.<NODE_ENV>.local` | e.g. `.env.development.local` |
+| 3 | `.env.local` | **not** when `NODE_ENV=test` |
+| 4 | `.env.<NODE_ENV>` | e.g. `.env.production` |
+| 5 | `.env` | always |
+
+Which gives three homes:
+
+**`.env.local`** — your machine’s development secrets. Skipped during tests by
+design, so a test run uses the same defaults for everyone.
+
+**`.env.turso`** — the production database credentials, and nothing else.
+Deliberately a name Next.js has never heard of. Put them in `.env` and they do
+not merely configure the migration script: they repoint the **dev server** at
+production and disable the Prisma CLI for as long as they sit there. Read by
+`scripts/migrate-production.ts` and by nothing else.
+
+**Vercel** — everything production actually runs on. Never a file.
+
+An explicit `TURSO_DATABASE_URL=… npx tsx …` still overrides both files, so
+targeting a different database for one run never means editing a file and
+remembering to put it back.
+
+`.gitignore` ignores `.env*` with `!.env.example`. A wildcard rather than a
+list, because the list missed `.env.development.local`, `.env.test.local` and
+anything added later — and a committed token is a rotation, not a deletion.
+
+---
+
 ## What happens when configuration is wrong
 
 These are guards, not documentation. `src/lib/startup-guards.ts`, called from

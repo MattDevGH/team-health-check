@@ -27,24 +27,31 @@ import { applyMigrations } from '../src/lib/migrations/apply-migrations';
 import { seedQuestions } from '../prisma/seed';
 
 /**
- * Load `.env`, the way the application does.
+ * Production database credentials, from a file Next.js cannot load.
  *
- * Next.js loads it for the app, but a standalone script gets no such help, so
- * this command failed with "TURSO_DATABASE_URL is not set" for someone who had
- * set it correctly — documented instructions that did not work. Found by
- * running it rather than by any test.
+ * A standalone script gets none of Next’s environment loading, so this command
+ * failed with "TURSO_DATABASE_URL is not set" for someone who had set it
+ * correctly — documented instructions that did not work, found by running them.
  *
- * `loadEnvFile` does not overwrite a value already in the environment, so an
- * explicit `TURSO_DATABASE_URL=… npx tsx …` still wins over the file. That
- * precedence matters: targeting a different database for one run must not
- * require editing `.env` and remembering to put it back.
+ * `.env.turso` rather than `.env` is the important part. Next.js loads exactly
+ * five names — `.env`, `.env.local`, `.env.<NODE_ENV>`, `.env.<NODE_ENV>.local`
+ * and the real environment — so production credentials in any of those repoint
+ * the *dev server* at production as a side effect, and disable the Prisma CLI
+ * while they sit there. Keeping them under a name Next has never heard of means
+ * they exist on a developer machine only for the command that needs them.
  *
- * Absent `.env` is fine — CI and a deploy host supply the environment directly.
+ * `loadEnvFile` does not overwrite a value already set, so
+ * `TURSO_DATABASE_URL=… npx tsx …` still wins — targeting a different database
+ * for one run must not mean editing a file and remembering to put it back.
+ *
+ * Both files are optional: CI and a deploy host supply the environment directly.
  */
-try {
-  process.loadEnvFile();
-} catch {
-  // No .env; the environment is expected to be supplied some other way
+for (const file of ['.env.turso', '.env']) {
+  try {
+    process.loadEnvFile(file);
+  } catch {
+    // Absent, which is expected for at least one of them
+  }
 }
 
 /** Hides everything but the host, so a token in the URL cannot reach a log. */

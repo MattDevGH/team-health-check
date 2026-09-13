@@ -31,9 +31,12 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (secrets — never commit)
-.env
-.env.local
-.env.production
+#
+# A wildcard, not a list. The list covered .env, .env.local and .env.production
+# and missed .env.development.local, .env.test.local, and any name added later —
+# such as .env.turso. A token committed by accident is a rotation, not a
+# deletion, so the default must be to ignore.
+.env*
 !.env.example
 
 # vercel
