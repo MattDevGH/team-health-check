@@ -144,6 +144,54 @@ you have confirmed the migration really did apply.
 
 ---
 
+## The production environment
+
+| | |
+|---|---|
+| Host | Vercel |
+| Production branch | `master` — a merge deploys |
+| Production URL | https://team-health-check-pi.vercel.app |
+| Database | Turso, eu-west-1 (Dublin) |
+
+**Environment variables are scoped to Production only**, deliberately. A
+preview deployment therefore starts with none of them, hits the
+`TURSO_DATABASE_URL` guard, and answers every request with 500.
+
+That is the correct posture — Requirement 1.3 says a preview must never write
+to the production database, and the surest way to guarantee that is to give it
+no credentials at all. But it means **a failing preview deployment on a pull
+request is expected and is not a signal worth chasing.** Judge a change by the
+CI checks, not by Vercel’s preview.
+
+### `NEXT_PUBLIC_APP_URL` has three traps in it
+
+Worth knowing before anyone changes it.
+
+**It is frozen at build time.** Next.js inlines `NEXT_PUBLIC_*` into the
+JavaScript sent to the browser, so changing it in the host and restarting does
+nothing. It needs a redeploy.
+
+**Unset, it silently becomes `http://localhost:3000`** — the fallback in
+`auth.service.ts`, `container.ts` and `production-notification-sink.ts`. Magic
+links and Slack links would then point at a machine that is not there. Nothing
+fails; the build is green.
+
+**It decides whether session cookies are `Secure`.** `session-cookie.ts` sets
+that flag by checking whether this value starts with `https://`. Left unset,
+production issues session cookies without it.
+
+It must also have **no trailing slash**: `production-notification-sink.ts`
+appends `/session/<token>` directly, and a trailing slash produces a double
+slash that may not match the route — a link that 404s for a member with no way
+for them to tell you anything useful.
+
+On Vercel it must be a **Config** variable, not a Secret. The value is public
+by definition, since it is compiled into the browser bundle, and the type
+cannot be changed after creation — a variable created as Secret has to be
+deleted and recreated.
+
+---
+
 ## Backups
 
 The production database is **eu-west-1 (Dublin)**.
