@@ -208,5 +208,28 @@ in this project.
 - **Vercel Pro.** Would remove the external trigger entirely. The moment to
   revisit is when the trigger's reliability starts costing more attention than
   the subscription would.
+- **Postgres, if concurrency ever becomes the problem.** SQLite allows **one
+  writer at a time**. For one delivery team answering five questions a week
+  that is nowhere near a concern, and this is recorded as a known ceiling
+  rather than as anticipated work — the honest expectation is that it is never
+  reached.
+
+  The trigger to revisit is write contention: several teams answering at once,
+  or a scheduler tick materialising aggregates while members are still
+  submitting. Symptoms would be `SQLITE_BUSY` errors or timeouts under load,
+  not gradual slowness.
+
+  Neon (serverless Postgres) was considered during this milestone and would
+  have been a defensible original choice. It would also have removed phase 2
+  entirely: `prisma migrate deploy` reaches Neon natively, and the custom
+  migration script exists *only* because Prisma cannot reach Turso. What Turso
+  buys in exchange is dev/prod parity — the local file and production run the
+  same engine, so a query that works on a laptop works deployed.
+
+  The cost of switching, so nobody underestimates it later: change the Prisma
+  provider, rewrite all three migrations in Postgres dialect, re-verify every
+  date and boolean mapping, and set up Postgres for local development. A real
+  project, not a configuration change.
+
 - **Session exclusion with a recorded reason.** Still unscheduled, still
   exclusion over deletion.
