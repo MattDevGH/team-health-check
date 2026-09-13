@@ -15,6 +15,7 @@ import type {
   TeamMemberRepository,
   TeamMemberRoleRepository,
   UserSessionRepository,
+  AuditLogRepository,
 } from '@/lib/repositories/types';
 
 export interface GenesisServiceDeps {
@@ -23,6 +24,7 @@ export interface GenesisServiceDeps {
   teamMemberRepo: TeamMemberRepository;
   teamMemberRoleRepo: TeamMemberRoleRepository;
   userSessionRepo: UserSessionRepository;
+  auditLogRepo: AuditLogRepository;
 }
 
 export interface GenesisInput {
@@ -47,6 +49,7 @@ export function createGenesisService(deps: GenesisServiceDeps) {
     teamMemberRepo,
     teamMemberRoleRepo,
     userSessionRepo,
+    auditLogRepo,
   } = deps;
 
   /**
@@ -89,7 +92,37 @@ export function createGenesisService(deps: GenesisServiceDeps) {
       role: 'delivery_manager',
     });
 
-    // 5. Create UserSession with crypto-random token, 7-day expiry
+    /*
+     * 5. Record that the team was created.
+     *
+     * Two routes create teams. `POST /api/teams` persists team, member, role
+     * and audit in one transaction; this one wrote everything but the audit,
+     * so a log that exists to answer "how did this team come to be configured
+     * this way?" began mid-story — missing the entry explaining how the team
+     * came to exist at all and who became its manager.
+     *
+     * Found by reading a production database after creating a real team, not
+     * by any test. Genesis is the route every first user arrives through.
+     *
+     * The same shape as the authenticated route writes, deliberately: one
+     * event with two shapes depending on which door was used is worse than
+     * one shape.
+     *
+     * Known limitation, stated rather than implied: this is not atomic with
+     * the writes above, because genesis creates its rows individually rather
+     * than through an aggregate. A crash here leaves a team with no creation
+     * entry — the same exposure the role and session writes already carry.
+     * Making genesis atomic is a worthwhile change and a separate one.
+     */
+    await auditLogRepo.create({
+      teamId: team.id,
+      changeType: 'team_created',
+      previousValue: '',
+      newValue: JSON.stringify({ name: input.teamName, description: input.description }),
+      userId: member.id,
+    });
+
+    // 6. Create UserSession with crypto-random token, 7-day expiry
     const sessionToken = randomBytes(32).toString('hex');
     const sevenDays = 7 * 24 * 60 * 60 * 1000;
     await userSessionRepo.create({

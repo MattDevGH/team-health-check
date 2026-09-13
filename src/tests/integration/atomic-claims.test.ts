@@ -101,6 +101,7 @@ describe('Atomic token claims - concurrency', () => {
         teamMemberRepo: repos.teamMember,
         teamMemberRoleRepo: repos.teamMemberRole,
         userSessionRepo: repos.userSession,
+        auditLogRepo: repos.auditLog,
       });
 
       // 3. Fire N concurrent calls with the same token
@@ -162,6 +163,7 @@ describe('new-user request → verify → genesis chain', () => {
       teamMemberRepo: repos.teamMember,
       teamMemberRoleRepo: repos.teamMemberRole,
       userSessionRepo: repos.userSession,
+      auditLogRepo: repos.auditLog,
     });
 
     await authService.requestMagicLink('founder@example.com');
