@@ -36,6 +36,36 @@ export function resolveSqliteFileUrl(
   return `file:${absolute.replace(/\\/g, '/')}`;
 }
 
+
+/**
+ * Prisma commands that never open a database.
+ *
+ * `generate` reads the schema and writes a client. `format` and `validate`
+ * read the schema. `version` reads nothing. None of them can be fooled into
+ * migrating the wrong database, which is the only thing the guard below exists
+ * to prevent.
+ */
+const SCHEMA_ONLY_COMMANDS = new Set(['generate', 'format', 'validate', 'version']);
+
+/**
+ * Whether the Prisma command being run would connect to the datasource.
+ *
+ * An allowlist, not a blocklist, so a Prisma command nobody anticipated is
+ * treated as dangerous rather than quietly permitted. Being wrong in that
+ * direction costs a loud error; the other direction costs a migration applied
+ * to a database nobody meant to touch.
+ *
+ * Takes argv so the rule can be exercised directly.
+ */
+export function cliCommandConnectsToDatabase(argv: string[]): boolean {
+  // Skip the node binary, the script path, and any leading flags
+  const command = argv.slice(2).find(arg => !arg.startsWith('-'));
+
+  if (command === undefined) return true;
+
+  return !SCHEMA_ONLY_COMMANDS.has(command);
+}
+
 /**
  * The datasource the Prisma CLI is permitted to use.
  *
@@ -60,7 +90,7 @@ export function resolveSqliteFileUrl(
  * Requirements: Deployment 3.1, 3.2
  */
 export function resolveCliDatasourceUrl(): string {
-  if (process.env.TURSO_DATABASE_URL) {
+  if (process.env.TURSO_DATABASE_URL && cliCommandConnectsToDatabase(process.argv)) {
     throw new Error(
       'TURSO_DATABASE_URL is set, and the Prisma CLI cannot reach a Turso database — ' +
         'its datasource takes a plain url and this schema targets sqlite. Left to resolve, ' +
