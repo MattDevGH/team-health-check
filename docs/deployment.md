@@ -106,8 +106,25 @@ check is deliberately broader than the route's own predicate, which enables only
 on exactly `"true"` — `TEST_MODE=1` is harmless to the route but is still someone
 trying to switch this on in production.
 
-**`TURSO_DATABASE_URL` set while running the Prisma CLI.** `prisma.config.ts`
-throws. See *Migrations* below for why.
+**`TURSO_DATABASE_URL` set while running a Prisma command that connects.**
+`prisma.config.ts` throws. Scoped to commands that actually open a database —
+`migrate`, `db push`, `db execute`, `studio` — because `generate`, `format`,
+`validate` and `version` only read the schema and cannot migrate anything.
+
+That scoping was learned from a failed deployment. The guard originally refused
+every command, which meant the production build could not generate its Prisma
+client and failed with `Can’t resolve '@/generated/prisma'` — a message that
+looks nothing like a guard working as intended. The host supplies
+`TURSO_DATABASE_URL` to the build as well as the runtime.
+
+The allowlist fails closed: an unrecognised command is treated as connecting.
+Being wrong that way costs a loud error; the other way costs a migration
+applied to a database nobody meant to touch.
+
+**The build generates the Prisma client.** `npm run build` is
+`prisma generate && next build`, because `src/generated/prisma` is gitignored
+and nothing else creates it on a fresh checkout.
+
 
 ---
 
