@@ -695,6 +695,44 @@ setting to revisit first if anyone else gains write access.
 
 ## Outstanding Work
 
+### Slack sign-in — spec written 2026-09-13, not started
+
+`.kiro/specs/slack-sign-in/`. Written because provisioning exposed a
+single point of failure nobody had noticed: **email is the only way in**, and
+sending as a domain needs DNS records proving ownership. Without a verified
+domain, Resend’s sandbox sender delivers only to the account owner and drops
+everyone else **silently** — and since `requestMagicLink` returns void for every
+input by design, a colleague sees "check your email" and waits forever. The tool
+cannot be trialled with a team unless its owner also owns a domain.
+
+**The chicken-and-egg that has to break:** `POST /api/me/slack-link` derives the
+member from the session cookie, so you must already be signed in to link Slack.
+Signing in needs email. Slack sign-in for a first-time user is impossible today.
+
+**Slack cannot set a cookie**, so the shape is: verified Slack request →
+resolve member → mint a single-use token → ephemeral reply with a link → the
+existing verification route establishes the session. That is a magic link
+delivered over Slack, and it reuses `verifyMagicLink`’s token lifecycle rather
+than growing a parallel one with its own bugs.
+
+**Two bindings, specified separately.** A Delivery Manager asserting which
+Slack account is which member needs no new scope and unblocks a trial (phase 2).
+Slack asserting it by verified email is self-service and removes email from the
+critical path for good, but costs `users:read.email` — a scope this project
+removed once for being speculative. It stops being speculative here, but the
+decision is its own (phase 3).
+
+**Why not simply surface session links?** They already exist per member per
+session and are never shown in the UI. Surfacing them would let a manager hold a
+member’s credential and submit as them — close to fatal for a tool whose whole
+premise is candid feedback. A binding asserts *who* an account belongs to;
+authentication stays the member’s own Slack login. NFR 3 records that.
+
+**Workspace membership is not team membership.** No Slack interaction creates a
+`TeamMember`; a contractor in one channel is in the workspace.
+
+## Outstanding Work
+
 ### Deployment — spec written 2026-09-12, not yet implemented
 
 `.kiro/specs/deployment/`. Two findings shaped it before any of it was written,
