@@ -50,6 +50,42 @@ by hand.
 
 ---
 
+## Which file does a value belong in?
+
+Next.js loads exactly five sources, first match winning, so earlier entries
+override later ones:
+
+| | Source | Loaded when |
+|---|---|---|
+| 1 | the real environment | always — a shell variable beats every file |
+| 2 | `.env.<NODE_ENV>.local` | e.g. `.env.development.local` |
+| 3 | `.env.local` | **not** when `NODE_ENV=test` |
+| 4 | `.env.<NODE_ENV>` | e.g. `.env.production` |
+| 5 | `.env` | always |
+
+Which gives three homes:
+
+**`.env.local`** — your machine’s development secrets. Skipped during tests by
+design, so a test run uses the same defaults for everyone.
+
+**`.env.turso`** — the production database credentials, and nothing else.
+Deliberately a name Next.js has never heard of. Put them in `.env` and they do
+not merely configure the migration script: they repoint the **dev server** at
+production and disable the Prisma CLI for as long as they sit there. Read by
+`scripts/migrate-production.ts` and by nothing else.
+
+**Vercel** — everything production actually runs on. Never a file.
+
+An explicit `TURSO_DATABASE_URL=… npx tsx …` still overrides both files, so
+targeting a different database for one run never means editing a file and
+remembering to put it back.
+
+`.gitignore` ignores `.env*` with `!.env.example`. A wildcard rather than a
+list, because the list missed `.env.development.local`, `.env.test.local` and
+anything added later — and a committed token is a rotation, not a deletion.
+
+---
+
 ## What happens when configuration is wrong
 
 These are guards, not documentation. `src/lib/startup-guards.ts`, called from
@@ -105,6 +141,26 @@ the safe direction: the alternative — recording first — would mark a migrati
 done that never ran, and it would be discovered as a missing column months
 later. Fix by inserting the missing row into `_applied_migration` by hand, once
 you have confirmed the migration really did apply.
+
+---
+
+## Backups
+
+The production database is **eu-west-1 (Dublin)**.
+
+**Stated position as of 2026-09-13: there is no automatic backup, and no
+point-in-time restore on the current plan.** The dashboard offers a manual
+**export** and nothing else. That is recorded rather than assumed, which is
+what NFR 3.2 asks for — "none" is an acceptable answer for a tool trialling
+with one team, provided nobody later believes otherwise.
+
+What this means in practice: **a mistaken delete or a bad migration is
+unrecoverable** unless an export was taken first. The two moments that warrant
+one are before running `scripts/migrate-production.ts` against a database that
+already holds responses, and before any manual `DELETE` or `UPDATE`.
+
+Revisit if the tool is adopted beyond a trial. A team’s candid feedback is not
+data you can ask them to re-enter.
 
 ---
 
