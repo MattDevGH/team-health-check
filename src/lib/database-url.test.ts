@@ -12,7 +12,11 @@ import path from 'node:path';
 
 import { afterEach, describe, it, expect } from 'vitest';
 
-import { resolveCliDatasourceUrl, resolveSqliteFileUrl } from './database-url';
+import {
+  cliCommandConnectsToDatabase,
+  resolveCliDatasourceUrl,
+  resolveSqliteFileUrl,
+} from './database-url';
 
 const root = process.cwd();
 const asUrl = (...segments: string[]) => `file:${path.resolve(root, ...segments).replace(/\\/g, '/')}`;
@@ -123,5 +127,88 @@ describe('resolveCliDatasourceUrl', () => {
       if (previous === undefined) delete process.env.DATABASE_URL;
       else process.env.DATABASE_URL = previous;
     }
+  });
+});
+
+/**
+ * Which Prisma commands the Turso guard should stop.
+ * Requirements: Deployment 3.1
+ *
+ * The guard was written to refuse everything while TURSO_DATABASE_URL is set,
+ * and a Vercel deployment proved that too broad. `prisma generate` reads the
+ * schema and writes a client; it never opens a database. Blocking it means the
+ * production build cannot generate its Prisma client at all — the build fails
+ * with "Can't resolve '@/generated/prisma'", which looks nothing like a guard
+ * doing its job.
+ *
+ * The rule is therefore about *connecting*, not about the CLI in general. An
+ * allowlist rather than a blocklist, so a command nobody anticipated is refused
+ * rather than quietly permitted — the same fail-closed reasoning as the
+ * TEST_MODE guard.
+ */
+describe('cliCommandConnectsToDatabase', () => {
+  it('lets generate through, because it never opens a database', () => {
+    expect(cliCommandConnectsToDatabase(['node', 'prisma', 'generate'])).toBe(false);
+  });
+
+  it('lets the other schema-only commands through', () => {
+    for (const command of ['format', 'validate', 'version']) {
+      expect(cliCommandConnectsToDatabase(['node', 'prisma', command]), command).toBe(false);
+    }
+  });
+
+  it('stops migrate, which is the command the guard exists for', () => {
+    expect(cliCommandConnectsToDatabase(['node', 'prisma', 'migrate', 'deploy'])).toBe(true);
+    expect(cliCommandConnectsToDatabase(['node', 'prisma', 'migrate', 'dev'])).toBe(true);
+  });
+
+  it('stops db push and db execute, which write to whatever they resolve', () => {
+    expect(cliCommandConnectsToDatabase(['node', 'prisma', 'db', 'push'])).toBe(true);
+    expect(cliCommandConnectsToDatabase(['node', 'prisma', 'db', 'execute'])).toBe(true);
+  });
+
+  it('stops studio, which reads a database it should not be reading', () => {
+    expect(cliCommandConnectsToDatabase(['node', 'prisma', 'studio'])).toBe(true);
+  });
+
+  it('fails closed on a command it has never heard of', () => {
+    // A future Prisma command that connects must be refused by default. The
+    // cost of being wrong this way is a loud error; the other way it is silence.
+    expect(cliCommandConnectsToDatabase(['node', 'prisma', 'some-future-command'])).toBe(true);
+  });
+
+  it('fails closed when there is no command at all', () => {
+    expect(cliCommandConnectsToDatabase(['node', 'prisma'])).toBe(true);
+  });
+
+  it('ignores flags when finding the command', () => {
+    expect(cliCommandConnectsToDatabase(['node', 'prisma', '--schema=x', 'generate'])).toBe(false);
+  });
+});
+
+describe('resolveCliDatasourceUrl and the command it was invoked for', () => {
+  const original = process.env.TURSO_DATABASE_URL;
+  const originalArgv = process.argv;
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.TURSO_DATABASE_URL;
+    else process.env.TURSO_DATABASE_URL = original;
+    process.argv = originalArgv;
+  });
+
+  it('resolves for generate even while a Turso database is configured', () => {
+    // The production build runs this with TURSO_DATABASE_URL set, because the
+    // host supplies it to the build as well as the runtime
+    process.env.TURSO_DATABASE_URL = 'libsql://team-health.turso.io';
+    process.argv = ['node', 'prisma', 'generate'];
+
+    expect(() => resolveCliDatasourceUrl()).not.toThrow();
+  });
+
+  it('still refuses migrate while a Turso database is configured', () => {
+    process.env.TURSO_DATABASE_URL = 'libsql://team-health.turso.io';
+    process.argv = ['node', 'prisma', 'migrate', 'deploy'];
+
+    expect(() => resolveCliDatasourceUrl()).toThrow(/migrate-production/);
   });
 });
