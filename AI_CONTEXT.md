@@ -855,6 +855,25 @@ which the Hobby plan cannot.
 in Vercel without changing it in the cron service stops the scheduler silently,
 because a refused tick looks exactly like no tick at all.
 
+**Genesis did not audit the team it created — found in production, 2026-09-13.**
+Reading the Turso database after creating a real team showed an empty audit log.
+Two routes create teams and only one recorded it: `POST /api/teams` persists
+team, member, role and audit in a single transaction through
+`createWithCreator`; `genesis.service.ts` wrote team, member, role and session
+and nothing else. Genesis is the route every first user arrives through, so the
+log began mid-story, missing the entry explaining how the team came to exist and
+who became its manager. This file claimed team creation persisted an audit
+atomically — true of the tested route, false of the untested one.
+
+Fixed with the same entry shape the authenticated route writes, since one event
+with two shapes depending on which door was used is worse than one shape.
+**Known limitation, stated in the source rather than implied:** the audit write
+is not atomic with the rows above it, because genesis creates each row
+individually rather than through an aggregate — the same exposure its role and
+session writes already carry. Making genesis atomic is worthwhile and separate;
+it would need the service to generate a member id, and no cuid package is a
+dependency.
+
 Three things can only be proven in production — that Turso answers, that the
 trigger fires, that email reaches a non-owner address. Those are not a gap to
 close with more tests; they are where this project’s defects have always lived.

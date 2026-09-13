@@ -126,6 +126,7 @@ export function createContainer(repos: Repositories, options?: ContainerOptions)
     teamMemberRepo: repos.teamMember,
     teamMemberRoleRepo: repos.teamMemberRole,
     userSessionRepo: repos.userSession,
+    auditLogRepo: repos.auditLog,
   });
 
   const trend = createTrendService({
