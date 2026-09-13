@@ -1,0 +1,183 @@
+# Implementation Plan
+
+Phase 1 delivers a working Slack sign-in for anyone already linked. Phase 2 lets
+a Delivery Manager create those links, which is what unblocks a trial with no
+email. Phase 3 makes it self-service and costs a Slack scope.
+
+Phases 1 and 2 together are sufficient to run a team trial without a verified
+sending domain. Phase 3 is the better end state and can wait for its own
+decision.
+
+---
+
+## Phase 1 — Slack hands back a working sign-in link
+
+### 1.1 A linked Slack user can request a sign-in link
+
+- [ ] Failing test: a verified command from a Slack user with an identity link
+      returns an ephemeral reply containing a sign-in URL
+- [ ] Failing test: the reply is `response_type: ephemeral` — a sign-in link
+      posted to a channel is a credential in a channel
+- [ ] Failing test: an unlinked Slack user gets guidance, and the reply reveals
+      nothing about whether that person exists in any team
+- [ ] Failing test: an unverified signature is rejected before any identity work
+- [ ] Implement, reusing the magic-link token lifecycle rather than minting a
+      parallel one
+- _Requirements: 1.1, 1.3, 1.5, 1.6, NFR 1.1, NFR 1.2_
+- _Property: 5_
+
+### 1.2 The link establishes a session, once
+
+- [ ] Failing test: opening the link establishes a `UserSession` with the same
+      expiry a magic link produces
+- [ ] Failing test: the second use of the same token fails
+- [ ] Failing test: an expired token fails
+- [ ] Integration test over a real file: the claim is a compare-and-set, so two
+      concurrent uses cannot both succeed
+- [ ] Mutation check: remove the single-use claim and watch the reuse test fail
+- _Requirements: 1.2, 1.4_
+- _Property: 2_
+
+### 1.3 Rate limit the command
+
+- [ ] Failing test: repeated requests from one Slack user are refused after a
+      threshold, on the same reasoning as the magic-link limit
+- [ ] Failing test: the refusal is legible — it says when to try again
+- _Requirements: 4.3_
+
+**Checkpoint:** anyone already linked can sign in from Slack. Nobody can link
+without email yet, which phase 2 fixes. One PR.
+
+---
+
+## Phase 2 — A Delivery Manager can assert a binding
+
+### 2.1 Record a Slack user id against a member
+
+- [ ] Failing test: a Delivery Manager can set a member's Slack user id
+- [ ] Failing test: a Slack user id already bound to another member is rejected
+- [ ] Failing test: an ordinary member cannot bind anyone, including themselves
+- [ ] Failing test: clearing a binding removes the link
+- _Requirements: 2.1, 2.2_
+- _Property: 3_
+
+### 2.2 Audit every binding
+
+- [ ] Failing test: creating, changing and removing a binding each write an
+      audit entry naming the actor
+- [ ] Failing test: the entry distinguishes a manager-asserted binding from an
+      email-matched one, so the log answers *how* as well as *who*
+- [ ] Verify the audit log page renders the new change types legibly rather than
+      falling back to a raw string
+- _Requirements: 2.3, NFR 2.1, NFR 2.2_
+
+### 2.3 Say what a binding grants
+
+- [ ] Failing test: the settings UI states that binding asserts identity and
+      does not grant the manager the ability to sign in as that member
+- [ ] axe against the new control, including its explanatory copy
+- [ ] Keyboard operable end to end
+- _Requirements: 2.4, 2.5, NFR 3.1_
+
+**Checkpoint:** a team can be set up and can sign in with no email configured at
+all. This is the point at which a trial becomes possible without a domain. One
+PR.
+
+---
+
+## Phase 3 — Slack asserts the binding
+
+Needs the `users:read.email` scope. This project removed `users:read` once for
+being speculative; it stops being speculative here, but the decision is its own.
+
+### 3.1 Match an unlinked Slack user by verified email
+
+- [ ] Failing test: an unlinked Slack user whose email matches one member is
+      linked automatically and signed in
+- [ ] Failing test: an email matching members in more than one team issues
+      nothing, matching the existing ambiguous-identity guard
+- [ ] Failing test: an email matching no member creates no team member and says
+      so without confirming who exists
+- [ ] Failing test: matching is case-insensitive and exact — no prefix or domain
+      matching
+- _Requirements: 3.1, 3.2, 3.3, 3.4_
+- _Properties: 1, 4_
+
+### 3.2 Degrade rather than fail opaquely
+
+- [ ] Failing test: a Slack user with no readable email falls back to the
+      manager-asserted path with a legible message
+- [ ] Failing test: a missing scope produces the same fallback, not a 500
+- [ ] The scope is documented in the README table alongside the existing three,
+      with what calls it
+- _Requirements: 3.5, 5.4_
+
+### 3.3 Audit the automatic link
+
+- [ ] Failing test: an email-matched binding is audited and distinguishable from
+      a manager-asserted one
+- _Requirements: 3.6_
+
+---
+
+## Phase 4 — Both routes, and neither
+
+### 4.1 Removal revokes access
+
+- [ ] Failing test: a member removed from a team cannot sign in through a
+      surviving identity link
+- [ ] Failing test: the identity link does not outlive the member row in a way
+      that would resurrect access if the member were re-added
+- _Requirements: 4.4_
+- _Property: 6_
+
+### 4.2 Either provider is sufficient, neither is fatal silence
+
+- [ ] Failing test: with no email provider configured but Slack present, the
+      application is fully usable
+- [ ] Failing test: with no Slack app configured but email present, unchanged
+- [ ] Failing test: with neither configured, startup says so rather than
+      presenting a sign-in page that cannot work
+- _Requirements: 5.1, 5.2, 5.3_
+
+### 4.3 Document the ways in
+
+- [ ] README and `docs/deployment.md`: which routes in exist, what each requires,
+      and what happens when only one is configured
+- [ ] State plainly that without a verified sending domain, email delivers only
+      to the Resend account owner — the defect that motivated this spec
+- _Requirements: 5.4_
+
+---
+
+## Phase 5 — Prove it in a real workspace
+
+### 5.1 Workspace acceptance
+
+Not optional, and not replaceable by tests. The 2026-08-26 pass found three
+defects a 1,150-test suite could not see, each visible only outside the app.
+
+- [ ] A linked member signs in from Slack and reaches their dashboard
+- [ ] The sign-in link is ephemeral — confirm it is not visible to anyone else
+- [ ] A second use of the same link fails
+- [ ] An unlinked user gets guidance rather than an error
+- [ ] With phase 3: a never-seen member signs in with no setup at all
+- [ ] Confirm what Slack actually returns for a guest account, rather than
+      assuming the fallback path is reachable
+- _Requirements: 1.1, 1.2, 1.4, 3.1, 3.5_
+
+### 5.2 Reconcile
+
+- [ ] Update README and AI_CONTEXT
+- [ ] Record anything the workspace pass found that no test could
+- [ ] Full gate set, then merge
+
+---
+
+## Roadmap, deliberately unscheduled
+
+- **OAuth "Sign in with Slack".** The full identity product. Unnecessary while
+  signed requests already prove identity, and it would add a token to store.
+- **Retiring the pairing-code flow.** It still serves someone already signed in
+  who wants to link Slack. Revisit once phase 3 has seen real use.
+- **Multi-workspace.** Blocked behind multi-team, which is its own future spec.
