@@ -736,7 +736,7 @@ that had closed exactly one check was told "more data needed" — a statement
 about the chart — and shown no scores at all. That is what Matt saw on
 production after closing the first check. A trend needs two points; a result
 needs one. The route now returns the closed sessions either way and
- keeps its original meaning, while the page gates only the
+`requiresMoreData` keeps its original meaning, while the page gates only the
 chart on it. Proven in a browser: a seeded single-close team shows its scores,
 and a seeded team whose closes were never materialised reports *overdue* on
 both surfaces rather than accusing anyone of silence.
