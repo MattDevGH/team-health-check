@@ -21,10 +21,10 @@
         "better-sqlite3": "^12.9.0",
         "date-fns-tz": "^3.2.0",
         "next": "16.3.4",
-        "react": "19.2.8",
-        "react-dom": "19.2.8",
-        "resend": "^6.26.0",
-        "zod": "^4.5.4"
+        "react": "19.3.0",
+        "react-dom": "19.3.0",
+        "resend": "^6.28.0",
+        "zod": "^4.6.5"
     },
     "prisma": {
         "seed": "npx tsx prisma/seed.ts"
@@ -39,14 +39,14 @@
         "@testing-library/user-event": "^14.6.7",
         "@types/better-sqlite3": "^7.6.13",
         "@types/jest-axe": "^3.5.9",
-        "@types/node": "^20",
+        "@types/node": "^26.5.1",
         "@types/react": "^19",
         "@types/react-dom": "^19",
         "@vitejs/plugin-react": "^6.1.1",
-        "eslint": "^9",
+        "eslint": "^9.39.4",
         "eslint-config-next": "^16.3.4",
         "fast-check": "^4.9.0",
-        "jest-axe": "^10.0.0",
+        "jest-axe": "^11.0.0",
         "jsdom": "^30.0.1",
         "msw": "^2.15.0",
         "prisma": "7.10.0",
@@ -54,7 +54,7 @@
         "tsx": "^4.23.13",
         "typescript": "^5",
         "vite-tsconfig-paths": "^6.1.1",
-        "vitest": "^4.1.5"
+        "vitest": "^4.1.8"
     },
     "_overrides_note": "Transitive pins for advisories with no non-breaking upstream fix; npm offered only a major Prisma downgrade for each. deepmerge-ts: @prisma/config pins 7.1.5, stack exhaustion on recursive graphs (GHSA-ggr8-5vv4-36mx). mysql2: reached through @prisma/client -> prisma and never loaded here, since this app uses SQLite and Turso (GHSA-3f6p-5ww8-9rcr, GHSA-rgwj-5xj2-c3m3). baseline-browser-mapping: browserslist data pulled in by next (GHSA-w5vr-8v7q-w6rv). All three are exercised by the gates -- the E2E suite runs prisma migrate through @prisma/config, and the build resolves browserslist data. Drop each one once its parent depends on a patched version itself.",
     "overrides": {
