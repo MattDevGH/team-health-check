@@ -281,7 +281,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
             <h2 className="text-lg font-semibold text-gray-700 mb-3">
               Trend Indicators
             </h2>
-            <TrendDistributionPanel distribution={trendDistribution} />
+            <TrendDistributionPanel distribution={trendDistribution} anonymousMode={anonymousMode} />
           </div>
         )}
 

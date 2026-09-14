@@ -15,9 +15,34 @@ interface TrendDistributionData {
 
 interface TrendDistributionProps {
   distribution: TrendDistributionData[];
+  /** Whether the team was promised that individual answers stay unattributable. */
+  anonymousMode: boolean;
+  /** Minimum voices before a count may be shown. */
+  anonymityThreshold?: number;
 }
 
-export function TrendDistribution({ distribution }: TrendDistributionProps) {
+const DEFAULT_ANONYMITY_THRESHOLD = 3;
+
+export function TrendDistribution({
+  distribution,
+  anonymousMode,
+  anonymityThreshold = DEFAULT_ANONYMITY_THRESHOLD,
+}: TrendDistributionProps) {
+  /**
+   * A trend indicator identifies a person exactly as a score does.
+   *
+   * Production showed every score hidden behind "fewer than 3 people
+   * answered" and `Stable: 1` beside it, which told any reader what that one
+   * person said. Protecting one and not the other makes the protection
+   * theatre: in a team of three where two have not answered, `Declining: 1`
+   * is attributable by elimination.
+   *
+   * Counted across all three words rather than per word. The identifying
+   * quantity is how many people expressed a trend at all — and a trend is
+   * optional alongside a score, so this total is not the response count.
+   */
+  const isSuppressed = (item: TrendDistributionData) =>
+    anonymousMode && item.improving + item.stable + item.declining < anonymityThreshold;
   return (
     <div className="space-y-3">
       {/*
@@ -34,17 +59,28 @@ export function TrendDistribution({ distribution }: TrendDistributionProps) {
           <p className="text-sm font-medium text-gray-700 mb-1">
             {formatQuestionId(item.questionId)}
           </p>
-          <div className="flex gap-4 text-xs">
-            <span className="text-green-700">
-              Improving: {item.improving}
-            </span>
-            <span className="text-gray-600">
-              Stable: {item.stable}
-            </span>
-            <span className="text-red-600">
-              Declining: {item.declining}
-            </span>
-          </div>
+          {isSuppressed(item) ? (
+            /*
+              Named and explained rather than omitted. An absent row reads as
+              "nobody answered", which is a different and false claim —
+              hidden is not the same as unanswered.
+            */
+            <p className="text-xs italic text-amber-800">
+              Hidden — fewer than {anonymityThreshold} people said how this is going
+            </p>
+          ) : (
+            <div className="flex gap-4 text-xs">
+              <span className="text-green-700">
+                Improving: {item.improving}
+              </span>
+              <span className="text-gray-600">
+                Stable: {item.stable}
+              </span>
+              <span className="text-red-600">
+                Declining: {item.declining}
+              </span>
+            </div>
+          )}
         </div>
       ))}
     </div>
