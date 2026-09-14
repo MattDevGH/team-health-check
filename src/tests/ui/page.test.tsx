@@ -130,3 +130,35 @@ describe('Home page', () => {
     });
   });
 });
+
+/**
+ * A page that has been left must not navigate.
+ *
+ * Requirements: Manager Experience 1.1
+ *
+ * `current` guarded the state update but not the redirect, so a fetch that
+ * resolved after unmount still called `router.replace`. In the suite that
+ * surfaced as a flake: a signed-in test's in-flight request landed during a
+ * later signed-out test and failed an assertion that nothing had navigated.
+ *
+ * CI caught it; a local run did not, because the leak depends on how long the
+ * request takes relative to the next test starting.
+ *
+ * It is not only a test problem. A member who clicks away from a slow-loading
+ * homepage should not be yanked to a dashboard a moment later.
+ */
+describe('Home page after the reader has left', () => {
+  beforeEach(() => {
+    mockReplace.mockClear();
+  });
+
+  it('does not navigate once it has been unmounted', async () => {
+    const { unmount } = render(<Home />);
+    unmount();
+
+    // Long enough for the in-flight /api/me to resolve and try to redirect
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+});

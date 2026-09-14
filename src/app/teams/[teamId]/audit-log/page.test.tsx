@@ -306,3 +306,110 @@ describe('Audit Log Page', () => {
     });
   });
 });
+
+/**
+ * The audit log is read by a person, months later.
+ *
+ * Requirements: 18.4
+ *
+ * Three findings from reading a real production log on 2026-09-14, none of which
+ * failed a test.
+ *
+ * A first schedule rendered as `null→{"cadence":"weekly",…}`. `null` is a
+ * database artefact — `team.service.ts` writes the literal string for a first
+ * configuration — and this is the one screen whose entire job is being
+ * understood by a human reader later.
+ *
+ * The values ran past the right edge of their card. Audit values are JSON by
+ * design, so they are long and unbroken, and this will only get worse.
+ *
+ * And an arrow between two unlabelled blobs asks the reader to infer which is
+ * which. `aria-label="changed to"` on a decorative span does less than it looks.
+ */
+describe('Audit entries a person can read', () => {
+  beforeEach(() => {
+    setupHandlers();
+  });
+
+  it('says what there was before, rather than showing a bare arrow', async () => {
+    renderPage();
+
+    await waitFor(() => expect(screen.getAllByRole('article').length).toBeGreaterThan(0));
+    const [entry] = screen.getAllByRole('article');
+
+    expect(entry).toHaveTextContent(/before/i);
+    expect(entry).toHaveTextContent(/after/i);
+  });
+
+  it('says "no previous value" rather than null for a first configuration', async () => {
+    server.use(
+      http.get('/api/teams/:teamId/audit-log', () =>
+        HttpResponse.json({
+          entries: [
+            {
+              id: 'first',
+              teamId: TEAM_ID,
+              changeType: 'schedule_change',
+              previousValue: 'null',
+              newValue: '{"cadence":"weekly"}',
+              userId: 'member-1',
+              timestamp: '2026-09-14T14:25:00.000Z',
+              actor: { id: 'member-1', name: 'Matt', isViewer: true, isErased: false },
+            },
+          ],
+          nextCursor: null,
+        }),
+      ),
+    );
+    renderPage();
+
+    await waitFor(() => expect(screen.getAllByRole('article').length).toBeGreaterThan(0));
+    const [entry] = screen.getAllByRole('article');
+
+    expect(entry).not.toHaveTextContent(/null/);
+    expect(entry).toHaveTextContent(/no previous value/i);
+  });
+
+  it('treats an empty previous value the same way', async () => {
+    // Two routes write "nothing was there before": the literal string "null"
+    // from a first schedule, and '' from team creation and member addition
+    server.use(
+      http.get('/api/teams/:teamId/audit-log', () =>
+        HttpResponse.json({
+          entries: [
+            {
+              id: 'created',
+              teamId: TEAM_ID,
+              changeType: 'team_created',
+              previousValue: '',
+              newValue: '{"name":"FCRM AI Labs"}',
+              userId: 'member-1',
+              timestamp: '2026-09-14T14:20:00.000Z',
+              actor: { id: 'member-1', name: 'Matt', isViewer: true, isErased: false },
+            },
+          ],
+          nextCursor: null,
+        }),
+      ),
+    );
+    renderPage();
+
+    await waitFor(() => expect(screen.getAllByRole('article').length).toBeGreaterThan(0));
+
+    expect(screen.getAllByRole('article')[0]).toHaveTextContent(/no previous value/i);
+  });
+
+  it('lets a long unbroken value wrap instead of leaving its card', async () => {
+    // A schedule is one long JSON string with no spaces to break on, so the
+    // default wrapping does nothing and it overflows
+    const { container } = renderPage();
+
+    await waitFor(() => expect(screen.getAllByRole('article').length).toBeGreaterThan(0));
+
+    const values = container.querySelectorAll('[data-audit-value]');
+    expect(values.length).toBeGreaterThan(0);
+    for (const value of values) {
+      expect(value.className).toMatch(/break-all|break-words/);
+    }
+  });
+});

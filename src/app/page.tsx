@@ -62,11 +62,19 @@ export default function Home() {
            */
           if (isSession(profile) && profile.team) {
             /**
+             * `current` guards the navigation, not just the state update.
+             *
+             * Without it a request that resolves after unmount still calls
+             * `replace`, so a member who clicks away from a slow-loading page
+             * is yanked to a dashboard a moment later. In the suite the same
+             * leak surfaced as a flake, one test’s in-flight fetch landing
+             * during the next.
+             *
              * replace, not push: push would leave `/` in the history directly
              * behind the dashboard, so Back would redirect straight forward
              * again and trap the member with no way out.
              */
-            router.replace(`/teams/${profile.team.id}/dashboard`);
+            if (current) router.replace(`/teams/${profile.team.id}/dashboard`);
             return;
           }
         }
