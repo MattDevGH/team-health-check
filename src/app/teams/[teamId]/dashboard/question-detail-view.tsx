@@ -14,6 +14,13 @@ import { useState } from 'react';
 
 import { pluralise } from '@/lib/format';
 
+import {
+  describeResultState,
+  materialisationEvidence,
+  resultState,
+  type ResultState,
+} from './result-state';
+
 interface SessionAverage {
   questionId: string;
   averageScore: number;
@@ -24,6 +31,8 @@ interface SessionData {
   sessionId: string;
   closedAt: string;
   averages: SessionAverage[];
+  /** When aggregates were computed, or null if they never were. */
+  materialisedAt?: string | null;
 }
 
 /** One entry of the fixed question catalogue, from the trends response. */
@@ -46,6 +55,8 @@ interface QuestionDetailViewProps {
   anonymousMode: boolean;
   /** Minimum responses required to display data in anonymous mode */
   anonymityThreshold?: number;
+  /** Injectable for tests; the pending and overdue wordings turn on it. */
+  now?: Date;
 }
 
 const DEFAULT_ANONYMITY_THRESHOLD = 3;
@@ -59,6 +70,7 @@ export function QuestionDetailView({
   questions,
   anonymousMode,
   anonymityThreshold = DEFAULT_ANONYMITY_THRESHOLD,
+  now = new Date(),
 }: QuestionDetailViewProps) {
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
 
@@ -153,15 +165,26 @@ export function QuestionDetailView({
                   <p className="pb-1 text-sm italic text-gray-600">{theme.description}</p>
                 )}
                 {sessions.map((session) => {
-                  const avg = session.averages.find((a) => a.questionId === qId);
-
-                  // A session where nobody answered this theme used to be
-                  // skipped, so the history silently omitted it and a reader
-                  // could not tell a gap from a check that never ran
-                  const isSuppressed =
-                    avg !== undefined &&
-                    anonymousMode &&
-                    avg.responseCount < anonymityThreshold;
+                  /*
+                    A session where nobody answered this theme used to be
+                    skipped, so the history silently omitted it and a reader
+                    could not tell a gap from a check that never ran. Now it
+                    is named, by the same selector the latest-session panel
+                    uses, so the two surfaces cannot describe one session
+                    differently.
+                  */
+                  const state = resultState({
+                    average: session.averages.find((a) => a.questionId === qId),
+                    materialisedAt: materialisationEvidence({
+                      materialisedAt: session.materialisedAt ?? null,
+                      closedAt: session.closedAt,
+                      averages: session.averages,
+                    }),
+                    closedAt: session.closedAt,
+                    now,
+                    anonymousMode,
+                    anonymityThreshold,
+                  });
 
                   return (
                     <div
@@ -171,31 +194,17 @@ export function QuestionDetailView({
                       <span className="text-gray-500">
                         {formatDate(session.closedAt)}
                       </span>
-                      {avg === undefined ? (
-                        // Distinct from suppression on purpose: nobody
-                        // answered, rather than too few answering to show
-                        <span className="text-gray-500">No responses</span>
-                      ) : isSuppressed ? (
-                        /*
-                          amber-800, not amber-600. amber-600 measures 3.19:1 on
-                          white and 2.95:1 on the expanded row — failing AA, not
-                          borderline. It survived because this label renders only
-                          for an anonymous team with a theme under the threshold,
-                          and no test put a page into that state; jsdom’s axe
-                          cannot judge colour either way. amber-800 gives 7.09:1.
-                        */
-                        <span className="text-amber-800 italic">
-                          Insufficient data
-                        </span>
-                      ) : (
+                      {state.kind === 'shown' ? (
                         <span className="flex gap-3">
                           <span className="font-medium text-gray-800">
-                            {avg.averageScore.toFixed(1)}
+                            {state.average.averageScore.toFixed(1)}
                           </span>
                           <span className="text-gray-500">
-                            {pluralise(avg.responseCount, 'response')}
+                            {pluralise(state.average.responseCount, 'response')}
                           </span>
                         </span>
+                      ) : (
+                        <ResultMessage state={state} />
                       )}
                     </div>
                   );
@@ -208,6 +217,25 @@ export function QuestionDetailView({
         })}
       </div>
     </section>
+  );
+}
+
+/**
+ * A line explaining an absent score.
+ *
+ * amber-800, not amber-600. amber-600 measures 3.19:1 on white and 2.95:1 on
+ * the expanded row — failing AA, not borderline. It survived because the label
+ * it coloured renders only for an anonymous team under the threshold, and no
+ * test put a page into that state; jsdom’s axe cannot judge colour either way.
+ * amber-800 gives 7.09:1.
+ */
+function ResultMessage({ state }: { state: Exclude<ResultState, { kind: 'shown' }> }) {
+  const message = describeResultState(state);
+
+  return (
+    <span className={message.tone === 'attention' ? 'text-amber-800 italic' : 'text-gray-500'}>
+      {message.text}
+    </span>
   );
 }
 

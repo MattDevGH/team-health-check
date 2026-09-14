@@ -21,6 +21,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  describeResultState,
   materialisationEvidence,
   resultState,
   RESULTS_OVERDUE_AFTER_MS,
@@ -190,5 +191,56 @@ describe('materialisationEvidence', () => {
     expect(
       materialisationEvidence({ materialisedAt: ran, closedAt: CLOSED, averages: [anAverage] }),
     ).toBe(ran);
+  });
+});
+
+/**
+ * One wording, two surfaces.
+ *
+ * The latest-session panel and the question themes list describe the same
+ * session, and a reader moves straight from one to the other. If they word the
+ * same state differently — "insufficient data" against "hidden until 3 people
+ * have answered" — the reader has two accounts of one fact and no way to tell
+ * which is true. They did, until this existed.
+ */
+describe('describeResultState', () => {
+  const message = (kind: 'pending' | 'overdue' | 'unanswered') =>
+    describeResultState({ kind }).text;
+
+  it('bounds the wait for a pending result rather than leaving it open', () => {
+    expect(message('pending')).toMatch(/minutes/i);
+  });
+
+  it('points an overdue result at the scheduler, not at the team', () => {
+    expect(message('overdue')).toMatch(/scheduler/i);
+    expect(message('overdue')).not.toMatch(/no responses/i);
+  });
+
+  it('says plainly that nobody answered', () => {
+    expect(message('unanswered')).toMatch(/no responses/i);
+  });
+
+  it('says what would make a suppressed value appear', () => {
+    // Not "insufficient data": the data is fine, the team is small
+    const text = describeResultState({ kind: 'suppressed', needed: 3 }).text;
+    expect(text).toMatch(/hidden until 3 people have answered/i);
+  });
+
+  it('describes nothing for a value that is on screen', () => {
+    expect(describeResultState({ kind: 'shown', average: average(6) })).toBeNull();
+  });
+
+  it('gives every silent state a distinct wording', () => {
+    const texts = [message('pending'), message('overdue'), message('unanswered')];
+    expect(new Set(texts).size).toBe(texts.length);
+  });
+
+  it('marks the states a reader should act on, and not the ones they cannot', () => {
+    // Drives colour on both surfaces. Overdue and suppressed have something a
+    // reader can do; a pending result and an unanswered theme do not.
+    expect(describeResultState({ kind: 'overdue' })?.tone).toBe('attention');
+    expect(describeResultState({ kind: 'suppressed', needed: 3 })?.tone).toBe('attention');
+    expect(describeResultState({ kind: 'pending' })?.tone).toBe('muted');
+    expect(describeResultState({ kind: 'unanswered' })?.tone).toBe('muted');
   });
 });

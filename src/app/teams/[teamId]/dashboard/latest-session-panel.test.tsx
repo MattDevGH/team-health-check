@@ -11,6 +11,9 @@
 
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import { axe, toHaveNoViolations } from 'jest-axe';
+
+expect.extend(toHaveNoViolations);
 
 import { LatestSessionPanel } from './latest-session-panel';
 
@@ -295,4 +298,80 @@ describe('LatestSessionPanel explains an empty result', () => {
     expect(screen.queryByText(/being prepared/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/overdue/i)).not.toBeInTheDocument();
   });
+});
+
+/**
+ * Explaining Itself NFR 2.1.
+ *
+ * Each explanation is a state the table can be in, and a state nothing has
+ * ever audited is a state that can ship broken. The colspan cells in
+ * particular are new structure, not new text: a cell spanning three columns
+ * in a table with row headers is exactly the sort of thing that reads fine
+ * and announces badly.
+ *
+ * jsdom's axe cannot judge colour contrast. The amber used here is checked by
+ * hand and recorded where it is applied.
+ */
+describe('LatestSessionPanel accessibility in every state', () => {
+  const CLOSED = '2026-09-14T17:00:00.000Z';
+  const QUESTIONS = [
+    { id: 'q-delivering-value', title: 'Delivering Value', description: 'How well…?' },
+    { id: 'q-psychological-safety', title: 'Psychological Safety', description: 'How safe…?' },
+  ];
+
+  const states = {
+    pending: {
+      sessions: [{ sessionId: 's1', closedAt: CLOSED, averages: [] }],
+      now: new Date('2026-09-14T17:02:00.000Z'),
+      anonymousMode: false,
+    },
+    overdue: {
+      sessions: [{ sessionId: 's1', closedAt: CLOSED, averages: [] }],
+      now: new Date('2026-09-14T19:00:00.000Z'),
+      anonymousMode: false,
+    },
+    unanswered: {
+      sessions: [
+        {
+          sessionId: 's1',
+          closedAt: CLOSED,
+          materialisedAt: CLOSED,
+          averages: [{ questionId: 'q-delivering-value', averageScore: 4, responseCount: 6 }],
+        },
+      ],
+      now: new Date('2026-09-14T19:00:00.000Z'),
+      anonymousMode: false,
+    },
+    suppressed: {
+      sessions: [
+        {
+          sessionId: 's1',
+          closedAt: CLOSED,
+          materialisedAt: CLOSED,
+          averages: [{ questionId: 'q-delivering-value', averageScore: 4, responseCount: 2 }],
+        },
+      ],
+      now: new Date('2026-09-14T19:00:00.000Z'),
+      anonymousMode: true,
+    },
+  };
+
+  for (const [name, props] of Object.entries(states)) {
+    it(`has no axe-detectable violations while ${name}`, async () => {
+      const { container } = render(<LatestSessionPanel {...props} questions={QUESTIONS} />);
+
+      expect(await axe(container)).toHaveNoViolations();
+    });
+
+    it(`keeps every theme addressable by its own row while ${name}`, () => {
+      // The explanation replaces three cells with one. A row whose header no
+      // longer pairs with anything is a table that reads as a list of names.
+      render(<LatestSessionPanel {...props} questions={QUESTIONS} />);
+
+      for (const question of QUESTIONS) {
+        expect(screen.getByRole('row', { name: new RegExp(question.title, 'i') }))
+          .toBeInTheDocument();
+      }
+    });
+  }
 });

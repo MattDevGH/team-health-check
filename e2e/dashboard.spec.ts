@@ -134,7 +134,7 @@ test.describe('dashboard with sufficient responses', () => {
 
     const detail = await openQuestionDetail(page, /psychological safety/i);
 
-    await expect(detail).not.toContainText(/insufficient data/i);
+    await expect(detail).not.toContainText(/hidden until 3 people have answered/i);
     await expect(detail).toContainText('2.5');
     await expect(detail).toContainText('3.0');
   });
@@ -163,7 +163,7 @@ test.describe('dashboard below the anonymity threshold', () => {
 
     const detail = await openQuestionDetail(page, /delivering value/i);
 
-    await expect(detail).toContainText(/insufficient data/i);
+    await expect(detail).toContainText(/hidden until 3 people have answered/i);
     // Scoped to the detail region: "4.0" and "5.0" also appear as chart axis labels
     await expect(detail).not.toContainText('4.0');
     await expect(detail).not.toContainText('5.0');

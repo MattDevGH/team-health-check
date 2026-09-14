@@ -543,7 +543,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1193 tests across 147 files**, including
+The Vitest suite now contains **1567 tests across 173 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
@@ -695,17 +695,45 @@ setting to revisit first if anyone else gains write access.
 
 ## Outstanding Work
 
-### Explaining itself — spec written 2026-09-14, not started
+### Explaining itself — phase 1 in progress (2026-09-14)
 
 `.kiro/specs/explaining-itself/`. Five findings from Matt walking the whole
 loop on production. Everything worked; almost nothing explained itself.
 
-**Three silences render identically.** A closed check shows no scores because
-materialisation runs on the next tick (resolves in minutes), or because one
-response is below the anonymity threshold (never resolves), or because nobody
-answered. The distinction exists in the data — absent aggregates,
-`responseCount` under the threshold, and the representable-absence work from
-the dashboard refinement. Only the words are missing.
+**Three silences render identically** — **phase 1, done.** A closed check shows
+no scores because materialisation runs on the next tick (resolves in minutes),
+or because one response is below the anonymity threshold (never resolves), or
+because nobody answered.
+
+The spec assumed the distinction was already in the data. **It was not.** "Not
+computed yet" and "computed, and nobody answered" were the same absence — zero
+aggregates — and the only thing left to separate them was elapsed time. Guessing
+from the clock fails in the dangerous direction: a stalled scheduler would have
+the dashboard report that a team ignored a health check it was never asked
+about. So `HealthCheckSession.materialisedAt` was added first, written by
+`materializeAggregates` after the aggregates land, and a fourth state —
+*overdue* — falls out of it. That is the one message that would have surfaced a
+stopped cron to the person who could restart it.
+
+`result-state.ts` holds the whole rule as a pure selector plus the wording:
+
+- `resultState()` returns `shown` / `pending` / `overdue` / `suppressed` /
+  `unanswered`. A value that exists is decided first, which is what stops a
+  theme reporting pending and suppressed at once.
+- `materialisationEvidence()` covers sessions closed before the column existed,
+  where a single aggregate is itself proof the work ran. Without it every
+  unanswered theme in production’s existing sessions would have claimed the
+  scheduler had stopped.
+- `describeResultState()` owns the words. The latest-session panel and the
+  question themes list describe the same session and a reader moves straight
+  between them; they had two wordings for suppression, and "Insufficient data"
+  read as a fault in the data when the truth was a small team. Both now say
+  *Hidden until 3 people have answered*.
+
+Each of the four states is axe-audited on both surfaces, proven live by
+mutation rather than assumed — an audit of a state the page never entered
+reports a pass for work it did not do, which is how the amber contrast defect
+survived.
 
 **Submitting has no ending.** No confirmation, no way onward, and a button
 reading exactly as before anything was saved — so pressing it again looks like
@@ -982,8 +1010,9 @@ close with more tests; they are where this project’s defects have always lived
 
 ### Anonymity suppression: a state no test could reach — 2026-09-11
 
-`text-amber-600` on the "Insufficient data" label measured **3.19:1** against
-white. Not borderline — failing AA outright, for as long as it had existed.
+`text-amber-600` on the suppression label — then reading "Insufficient data",
+now "Hidden until 3 people have answered" — measured **3.19:1** against white.
+Not borderline: failing AA outright, for as long as it had existed.
 
 **It survived because nothing put a page into the state.** The label renders
 only for a team in *anonymous* mode with a theme under the three-response

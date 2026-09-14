@@ -104,3 +104,50 @@ export function materialisationEvidence(input: MaterialisationInput): string | n
   if (input.materialisedAt) return input.materialisedAt;
   return input.averages.length > 0 ? input.closedAt : null;
 }
+
+export interface ResultStateMessage {
+  text: string;
+  /**
+   * Whether a reader has anything to do about it. `attention` earns colour;
+   * `muted` is news the reader cannot act on and should not be alarmed by.
+   */
+  tone: 'muted' | 'attention';
+}
+
+/**
+ * How to say a silence, for every surface that has to say it.
+ *
+ * The latest-session panel and the question themes list describe the same
+ * session and a reader moves straight between them, so wording that differs
+ * between the two gives one fact two accounts. That happened: the list called a
+ * suppressed value "insufficient data", which reads as a fault in the data
+ * rather than a small team, while the panel named the threshold.
+ *
+ * Returns null for a value that is on screen, where the number speaks.
+ */
+/** Every state but `shown` has something to say, and the type says so. */
+export function describeResultState(
+  state: Exclude<ResultState, { kind: 'shown' }>,
+): ResultStateMessage;
+export function describeResultState(state: ResultState): ResultStateMessage | null;
+export function describeResultState(state: ResultState): ResultStateMessage | null {
+  switch (state.kind) {
+    case 'shown':
+      return null;
+    case 'pending':
+      // Bounded on purpose. "Being prepared" with no horizon is indistinguishable
+      // from broken after the second refresh.
+      return { text: 'Results are being prepared — this usually takes a few minutes', tone: 'muted' };
+    case 'overdue':
+      /*
+       * Names the scheduler rather than the team. The alternative reading —
+       * "no responses" — is a false accusation, and the one message that would
+       * have surfaced a stopped cron to the person who could restart it.
+       */
+      return { text: 'Results are overdue — the scheduler may not be running', tone: 'attention' };
+    case 'suppressed':
+      return { text: `Hidden until ${state.needed} people have answered`, tone: 'attention' };
+    case 'unanswered':
+      return { text: 'No responses', tone: 'muted' };
+  }
+}

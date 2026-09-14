@@ -15,7 +15,12 @@
  */
 
 import { pluralise } from '@/lib/format';
-import { materialisationEvidence, resultState } from './result-state';
+import {
+  describeResultState,
+  materialisationEvidence,
+  resultState,
+  type ResultState,
+} from './result-state';
 
 interface SessionAverage {
   questionId: string;
@@ -178,37 +183,16 @@ export function LatestSessionPanel({
                   </th>
 
                   {/*
-                    Four reasons a cell can be empty, and they are different news.
+                    Four reasons a cell can be empty, and they are different
+                    news. Being prepared resolves in minutes; overdue means the
+                    scheduler has stopped; hidden never resolves without more
+                    people; and no responses means silence. Rendering all four
+                    as blankness is how a working tool came to look broken.
 
-                    Being prepared resolves in minutes. Overdue means the
-                    scheduler has stopped. Hidden never resolves without more
-                    people. And no responses means silence. Rendering all four as
-                    blankness is how a working tool came to look broken.
+                    Worded by the shared selector so this panel and the themes
+                    list below it cannot give one session two accounts.
                   */}
-                  {state.kind === 'pending' ? (
-                    <td colSpan={3} className="py-1 italic text-gray-600">
-                      Results are being prepared — this usually takes a few minutes
-                    </td>
-                  ) : state.kind === 'overdue' ? (
-                    /*
-                      Not "nobody answered". That would be a false claim about a
-                      team, on a tool whose purpose is telling you how they are
-                      doing — and the truth is that nothing has computed them.
-                    */
-                    <td colSpan={3} className="py-1 italic text-amber-800">
-                      Results are overdue — the scheduler may not be running
-                    </td>
-                  ) : state.kind === 'unanswered' ? (
-                    // Silence, distinct from suppression: one means nobody spoke,
-                    // the other means too few did to show it safely.
-                    <td colSpan={3} className="py-1 text-gray-500">
-                      No responses
-                    </td>
-                  ) : state.kind === 'suppressed' ? (
-                    <td colSpan={3} className="py-1 italic text-amber-800">
-                      Hidden until {state.needed} people have answered
-                    </td>
-                  ) : (
+                  {state.kind === 'shown' ? (
                     <>
                       <td className="py-1 pr-4 font-medium text-gray-900">
                         {state.average.averageScore.toFixed(1)}
@@ -220,6 +204,8 @@ export function LatestSessionPanel({
                         {pluralise(state.average.responseCount, 'response')}
                       </td>
                     </>
+                  ) : (
+                    <ResultMessageCell state={state} />
                   )}
                 </tr>
               );
@@ -228,5 +214,27 @@ export function LatestSessionPanel({
         </table>
       </div>
     </section>
+  );
+}
+
+/**
+ * A cell that explains an absent score.
+ *
+ * amber-800 rather than amber-600: amber-600 measures 3.19:1 on white, which
+ * fails AA outright. jsdom’s axe cannot judge colour, so this is checked by
+ * hand and stated here.
+ */
+function ResultMessageCell({ state }: { state: Exclude<ResultState, { kind: 'shown' }> }) {
+  const message = describeResultState(state);
+
+  return (
+    <td
+      colSpan={3}
+      className={`py-1 italic ${
+        message.tone === 'attention' ? 'text-amber-800' : 'text-gray-600'
+      }`}
+    >
+      {message.text}
+    </td>
   );
 }
