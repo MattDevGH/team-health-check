@@ -19,26 +19,42 @@ describe('Session lifecycle integration', () => {
   let container: Container;
   let scheduler: ReturnType<typeof createSchedulerService>;
 
+  /** Advanced by tickAt so the scheduler and the session service agree on now. */
+  let tickClock = new Date();
+  const tickAt = async (iso: string) => {
+    tickClock = new Date(iso);
+    await scheduler.tick(tickClock);
+  };
+
   beforeEach(() => {
     repos = createInMemoryRepositories();
     container = createContainer(repos);
 
-    // Wire the scheduler service (not part of container — requires sessionService dep)
-    const sessionService = createSessionService({
-      sessionRepo: repos.session,
-      sessionLinkRepo: repos.sessionLink,
-      teamMemberRepo: repos.teamMember,
-      responseRepo: repos.response,
-      sessionAggregateRepo: repos.sessionAggregate,
-    });
-
+    /*
+     * One tick, one clock — the wiring the production route uses.
+     *
+     * open() stamps scheduledCloseAt from its own clock and needs the schedule
+     * to compute it. Without both, a session opened by a tick dated 2024 carried
+     * a close time derived from whenever the suite happened to run, and the
+     * close assertion passed only because the scheduler compared clock strings
+     * rather than looking at the session.
+     */
     scheduler = createSchedulerService({
       teamRepo: repos.team,
       teamScheduleRepo: repos.teamSchedule,
       sessionRepo: repos.session,
       sessionAggregateRepo: repos.sessionAggregate,
-      sessionService,
+      sessionService: createSessionService({
+        sessionRepo: repos.session,
+        sessionLinkRepo: repos.sessionLink,
+        teamMemberRepo: repos.teamMember,
+        responseRepo: repos.response,
+        sessionAggregateRepo: repos.sessionAggregate,
+        teamScheduleRepo: repos.teamSchedule,
+        now: () => tickClock,
+      }),
     });
+
   });
 
   describe('Scheduled session lifecycle', () => {
@@ -75,8 +91,7 @@ describe('Session lifecycle integration', () => {
       });
 
       // 4. Simulate scheduler tick at open time (Monday 09:00)
-      const openTime = new Date('2024-01-08T09:00:00.000Z'); // Monday
-      await scheduler.tick(openTime);
+      await tickAt('2024-01-08T09:00:00.000Z');
 
       // 5. Verify session was opened
       const openSession = await repos.session.findOpenByTeamId(team.id);
@@ -132,8 +147,7 @@ describe('Session lifecycle integration', () => {
       });
 
       // 8. Simulate scheduler tick at close time (Friday 17:00)
-      const closeTime = new Date('2024-01-12T17:00:00.000Z'); // Friday
-      await scheduler.tick(closeTime);
+      await tickAt('2024-01-12T17:00:00.000Z');
 
       // 9. Verify session was closed
       const closedSession = await repos.session.findById(openSession!.id);

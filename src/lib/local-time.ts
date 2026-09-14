@@ -107,3 +107,29 @@ export function isWithinTimeWindow(time: string, start: string, end: string): bo
 
   return time >= start || time <= end;
 }
+
+/**
+ * The most recent occurrence at or before `at`.
+ *
+ * Requirements: Deployment 4.1, 4.3
+ *
+ * The scheduler needs to know which cycle it is in, not whether the clock reads
+ * a particular minute. Comparing `HH:MM` strings meant a tick one minute late
+ * opened nothing, and a whole day of five-minute ticks opened nothing at all —
+ * silently, because there is no error in "the time is not 09:00".
+ *
+ * Implemented on top of `nextOccurrenceUtc` rather than beside it: exactly one
+ * weekly occurrence falls in any seven-day window, so the next one strictly
+ * after a week ago is the most recent one at or before now. That reuses the
+ * DST-safe calendar arithmetic instead of writing a second, subtly different
+ * copy of it.
+ */
+export function previousOccurrenceUtc(
+  at: Date,
+  day: number,
+  time: string,
+  timezone: string,
+): Date {
+  const aWeekBefore = new Date(at.getTime() - 7 * 24 * 60 * 60 * 1000);
+  return nextOccurrenceUtc(aWeekBefore, day, time, timezone);
+}

@@ -41,6 +41,42 @@ The tick is idempotent and reconciles state, so a missed trigger costs a delay
 rather than a lost session. That property is what makes an external trigger
 acceptable at all, and it is why Requirement 4.3 and 4.4 exist.
 
+### 1a. The tick acts on state, not on the minute — corrected 2026-09-14
+
+Decision 1 said the tick "is idempotent and reconciles state, so a missed
+trigger costs a delay rather than a lost session", and gave that as the reason
+an external trigger was acceptable at all.
+
+**That was false when written.** The scheduler compared
+`getLocalDayAndTime(now).time` to `schedule.openTime` as strings, so a session
+opened only if a tick landed on the exact configured minute. Proven by
+execution: a tick one minute late opened nothing, and a full day of
+five-minute ticks opened nothing at all — silently, because there is nothing
+exceptional about the time not being 09:00. Closing had the same defect, which
+would have left a check collecting forever.
+
+It survived because unit tests hand `tick` the exact minute, so the condition
+was true in every test and could only be false in the wild. It was found by
+asking what a real cron every five minutes would do — not by any test.
+
+**Now level-triggered.** Closing compares the session’s stored
+`scheduledCloseAt` to `now`, with no staleness bound: a session past its close
+is still collecting, and however late, ending it is right. Opening asks which
+cycle we are in — `previousOccurrenceUtc`, built on the existing DST-safe
+arithmetic — and whether any session has already served it.
+
+Two judgement calls are worth recording. **A missed open is not reopened once
+the collection window has passed**: a check exists to gather answers between
+open and close, and opening after the close would create a session immediately
+overdue and prompt a team after the fact. A trigger down for a week costs that
+week and says so by leaving no session, rather than quietly producing a
+misdated one. **A closed check is not reopened within its own cycle**, so
+ending one early stays ended.
+
+Only now is the external-trigger decision sound rather than lucky. Vercel
+Hobby’s ±59 minutes was never merely imprecise — under the old comparison it
+would have opened nothing, ever.
+
 ### 2. Turso is selected by the presence of `TURSO_DATABASE_URL`, and its absence is fatal
 
 `createPrismaClient()` already branches on `TURSO_DATABASE_URL`. The gap is what

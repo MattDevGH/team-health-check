@@ -9,7 +9,12 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { getLocalDayAndTime, isWithinTimeWindow, nextOccurrenceUtc } from './local-time';
+import {
+  getLocalDayAndTime,
+  isWithinTimeWindow,
+  nextOccurrenceUtc,
+  previousOccurrenceUtc,
+} from './local-time';
 
 describe('getLocalDayAndTime', () => {
   it('reads the weekday and wall-clock time in the given timezone', () => {
@@ -110,5 +115,75 @@ describe('nextOccurrenceUtc', () => {
     );
 
     expect(result.toISOString()).toBe('2026-08-25T00:00:00.000Z');
+  });
+});
+
+/**
+ * The most recent occurrence at or before an instant.
+ *
+ * Requirements: Deployment 4.1, 4.3
+ *
+ * The scheduler needs to answer "which cycle are we in?" rather than "is it
+ * exactly now?". `nextOccurrenceUtc` only looks forward, so there was no way to
+ * ask, and the scheduler compared clock strings instead — which meant a tick one
+ * minute late opened nothing at all.
+ */
+describe('previousOccurrenceUtc', () => {
+  const MONDAY_9AM = 1;
+
+  it('returns today’s occurrence once it has passed', () => {
+    // Monday 2026-09-14, 10:00 UTC — the 09:00 occurrence is behind us
+    const result = previousOccurrenceUtc(
+      new Date('2026-09-14T10:00:00Z'), MONDAY_9AM, '09:00', 'UTC',
+    );
+    expect(result.toISOString()).toBe('2026-09-14T09:00:00.000Z');
+  });
+
+  it('returns last week’s when today’s has not arrived yet', () => {
+    // Monday 08:00 — today's 09:00 is still ahead, so the current cycle began a week ago
+    const result = previousOccurrenceUtc(
+      new Date('2026-09-14T08:00:00Z'), MONDAY_9AM, '09:00', 'UTC',
+    );
+    expect(result.toISOString()).toBe('2026-09-07T09:00:00.000Z');
+  });
+
+  it('includes an occurrence falling exactly on the instant', () => {
+    // The boundary the old equality check depended on must still be inside the cycle
+    const result = previousOccurrenceUtc(
+      new Date('2026-09-14T09:00:00Z'), MONDAY_9AM, '09:00', 'UTC',
+    );
+    expect(result.toISOString()).toBe('2026-09-14T09:00:00.000Z');
+  });
+
+  it('works from a day later in the week', () => {
+    const result = previousOccurrenceUtc(
+      new Date('2026-09-17T15:00:00Z'), MONDAY_9AM, '09:00', 'UTC',
+    );
+    expect(result.toISOString()).toBe('2026-09-14T09:00:00.000Z');
+  });
+
+  it('keeps local wall-clock time across a DST change', () => {
+    // British Summer Time ends 2026-10-25. A 09:00 London check stays 09:00
+    // local on both sides, which is 08:00Z before and 09:00Z after.
+    const before = previousOccurrenceUtc(
+      new Date('2026-10-20T12:00:00Z'), MONDAY_9AM, '09:00', 'Europe/London',
+    );
+    expect(before.toISOString()).toBe('2026-10-19T08:00:00.000Z');
+
+    const after = previousOccurrenceUtc(
+      new Date('2026-10-27T12:00:00Z'), MONDAY_9AM, '09:00', 'Europe/London',
+    );
+    expect(after.toISOString()).toBe('2026-10-26T09:00:00.000Z');
+  });
+
+  it('is always at most a week behind', () => {
+    // The property that makes it usable: exactly one weekly occurrence lies in
+    // any seven-day window ending now
+    const now = new Date('2026-09-17T15:00:00Z');
+    const result = previousOccurrenceUtc(now, MONDAY_9AM, '09:00', 'UTC');
+    const ageMs = now.getTime() - result.getTime();
+
+    expect(ageMs).toBeGreaterThanOrEqual(0);
+    expect(ageMs).toBeLessThan(7 * 24 * 60 * 60 * 1000);
   });
 });
