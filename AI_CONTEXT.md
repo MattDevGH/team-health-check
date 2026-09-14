@@ -727,6 +727,32 @@ The stated cost is in the design — a Slack-linked member whose delivery fails
 hears nothing, and a failure fallback needs the retry queue to report outcomes,
 which is separate work.
 
+**Phase 1 as built.** `MyHealthCheckService.resolve` takes a member id and
+returns that member’s link — there is no parameter in which to ask for anyone
+else’s, and the team comes from the member record rather than the caller.
+Four outcomes rather than a nullable token: "nothing is open" and "a check is
+open but you are not in it" need different words, and the second happens to a
+member added after a check opened.
+
+`/me/health-check` is the route, under a segment that already mounts the shell.
+It links rather than redirects: landing straight in a form gives no moment to
+realise what is about to be asked. The nav entry comes **first** and needs no
+team id, so it survives the in-flight state where every other destination waits
+because a guessed id 404s.
+
+**Two existing tests were over-specified and were corrected rather than
+worked around.** A property named "offers no team-scoped destination until the
+team is known" asserted an exact list, so it broke when a destination needing
+no team id was added — it now asserts the absence of `/teams/` links, which is
+what its name claims. And the keyboard tab-order test tabbed a fixed six times,
+pushing Sign out out of range.
+
+**The E2E test clicks.** `journey.spec.ts` reaches sessions by reading the
+token out of the database, which is why this suite could never have caught the
+defect — the same navigating-by-looked-up-URLs pattern that hid the sign-in
+dead end. The new one opens a check through the interface, follows the
+dashboard link, follows the page link, and lands on the form.
+
 **Phase 1 alone fixes the defect** and depends on nothing external.
 
 ## Outstanding Work

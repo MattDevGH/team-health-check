@@ -371,6 +371,30 @@ export function SessionLifecyclePanel({
 
           {state.status === 'collecting' && (
             <>
+              {/*
+                A route to answer, beside the route to close.
+
+                The panel reported "3 of 8 answered" and offered only a way to
+                end the check, so a delivery manager could watch participation
+                and close it but not take part. Production opened a check on
+                2026-09-14 that nobody could answer.
+
+                It points at the page that resolves the reader’s own session
+                link from their cookie, never at a token. The panel does not
+                know which link belongs to the reader and must not: a session
+                link authenticates whoever holds it.
+
+                Styled as the quieter of the two. Closing is the destructive
+                one and keeps the emphasis it had, because adding a control
+                can make an existing one ambiguous.
+              */}
+              <a
+                href="/me/health-check"
+                className="mt-3 mr-2 inline-block rounded bg-blue-700 px-4 py-2 text-white hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Answer the health check
+              </a>
+
               <button
                 ref={closeTriggerRef}
                 type="button"

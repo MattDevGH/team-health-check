@@ -202,7 +202,7 @@ test.describe('using the shell', () => {
     await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
 
     const order: string[] = [];
-    for (let i = 0; i < 6; i += 1) {
+    for (let i = 0; i < 7; i += 1) {
       await page.keyboard.press('Tab');
       order.push(
         await page.evaluate(() => {
@@ -215,6 +215,9 @@ test.describe('using the shell', () => {
 
     expect(order).toEqual([
       'Skip to main content',
+      // First in the nav because it is the thing the tool is for, and because
+      // a contributor never visits the dashboard
+      'Health check',
       'Dashboard',
       'Settings',
       'Audit log',
@@ -271,5 +274,60 @@ test.describe('narrow viewports', () => {
       await expect(page.getByRole('link', { name: label })).toBeVisible();
     }
     await expect(page.getByRole('button', { name: /sign out/i })).toBeVisible();
+  });
+});
+
+/**
+ * A member can reach their own health check.
+ *
+ * Requirements: Reaching Your Health Check 1.1, 1.2, 1.5
+ *
+ * Production opened a check on 2026-09-14 and nobody could answer it. Nothing
+ * in the authenticated interface linked to a session, and this suite could not
+ * have noticed: `journey.spec.ts` reaches sessions by reading the token out of
+ * the database, which is the same navigating-by-looked-up-URLs pattern that hid
+ * the sign-in dead end.
+ *
+ * So this one clicks.
+ */
+test.describe('reaching your own health check', () => {
+  const EMAIL = 'reach-check@e2e.invalid';
+  let teamId = '';
+
+  test.beforeAll(() => {
+    const team = seedTeam({ teamName: 'Reach Check Team', memberEmail: EMAIL });
+    teamId = team.teamId;
+  });
+
+  test('offers the health check in the navigation, before any team is known', async ({ page }) => {
+    await signIn(page, EMAIL);
+
+    const nav = page.getByRole('navigation', { name: 'Main' });
+    await expect(nav.getByRole('link', { name: /health check/i })).toBeVisible();
+  });
+
+  test('says nothing is open when nothing is', async ({ page }) => {
+    await signIn(page, EMAIL);
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /health check/i }).click();
+
+    await expect(page.getByText(/no health check is open/i)).toBeVisible();
+  });
+
+  test('reaches the answering form by clicking, with no token looked up anywhere', async ({ page }) => {
+    await signIn(page, EMAIL);
+    await page.goto(`/teams/${teamId}/dashboard`);
+
+    // Open a check through the interface, the way a manager would
+    await page.getByRole('button', { name: /open a health check/i }).click();
+    await expect(page.getByRole('link', { name: /answer the health check/i })).toBeVisible();
+
+    await page.getByRole('link', { name: /answer the health check/i }).click();
+    await expect(page).toHaveURL(/\/me\/health-check$/);
+
+    await page.getByRole('link', { name: /answer the health check/i }).click();
+
+    // The feedback form itself — reached entirely by clicking
+    await expect(page).toHaveURL(/\/session\/[^/]+$/);
+    await expect(page.getByRole('heading', { name: /health check/i }).first()).toBeVisible();
   });
 });

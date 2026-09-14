@@ -31,7 +31,19 @@ export interface ShellContext {
  * both roles can open.
  */
 export function destinationsFor(context: ShellContext | null): Destination[] {
-  const destinations: Destination[] = [];
+  /*
+   * The health check comes first, and needs no team id.
+   *
+   * First because it is the thing the tool is for, and because a
+   * contributor’s journey never touches the dashboard — they arrive from a
+   * prompt, answer, and leave. When a check opened on 2026-09-14 and no
+   * prompt reached anyone, there was nowhere for them to go.
+   *
+   * Offered even in the in-flight state, unlike every other destination:
+   * those wait for the team because a guessed id produces links that 404,
+   * and this one has nothing to guess.
+   */
+  const destinations: Destination[] = [{ href: '/me/health-check', label: 'Health check' }];
 
   if (context?.team) {
     destinations.push(

@@ -503,3 +503,71 @@ describe('SessionLifecyclePanel closing a check nobody answered', () => {
     await waitFor(() => expect(countPatches()).toBe(1));
   });
 });
+
+/**
+ * A route to answer, beside the route to close.
+ *
+ * Requirements: Reaching Your Health Check 1.1, 1.4
+ *
+ * The panel already reported "0 of 1 answered" and offered a button to *close*
+ * the check. It offered nothing to *answer* it, which is how production came to
+ * open a check on 2026-09-14 that the delivery manager could watch and end but
+ * not take part in.
+ *
+ * Adding a control can make an existing one ambiguous — this project learned
+ * that during the dashboard refinement — so the close control is asserted to be
+ * unchanged rather than assumed to be.
+ */
+describe('SessionLifecyclePanel offers a way to answer', () => {
+  const openSession = wireSession({
+    id: 'open-1',
+    status: 'open',
+    actualOpenAt: '2026-09-01T09:00:00.000Z',
+    actualCloseAt: null,
+    scheduledCloseAt: '2026-09-08T17:00:00.000Z',
+  });
+
+  it('links to the answering route while a check is collecting', async () => {
+    mockParticipation('open-1', { totalCount: 8, respondedCount: 3 });
+    mockSessions({ initial: [openSession] });
+    renderPanel();
+
+    const link = await screen.findByRole('link', { name: /answer the health check/i });
+    expect(link).toHaveAttribute('href', '/me/health-check');
+  });
+
+  it('does not offer it when nothing is collecting', async () => {
+    mockSessions({ initial: [] });
+    renderPanel();
+
+    await screen.findByRole('button', { name: /open a health check/i });
+    expect(screen.queryByRole('link', { name: /answer/i })).not.toBeInTheDocument();
+  });
+
+  it('leaves the close control exactly where it was', async () => {
+    // A second control next to a destructive one is the moment an interface
+    // becomes ambiguous. The close button keeps its name and its behaviour.
+    mockParticipation('open-1', { totalCount: 8, respondedCount: 3 });
+    mockSessions({ initial: [openSession] });
+    const countPatches = mockClose('open-1');
+    renderPanel();
+
+    const close = await screen.findByRole('button', { name: /^close the health check$/i });
+    expect(close).toBeEnabled();
+    expect(countPatches(), 'rendering must not close anything').toBe(0);
+  });
+
+  it('routes through the member’s own page rather than embedding a token', async () => {
+    /*
+     * The panel does not know which session link belongs to the reader, and
+     * must not: a link is a credential. It points at the route that resolves
+     * the reader's own from their cookie.
+     */
+    mockParticipation('open-1', { totalCount: 8, respondedCount: 3 });
+    mockSessions({ initial: [openSession] });
+    renderPanel();
+
+    const link = await screen.findByRole('link', { name: /answer the health check/i });
+    expect(link.getAttribute('href')).not.toMatch(/\/session\//);
+  });
+});
