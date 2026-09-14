@@ -71,8 +71,16 @@ describe('Property 1: Delivery-Manager-only destinations', () => {
   it('offers no team-scoped destination until the team is known', () => {
     fc.assert(
       fc.property(rolesArb, roles => {
-        // The in-flight state: a guessed team id produces links that 404
-        expect(destinationsFor({ team: null, roles }).map(d => d.label)).toEqual(['Profile']);
+        // The in-flight state: a guessed team id produces links that 404.
+        //
+        // Asserts the absence of team-scoped links rather than an exact list,
+        // which is what the name claims. The exact-list form broke when a
+        // destination needing no team id was added — and it was right to be
+        // added, so the property was over-specified rather than the change
+        // wrong.
+        const hrefs = destinationsFor({ team: null, roles }).map(d => d.href);
+
+        expect(hrefs.filter(href => href.startsWith('/teams/'))).toEqual([]);
       }),
     );
   });
@@ -89,5 +97,54 @@ describe('Property 1: Delivery-Manager-only destinations', () => {
         }
       }),
     );
+  });
+});
+
+/**
+ * The health check is a destination in its own right.
+ *
+ * Requirements: Reaching Your Health Check 1.2, 1.5
+ *
+ * A contributor's journey never touches the dashboard: they arrive from a
+ * prompt, answer, and leave. When production opened a check on 2026-09-14 and
+ * no prompt could reach anyone, there was nowhere for them to go — and nowhere
+ * for the delivery manager either.
+ *
+ * Unlike every other destination this one needs no team id, so it survives the
+ * in-flight state where a guessed id would produce links that 404.
+ */
+describe('the health check destination', () => {
+  const team = { id: 'team-1', name: 'Platform' };
+
+  it('is offered to a contributor', () => {
+    const hrefs = destinationsFor({ team, roles: [] }).map(d => d.href);
+
+    expect(hrefs).toContain('/me/health-check');
+  });
+
+  it('is offered to a delivery manager too', () => {
+    const hrefs = destinationsFor({ team, roles: [DELIVERY_MANAGER] }).map(d => d.href);
+
+    expect(hrefs).toContain('/me/health-check');
+  });
+
+  it('is offered before the team is known, since it needs no team id', () => {
+    // The loading state. Every other destination waits because a guessed team
+    // id 404s; this one has nothing to guess.
+    const hrefs = destinationsFor(null).map(d => d.href);
+
+    expect(hrefs).toContain('/me/health-check');
+  });
+
+  it('is the first thing offered, because it is the thing the tool is for', () => {
+    const [first] = destinationsFor({ team, roles: [DELIVERY_MANAGER] });
+
+    expect(first.href).toBe('/me/health-check');
+  });
+
+  it('is named for what it does rather than where it goes', () => {
+    const entry = destinationsFor({ team, roles: [] }).find(d => d.href === '/me/health-check');
+
+    expect(entry?.label).toMatch(/health check/i);
   });
 });
