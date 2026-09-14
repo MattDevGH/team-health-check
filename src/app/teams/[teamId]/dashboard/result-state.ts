@@ -1,17 +1,19 @@
 /**
  * Why a score is not on screen.
  *
- * Requirements: Explaining Itself 1.4
+ * Requirements: Explaining Itself 1.4; Deployment 4.5
  * Properties: 1, 2
  *
- * A closed check shows no score for one of three reasons, and the dashboard
- * rendered all three as the same blankness: the aggregates have not been
- * computed yet, the value is suppressed for anonymity, or nobody answered.
+ * A closed check shows no score for one of several reasons, and the dashboard
+ * rendered them all as the same blankness. One resolves itself in minutes,
+ * another never will, and a third means the scheduler has stopped — so a reader
+ * who cannot tell them apart cannot tell a working tool from a broken one.
  *
- * One of those resolves itself in minutes and another never will, so a reader
- * who cannot tell them apart cannot tell a working tool from a broken one. This
- * decides which is which, apart from any rendering, so the rule can be read and
- * exercised as the rule it is.
+ * Decided from `materialisedAt` rather than from elapsed time. Before that field
+ * existed, "not computed yet" and "computed and found nothing" were the same
+ * absence in the data and could only be guessed at from the clock — and a wrong
+ * guess went in the dangerous direction, reporting that a team had ignored a
+ * health check when the scheduler had simply stopped.
  */
 
 export interface SessionAverage {
@@ -23,8 +25,8 @@ export interface SessionAverage {
 export interface ResultStateInput {
   /** The aggregate for this theme, if one has been computed. */
   average: SessionAverage | undefined;
-  /** Whether the session has aggregates for *any* theme. */
-  sessionHasAnyAggregates: boolean;
+  /** When the session's aggregates were computed. Null means never. */
+  materialisedAt: string | null;
   closedAt: string;
   now: Date;
   anonymousMode: boolean;
@@ -34,33 +36,28 @@ export interface ResultStateInput {
 export type ResultState =
   | { kind: 'shown'; average: SessionAverage }
   | { kind: 'pending' }
+  | { kind: 'overdue' }
   | { kind: 'suppressed'; needed: number }
   | { kind: 'unanswered' };
 
 /**
- * How long after a close to keep saying "being prepared".
+ * How long after a close results should have appeared.
  *
- * Materialisation waits 30 seconds after close so late writes settle, then runs
- * on the next scheduler tick — minutes apart in production. Ten minutes covers a
- * missed tick without leaving a reader told to wait for something that is never
- * coming.
- *
- * It is a heuristic, and the reason one is needed is worth recording: **nothing
- * stores whether materialisation ran**, so "not computed yet" and "computed and
- * found nothing" are the same absence in the data. A `materialisedAt` on the
- * session would make the distinction exact. That is a schema change and is on
- * the roadmap rather than smuggled in here.
+ * Materialisation waits 30 seconds so responses in flight at close time land
+ * first, then runs on the next scheduler tick — minutes apart in production.
+ * Beyond this, the honest reading is not "wait a little longer" but "something
+ * is not running", which is the one message that would have surfaced a stopped
+ * cron to the person who cares.
  */
-export const MATERIALISATION_GRACE_MS = 10 * 60 * 1000;
+export const RESULTS_OVERDUE_AFTER_MS = 15 * 60 * 1000;
 
 export function resultState(input: ResultStateInput): ResultState {
-  const { average, sessionHasAnyAggregates, closedAt, now, anonymousMode, anonymityThreshold } =
-    input;
+  const { average, materialisedAt, closedAt, now, anonymousMode, anonymityThreshold } = input;
 
   /*
-   * A value that exists has been computed, whatever the clock says. Checking
-   * this first is what stops a recently-closed check reporting both pending and
-   * suppressed for the same theme.
+   * A value that exists has been computed, whatever else is true. Checking this
+   * first is what stops a session reporting both pending and suppressed for the
+   * same theme.
    */
   if (average) {
     if (anonymousMode && average.responseCount < anonymityThreshold) {
@@ -70,13 +67,40 @@ export function resultState(input: ResultStateInput): ResultState {
   }
 
   /*
-   * Other themes computed, this one did not — materialisation clearly ran, and
-   * found nothing here. Unambiguous, and independent of the clock.
+   * Materialisation has run and produced nothing for this theme. Exact, because
+   * the session records that the work was done rather than leaving it to be
+   * inferred from whether the work produced output.
    */
-  if (sessionHasAnyAggregates) {
+  if (materialisedAt) {
     return { kind: 'unanswered' };
   }
 
   const sinceClose = now.getTime() - new Date(closedAt).getTime();
-  return sinceClose < MATERIALISATION_GRACE_MS ? { kind: 'pending' } : { kind: 'unanswered' };
+  return sinceClose < RESULTS_OVERDUE_AFTER_MS ? { kind: 'pending' } : { kind: 'overdue' };
+}
+
+interface MaterialisationInput {
+  /** The recorded time, or null for a session closed before the column existed. */
+  materialisedAt: string | null;
+  closedAt: string;
+  /** The aggregates the session produced, whatever their subject. */
+  averages: readonly { questionId: string }[];
+}
+
+/**
+ * When a session's aggregates were computed, as best the data can support.
+ *
+ * `materialisedAt` was added after production had already closed sessions, so
+ * those rows carry null while plainly having been materialised. A single
+ * aggregate is proof the work ran — a value cannot exist otherwise — and using
+ * it keeps unanswered themes in old sessions from reporting a stopped
+ * scheduler.
+ *
+ * A session with neither a time nor any output gets no benefit of the doubt.
+ * That case is genuinely indistinguishable from never having run, and guessing
+ * at it is what the column exists to stop.
+ */
+export function materialisationEvidence(input: MaterialisationInput): string | null {
+  if (input.materialisedAt) return input.materialisedAt;
+  return input.averages.length > 0 ? input.closedAt : null;
 }

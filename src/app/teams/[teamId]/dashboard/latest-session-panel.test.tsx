@@ -178,3 +178,121 @@ describe('LatestSessionPanel', () => {
     });
   });
 });
+
+/**
+ * Saying why a value is not there.
+ *
+ * Requirements: Explaining Itself 1.1, 1.2, 1.3, 1.5
+ *
+ * Found by closing a check on production and reading the dashboard. It showed
+ * nothing for five minutes because materialisation runs on the next tick, then
+ * nothing permanently because one response is below the anonymity threshold —
+ * two entirely different silences, indistinguishable from each other and from a
+ * broken tool.
+ */
+describe('LatestSessionPanel explains an empty result', () => {
+  const closedAt = '2026-09-14T19:20:00.000Z';
+  const questions = [
+    { id: 'q-delivering-value', title: 'Delivering Value', description: 'How well…' },
+  ];
+
+  const session = (over: Partial<{ materialisedAt: string | null; averages: unknown[] }> = {}) => [
+    {
+      sessionId: 's1',
+      closedAt,
+      materialisedAt: null,
+      averages: [],
+      ...over,
+    },
+  ];
+
+  it('says results are being prepared just after a close', () => {
+    render(
+      <LatestSessionPanel
+        sessions={session() as never}
+        anonymousMode
+        questions={questions}
+        now={new Date('2026-09-14T19:22:00.000Z')}
+      />,
+    );
+
+    expect(screen.getByText(/being prepared/i)).toBeInTheDocument();
+  });
+
+  it('says how long, so a reader knows whether to wait', () => {
+    render(
+      <LatestSessionPanel
+        sessions={session() as never}
+        anonymousMode
+        questions={questions}
+        now={new Date('2026-09-14T19:22:00.000Z')}
+      />,
+    );
+
+    expect(screen.getByText(/minutes/i)).toBeInTheDocument();
+  });
+
+  it('says results are overdue rather than blaming the team', () => {
+    /*
+     * The message that would have surfaced a stopped scheduler. Reporting
+     * "nobody answered" here is a false claim about a team, on a tool whose
+     * whole purpose is telling you how that team is doing.
+     */
+    render(
+      <LatestSessionPanel
+        sessions={session() as never}
+        anonymousMode
+        questions={questions}
+        now={new Date('2026-09-14T21:00:00.000Z')}
+      />,
+    );
+
+    expect(screen.getByText(/overdue/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no responses/i)).not.toBeInTheDocument();
+  });
+
+  it('says a value is hidden for anonymity, and how many are needed', () => {
+    render(
+      <LatestSessionPanel
+        sessions={session({
+          materialisedAt: closedAt,
+          averages: [{ questionId: 'q-delivering-value', averageScore: 3, responseCount: 1 }],
+        }) as never}
+        anonymousMode
+        questions={questions}
+        now={new Date('2026-09-14T21:00:00.000Z')}
+      />,
+    );
+
+    expect(screen.getByText(/hidden/i)).toBeInTheDocument();
+    expect(screen.getByText(/3/)).toBeInTheDocument();
+  });
+
+  it('still says nobody answered when materialisation ran and found nothing', () => {
+    render(
+      <LatestSessionPanel
+        sessions={session({ materialisedAt: closedAt }) as never}
+        anonymousMode
+        questions={questions}
+        now={new Date('2026-09-14T21:00:00.000Z')}
+      />,
+    );
+
+    expect(screen.getByText(/no responses/i)).toBeInTheDocument();
+  });
+
+  it('never shows two explanations for the same theme', () => {
+    // Property 2: the states are exclusive
+    render(
+      <LatestSessionPanel
+        sessions={session({ materialisedAt: closedAt }) as never}
+        anonymousMode
+        questions={questions}
+        now={new Date('2026-09-14T21:00:00.000Z')}
+      />,
+    );
+
+    expect(screen.queryByText(/being prepared/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/overdue/i)).not.toBeInTheDocument();
+  });
+});

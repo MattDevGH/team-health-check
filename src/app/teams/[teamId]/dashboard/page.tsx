@@ -29,6 +29,12 @@ interface SessionData {
   sessionId: string;
   closedAt: string;
   averages: SessionAverage[];
+  /**
+   * When aggregates were computed, or null if they never were. Declared here
+   * because the panel below distinguishes "not computed yet" from "nobody
+   * answered" with it, and dropping it in transit would look like nothing.
+   */
+  materialisedAt?: string | null;
 }
 
 interface TrendDistributionData {

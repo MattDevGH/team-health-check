@@ -107,6 +107,15 @@ export const GET = withErrorHandling(async (request: Request, context) => {
   const sessions = closedSessions.map(session => ({
     sessionId: session.id,
     closedAt: session.actualCloseAt!.toISOString(),
+    /*
+     * Whether the aggregates were computed, not merely whether they exist.
+     *
+     * Zero aggregates means "nobody answered" or "not computed yet", and those
+     * are different news — one resolves in minutes, the other never. Without
+     * this the dashboard could only guess from the clock, and a stalled
+     * scheduler would have it report that a team ignored a check.
+     */
+    materialisedAt: session.materialisedAt ? session.materialisedAt.toISOString() : null,
     averages: averagesBySession.get(session.id) ?? [],
   }));
 

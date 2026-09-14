@@ -15,6 +15,7 @@
  */
 
 import { pluralise } from '@/lib/format';
+import { materialisationEvidence, resultState } from './result-state';
 
 interface SessionAverage {
   questionId: string;
@@ -25,6 +26,8 @@ interface SessionAverage {
 interface SessionData {
   sessionId: string;
   closedAt: string;
+  /** When aggregates were computed. Null means never — not the same as empty. */
+  materialisedAt?: string | null;
   averages: SessionAverage[];
 }
 
@@ -36,6 +39,8 @@ interface QuestionCatalogueEntry {
 }
 
 interface LatestSessionPanelProps {
+  /** Injectable so "being prepared" versus "overdue" is testable without waiting. */
+  now?: Date;
   /** Closed sessions, oldest first, as the trends endpoint returns them. */
   sessions: SessionData[];
   /**
@@ -91,12 +96,20 @@ export function LatestSessionPanel({
   sessions,
   questions,
   anonymousMode,
+  now = new Date(),
 }: LatestSessionPanelProps) {
   if (sessions.length === 0) return null;
 
   const latest = sessions[sessions.length - 1];
   const previous = sessions[sessions.length - 2];
 
+  // Derived once for the session rather than per row, so no two themes can
+  // disagree about whether the session was ever materialised.
+  const materialisedAt = materialisationEvidence({
+    materialisedAt: latest.materialisedAt ?? null,
+    closedAt: latest.closedAt,
+    averages: latest.averages,
+  });
   /**
    * Every theme the team is asked about, not only those with answers.
    *
@@ -144,10 +157,16 @@ export function LatestSessionPanel({
           </thead>
           <tbody>
             {rows.map(({ id, title, average }) => {
-              const suppressed =
-                average !== undefined &&
-                anonymousMode &&
-                average.responseCount < ANONYMITY_THRESHOLD;
+              // One selector decides all four outcomes, so the panel and the
+              // themes list cannot drift into disagreeing about the same data.
+              const state = resultState({
+                average,
+                materialisedAt: materialisedAt,
+                closedAt: latest.closedAt,
+                now,
+                anonymousMode,
+                anonymityThreshold: ANONYMITY_THRESHOLD,
+              });
               const previousScore = previous?.averages.find(
                 a => a.questionId === id,
               )?.averageScore;
@@ -158,30 +177,47 @@ export function LatestSessionPanel({
                     {title}
                   </th>
 
-                  {average === undefined ? (
-                    // Nobody answered. Deliberately worded differently from
-                    // suppression: one means silence, the other means people
-                    // answered and there were too few to show safely.
+                  {/*
+                    Four reasons a cell can be empty, and they are different news.
+
+                    Being prepared resolves in minutes. Overdue means the
+                    scheduler has stopped. Hidden never resolves without more
+                    people. And no responses means silence. Rendering all four as
+                    blankness is how a working tool came to look broken.
+                  */}
+                  {state.kind === 'pending' ? (
+                    <td colSpan={3} className="py-1 italic text-gray-600">
+                      Results are being prepared — this usually takes a few minutes
+                    </td>
+                  ) : state.kind === 'overdue' ? (
+                    /*
+                      Not "nobody answered". That would be a false claim about a
+                      team, on a tool whose purpose is telling you how they are
+                      doing — and the truth is that nothing has computed them.
+                    */
+                    <td colSpan={3} className="py-1 italic text-amber-800">
+                      Results are overdue — the scheduler may not be running
+                    </td>
+                  ) : state.kind === 'unanswered' ? (
+                    // Silence, distinct from suppression: one means nobody spoke,
+                    // the other means too few did to show it safely.
                     <td colSpan={3} className="py-1 text-gray-500">
                       No responses
                     </td>
-                  ) : suppressed ? (
-                    // Said plainly rather than left blank: a gap reads as
-                    // missing data, when in fact the team is too small for this
-                    // answer to stay anonymous
-                    <td colSpan={3} className="py-1 italic text-amber-700">
-                      Hidden until {ANONYMITY_THRESHOLD} people have answered
+                  ) : state.kind === 'suppressed' ? (
+                    <td colSpan={3} className="py-1 italic text-amber-800">
+                      Hidden until {state.needed} people have answered
                     </td>
                   ) : (
                     <>
                       <td className="py-1 pr-4 font-medium text-gray-900">
-                        {average.averageScore.toFixed(1)}
+                        {state.average.averageScore.toFixed(1)}
                       </td>
                       <td className="py-1 pr-4 text-gray-700">
-                        {describeChange(average.averageScore, previousScore)}
+                        {describeChange(state.average.averageScore, previousScore)}
                       </td>
                       <td className="py-1 text-gray-600">
-                        {pluralise(average.responseCount, 'response')}
+                        {pluralise(state.average.responseCount, 'response')}
                       </td>
                     </>
                   )}
