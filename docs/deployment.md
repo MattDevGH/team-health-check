@@ -152,6 +152,13 @@ merge.
 
 **Verify by reading the schema back.** An exit code is not evidence.
 
+**Pending for the next deploy: `20260914212427_add_materialised_at`.** It adds
+`HealthCheckSession.materialisedAt`, which the dashboard reads to tell "results
+not computed yet" from "nobody answered". Rows that closed before it exists keep
+working — a session with aggregates is treated as materialised — but until the
+migration runs, no new close records the column, and a stalled scheduler would
+again look like a silent team.
+
 **If a run is interrupted** between applying a migration and recording it, the
 next run reports that a table already exists. That is the expected symptom, and
 the safe direction: the alternative — recording first — would mark a migration
