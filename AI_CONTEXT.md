@@ -695,6 +695,45 @@ setting to revisit first if anyone else gains write access.
 
 ## Outstanding Work
 
+### Explaining itself — spec written 2026-09-14, not started
+
+`.kiro/specs/explaining-itself/`. Five findings from Matt walking the whole
+loop on production. Everything worked; almost nothing explained itself.
+
+**Three silences render identically.** A closed check shows no scores because
+materialisation runs on the next tick (resolves in minutes), or because one
+response is below the anonymity threshold (never resolves), or because nobody
+answered. The distinction exists in the data — absent aggregates,
+`responseCount` under the threshold, and the representable-absence work from
+the dashboard refinement. Only the words are missing.
+
+**Submitting has no ending.** No confirmation, no way onward, and a button
+reading exactly as before anything was saved — so pressing it again looks like
+submitting twice. Decided: confirm and keep the form, because the tool allows
+revision until close and a member who thinks answers are final answers more
+cautiously. A redirect was rejected: someone on a session link alone may have
+nowhere to be sent.
+
+**The dashboard stays open to every member** — revised during the discussion,
+and rightly. Its data is aggregate and anonymised, and hiding it would make
+transparency depend on a role. It already gates the lifecycle panel by role,
+with an E2E test proving a contributor sees no open or close controls.
+**Settings is the one that lies**: the nav offers it to everyone while every
+write behind it is manager-only. Navigation is not authorisation and this does
+not pretend otherwise — Requirement 3.4 freezes route behaviour deliberately.
+
+**Four profile settings with no explanation**, and the reminders toggle needs
+care: it governs closing reminders and nudges, *not* opening prompts and not
+sign-in. Someone turning it off expecting silence will still be prompted.
+
+**An away period can be set and then neither seen nor cancelled** — a setting
+that changes behaviour invisibly and, from the member’s view, permanently.
+
+The privacy defect found in the same session — trend indicators bypassing the
+anonymity threshold — was fixed immediately and is out of scope here.
+
+## Outstanding Work
+
 ### Reaching your health check — spec written 2026-09-14, not started
 
 `.kiro/specs/reaching-your-health-check/`. Written because production opened a
