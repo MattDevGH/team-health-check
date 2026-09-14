@@ -13,7 +13,7 @@ import type {
   SessionAggregateRepository,
 } from '@/lib/repositories/types';
 import type { SessionService } from '@/lib/services/session.service';
-import { getLocalDayAndTime } from '@/lib/local-time';
+import { nextOccurrenceUtc, previousOccurrenceUtc } from '@/lib/local-time';
 
 export interface SchedulerServiceDeps {
   teamRepo: TeamRepository;
@@ -48,19 +48,72 @@ export function createSchedulerService(deps: SchedulerServiceDeps) {
       if (!schedule) continue;
 
       const timezone = schedule.timezone || team.timezone || 'UTC';
-      const { day, time } = getLocalDayAndTime(now, timezone);
 
       const currentSession = await sessionRepo.findOpenByTeamId(team.id);
 
-      // Check if it's time to close an open session
-      if (currentSession && day === schedule.closeDay && time === schedule.closeTime) {
+      /*
+       * Close when the session is past its close time, however far past.
+       *
+       * `scheduledCloseAt` is stamped when the session opens, so this reads
+       * stored state rather than the clock. The old test — local time equal to
+       * `closeTime` as a string — meant a tick a minute late left the session
+       * open forever: still collecting, never producing results.
+       *
+       * No staleness bound here, deliberately. A missed close is not like a
+       * missed open: the check is still gathering answers, and however late,
+       * ending it is right.
+       */
+      if (currentSession?.scheduledCloseAt && currentSession.scheduledCloseAt <= now) {
         await sessionService.close(team.id, currentSession.id);
       }
 
-      // Check if it's time to open (and no session is currently open)
+      /*
+       * Open when the current cycle has begun and nothing has served it yet.
+       *
+       * Asking "which cycle are we in, and has it been handled?" rather than
+       * "is the clock reading 09:00?" is what makes the tick safe to miss. An
+       * external cron every five minutes will almost never land on the exact
+       * minute, and under the old comparison that meant the check simply never
+       * opened — silently, since there is nothing exceptional about the time
+       * not being 09:00.
+       *
+       * A session is evidence the cycle was served whether it is still open or
+       * already closed, and whether the scheduler or a manager opened it. That
+       * is why this looks at `actualOpenAt` across all sessions rather than at
+       * a flag the scheduler sets for itself.
+       */
       const sessionAfterClose = await sessionRepo.findOpenByTeamId(team.id);
-      if (!sessionAfterClose && day === schedule.openDay && time === schedule.openTime) {
-        await sessionService.open(team.id, 'system');
+      if (!sessionAfterClose) {
+        const cycleOpenedAt = previousOccurrenceUtc(
+          now,
+          schedule.openDay,
+          schedule.openTime,
+          timezone,
+        );
+        const cycleClosesAt = nextOccurrenceUtc(
+          cycleOpenedAt,
+          schedule.closeDay,
+          schedule.closeTime,
+          timezone,
+        );
+
+        /*
+         * Past the close time the collection window is gone, and opening then
+         * serves nobody: it would create a session immediately overdue for
+         * closing and prompt a team after the fact. A trigger down for a week
+         * costs that week, and says so by leaving no session, rather than
+         * quietly producing a misdated one.
+         */
+        const withinCollectionWindow = now >= cycleOpenedAt && now < cycleClosesAt;
+
+        const sessions = await sessionRepo.findByTeamId(team.id);
+        const cycleAlreadyServed = sessions.some(
+          session => session.actualOpenAt && session.actualOpenAt >= cycleOpenedAt,
+        );
+
+        if (withinCollectionWindow && !cycleAlreadyServed) {
+          await sessionService.open(team.id, 'system');
+        }
       }
     }
 

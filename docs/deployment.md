@@ -262,9 +262,16 @@ POST https://<production-url>/api/scheduler/tick
 Authorization: Bearer <CRON_SECRET>
 ```
 
-Every few minutes. The endpoint is idempotent and reconciles state, so a missed
-trigger costs a delay rather than a lost session — which is what makes an
-external trigger acceptable at all.
+Every few minutes. The endpoint reconciles state rather than firing on an exact
+clock reading, so a missed or late trigger costs a delay rather than a lost
+session — which is what makes an external trigger acceptable at all.
+
+**That was not true until 2026-09-14.** The scheduler compared the local time
+to the configured open time as strings, so a tick one minute late opened
+nothing and a day of five-minute ticks opened nothing at all. Opening and
+closing are now decided from stored state. If you are reading this against an
+older deployment, check `scheduler.service.ts` before trusting the paragraph
+above.
 
 GitHub Actions was considered and rejected: its scheduled runs can be *dropped*
 under load, and scheduled workflows are **disabled automatically after 60 days
