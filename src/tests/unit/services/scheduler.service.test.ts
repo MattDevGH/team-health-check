@@ -26,7 +26,6 @@ describe('SchedulerService.tick', () => {
       teamRepo: repos.team,
       teamScheduleRepo: repos.teamSchedule,
       sessionRepo: repos.session,
-      sessionAggregateRepo: repos.sessionAggregate,
       sessionService,
     });
   });
@@ -339,7 +338,6 @@ describe('SchedulerService.tick acts on state, not on the minute', () => {
       teamRepo: repos.team,
       teamScheduleRepo: repos.teamSchedule,
       sessionRepo: repos.session,
-      sessionAggregateRepo: repos.sessionAggregate,
       sessionService,
     });
     await seedSchedule();
@@ -469,5 +467,120 @@ describe('SchedulerService.tick acts on state, not on the minute', () => {
     await tickAt('2026-09-14T09:01:00Z');
 
     expect(await repos.session.findOpenByTeamId(other.id)).toBeNull();
+  });
+});
+
+/**
+ * A check nobody answered must not be re-materialised forever.
+ *
+ * Requirements: Explaining Itself 1.4
+ *
+ * The scheduler skipped sessions that already had aggregates. A check nobody
+ * answered produces **zero** aggregates, so that test was never true for it and
+ * every tick re-ran materialisation on it — for as long as the session existed.
+ * Two empty checks on production had been re-processed every five minutes since
+ * they closed.
+ *
+ * `materialisedAt` says whether the work was done, rather than inferring it from
+ * whether the work produced anything.
+ */
+describe('SchedulerService.tick and materialisation', () => {
+  let repos: Repositories;
+  let sessionService: SessionService;
+  let scheduler: ReturnType<typeof createSchedulerService>;
+  let teamId: string;
+
+  beforeEach(async () => {
+    repos = createInMemoryRepositories();
+    sessionService = createSessionService({
+      sessionRepo: repos.session,
+      sessionLinkRepo: repos.sessionLink,
+      teamMemberRepo: repos.teamMember,
+      responseRepo: repos.response,
+      sessionAggregateRepo: repos.sessionAggregate,
+      teamScheduleRepo: repos.teamSchedule,
+    });
+    scheduler = createSchedulerService({
+      teamRepo: repos.team,
+      teamScheduleRepo: repos.teamSchedule,
+      sessionRepo: repos.session,
+      sessionService,
+    });
+    const team = await repos.team.create({ name: 'Materialise', timezone: 'UTC' });
+    teamId = team.id;
+    await repos.teamMember.create({ teamId, name: 'Alice', email: 'a@e.test' });
+  });
+
+  /** A closed session, old enough that the quiet period has elapsed. */
+  async function closedSession() {
+    const session = await repos.session.create({ teamId, status: 'open' });
+    await repos.session.update(session.id, {
+      status: 'closed',
+      actualCloseAt: new Date('2026-09-14T10:00:00Z'),
+    });
+    return session;
+  }
+
+  it('records when it materialised a session', async () => {
+    const session = await closedSession();
+
+    await scheduler.tick(new Date('2026-09-14T10:05:00Z'));
+
+    const after = await repos.session.findById(session.id);
+    expect(after?.materialisedAt).toBeInstanceOf(Date);
+  });
+
+  it('does not materialise the same empty session twice', async () => {
+    /*
+     * The defect. Zero aggregates is not evidence that nothing was done — it is
+     * exactly what a check nobody answered produces, so the old test
+     * (aggregates.length > 0) was never true for one and every tick re-ran it.
+     *
+     * Counts calls rather than comparing timestamps. The first version of this
+     * test asserted materialisedAt was unchanged, and passed under a mutation
+     * that re-materialised on every tick — because two wall-clock reads a
+     * millisecond apart can be equal.
+     */
+    const session = await closedSession();
+
+    let materialisations = 0;
+    const counting = createSchedulerService({
+      teamRepo: repos.team,
+      teamScheduleRepo: repos.teamSchedule,
+      sessionRepo: repos.session,
+      sessionService: {
+        ...sessionService,
+        materializeAggregates: async (id: string) => {
+          materialisations += 1;
+          return sessionService.materializeAggregates(id);
+        },
+      },
+    });
+
+    await counting.tick(new Date('2026-09-14T10:05:00Z'));
+    await counting.tick(new Date('2026-09-14T10:30:00Z'));
+    await counting.tick(new Date('2026-09-14T11:00:00Z'));
+
+    expect(materialisations, 'three ticks, one materialisation').toBe(1);
+    expect((await repos.session.findById(session.id))?.materialisedAt).toBeInstanceOf(Date);
+  });
+
+  it('still waits out the quiet period before materialising', async () => {
+    // The 30 seconds exist so responses in flight at close time land first
+    const session = await repos.session.create({ teamId, status: 'open' });
+    const closedAt = new Date('2026-09-14T10:00:00Z');
+    await repos.session.update(session.id, { status: 'closed', actualCloseAt: closedAt });
+
+    await scheduler.tick(new Date(closedAt.getTime() + 5_000));
+
+    expect((await repos.session.findById(session.id))?.materialisedAt).toBeFalsy();
+  });
+
+  it('leaves an open session alone', async () => {
+    const session = await repos.session.create({ teamId, status: 'open' });
+
+    await scheduler.tick(new Date('2026-09-14T10:05:00Z'));
+
+    expect((await repos.session.findById(session.id))?.materialisedAt).toBeFalsy();
   });
 });

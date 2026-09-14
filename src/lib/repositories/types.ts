@@ -85,7 +85,7 @@ export interface SessionRepository {
   findById(id: string): Promise<HealthCheckSession | null>;
   findOpenByTeamId(teamId: string): Promise<HealthCheckSession | null>;
   findByTeamId(teamId: string): Promise<HealthCheckSession[]>;
-  update(id: string, data: Partial<Pick<HealthCheckSession, 'status' | 'actualCloseAt'>>): Promise<HealthCheckSession>;
+  update(id: string, data: Partial<Pick<HealthCheckSession, 'status' | 'actualCloseAt' | 'materialisedAt'>>): Promise<HealthCheckSession>;
 }
 
 /** Requirement 10.1: Response data integrity */

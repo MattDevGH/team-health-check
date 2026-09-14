@@ -10,7 +10,6 @@ import type {
   TeamRepository,
   TeamScheduleRepository,
   SessionRepository,
-  SessionAggregateRepository,
 } from '@/lib/repositories/types';
 import type { SessionService } from '@/lib/services/session.service';
 import { nextOccurrenceUtc, previousOccurrenceUtc } from '@/lib/local-time';
@@ -19,7 +18,6 @@ export interface SchedulerServiceDeps {
   teamRepo: TeamRepository;
   teamScheduleRepo: TeamScheduleRepository;
   sessionRepo: SessionRepository;
-  sessionAggregateRepo: SessionAggregateRepository;
   sessionService: SessionService;
 }
 
@@ -27,7 +25,7 @@ export interface SchedulerServiceDeps {
 const QUIET_PERIOD_MS = 30_000;
 
 export function createSchedulerService(deps: SchedulerServiceDeps) {
-  const { teamRepo, teamScheduleRepo, sessionRepo, sessionAggregateRepo, sessionService } = deps;
+  const { teamRepo, teamScheduleRepo, sessionRepo, sessionService } = deps;
 
   /**
    * Desired-state reconciliation tick.
@@ -139,9 +137,14 @@ export function createSchedulerService(deps: SchedulerServiceDeps) {
         const elapsed = now.getTime() - session.actualCloseAt.getTime();
         if (elapsed < QUIET_PERIOD_MS) continue;
 
-        // Skip sessions that already have aggregates (idempotent)
-        const existing = await sessionAggregateRepo.findBySessionId(session.id);
-        if (existing.length > 0) continue;
+        /*
+         * Skip what has already been done, rather than what produced output.
+         *
+         * This tested `aggregates.length > 0`, which a check nobody answered
+         * never satisfies — so every tick re-materialised every empty session
+         * for as long as it existed.
+         */
+        if (session.materialisedAt) continue;
 
         // Attempt materialisation — safe to call; errors are swallowed
         // (e.g., already materialised or no responses).

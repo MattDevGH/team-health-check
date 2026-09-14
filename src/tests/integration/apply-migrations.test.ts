@@ -169,7 +169,22 @@ describe('applyMigrations', () => {
       full.applied[full.applied.length - 1],
     ]);
 
-    await expect(applyMigrations(client)).rejects.toThrow(/already exists/i);
+    /*
+     * Asserts that it fails, not how SQLite phrases it.
+     *
+     * This matched /already exists/, which is what a repeated CREATE TABLE
+     * says. Adding an ALTER TABLE migration broke it — SQLite says "duplicate
+     * column name" for that one. The wording depends on whichever migration
+     * happens to be last, which is a moving target; the behaviour under test is
+     * that a migration applied but unrecorded stops the run rather than being
+     * silently skipped forever.
+     */
+    await expect(applyMigrations(client)).rejects.toThrow();
+
+    const error = await applyMigrations(client).catch((e: unknown) => e);
+    expect(String(error), 'the operator has to be able to act on this').toMatch(
+      new RegExp(full.applied[full.applied.length - 1].split(String.fromCharCode(95))[1] + '|SQLITE', 'i'),
+    );
   });
 
   it('records every applied migration in the ledger', async () => {

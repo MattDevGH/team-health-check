@@ -72,6 +72,7 @@ export class PrismaSessionRepository implements SessionRepository {
       scheduledCloseAt: record.scheduledCloseAt,
       actualOpenAt: record.actualOpenAt,
       actualCloseAt: record.actualCloseAt,
+      materialisedAt: record.materialisedAt,
       createdAt: record.createdAt,
     };
   }

@@ -25,6 +25,7 @@ function session(overrides: Partial<HealthCheckSession> & { id: string }): Healt
     teamId: 'team-1',
     status: 'closed',
     scheduledOpenAt: null,
+    materialisedAt: null,
     scheduledCloseAt: null,
     actualOpenAt: new Date('2026-08-01T09:00:00.000Z'),
     actualCloseAt: new Date('2026-08-05T17:00:00.000Z'),

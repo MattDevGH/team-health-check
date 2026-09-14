@@ -193,6 +193,18 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
         decliningCount,
       });
     }
+
+    /*
+     * Record that the work was done, whether or not it produced anything.
+     *
+     * A check nobody answered produces zero aggregates, which is
+     * indistinguishable from never having been computed. The scheduler used to
+     * infer "already done" from the presence of aggregates, so it re-ran
+     * materialisation on every empty session on every tick, forever. And the
+     * dashboard could not tell a reader whether to wait or to conclude that
+     * nobody had answered.
+     */
+    await sessionRepo.update(sessionId, { materialisedAt: now() });
   }
 
   return { open, get, close, generateSessionLinks, materializeAggregates };

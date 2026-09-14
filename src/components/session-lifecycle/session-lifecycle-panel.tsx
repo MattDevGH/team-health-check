@@ -128,6 +128,8 @@ function toSession(wire: WireSession): HealthCheckSession {
     teamId: wire.teamId,
     status: wire.status,
     scheduledOpenAt: parseDate(wire.scheduledOpenAt),
+    // The panel never needs this; it is the dashboard that reports results.
+    materialisedAt: null,
     scheduledCloseAt: parseDate(wire.scheduledCloseAt),
     actualOpenAt: new Date(wire.actualOpenAt),
     actualCloseAt: parseDate(wire.actualCloseAt),
