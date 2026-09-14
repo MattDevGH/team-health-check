@@ -695,6 +695,42 @@ setting to revisit first if anyone else gains write access.
 
 ## Outstanding Work
 
+### Reaching your health check — spec written 2026-09-14, not started
+
+`.kiro/specs/reaching-your-health-check/`. Written because production opened a
+check exactly on schedule, generated a session link, and **told nobody** — and
+the delivery manager, signed in and looking at the dashboard, had no way to
+answer it.
+
+**Nothing in the authenticated UI links to a session.** The lifecycle panel
+reports "0 of 1 answered" and offers a button to *close* the check, but no
+route to *answer* it. `/session/[token]` works; nothing points at it.
+`e2e/journey.spec.ts` reaches it by reading the token out of the database —
+the same "navigating by URLs it looked up" pattern that hid the sign-in dead
+end.
+
+**Email cannot deliver a prompt.** `EmailService` has one method,
+`sendMagicLink`, and the tick calls `sendSlackPrompt` and nothing else. So
+email is the only way *in* and Slack is the only way to hear there is anything
+to do — two single points of failure pointing in opposite directions.
+
+**Decided with Matt 2026-09-14:** both a dashboard link *and* a route in the
+shell, because a contributor’s journey never touches the dashboard. Email
+prompts added, with a member preference, because Slack stays primary and a
+member who gets both is told twice. The full Slack spec including phase 3.
+
+**The default is the interesting decision.** Email prompts default **on** for a
+member with no Slack link and **off** for one with Slack linked, with an
+explicit preference overriding either. Always-on-opt-out was considered and
+rejected: it would start mailing every existing Slack user the day it shipped.
+The stated cost is in the design — a Slack-linked member whose delivery fails
+hears nothing, and a failure fallback needs the retry queue to report outcomes,
+which is separate work.
+
+**Phase 1 alone fixes the defect** and depends on nothing external.
+
+## Outstanding Work
+
 ### Slack sign-in — spec written 2026-09-13, not started
 
 `.kiro/specs/slack-sign-in/`. Written because provisioning exposed a
