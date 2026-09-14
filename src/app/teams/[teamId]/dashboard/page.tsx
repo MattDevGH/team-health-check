@@ -211,7 +211,16 @@ export default function TrendDashboardPage({ params }: PageProps) {
   if (!data) return null;
 
   const { sessions, trendDistribution, privacyMode, questions } = data;
-  const hasEnoughData = sessions.length >= 2;
+  /*
+   * A chart needs two points. Everything else on this page needs one.
+   *
+   * These were the same condition, so a team that had closed exactly one
+   * check saw "more data needed" and nothing else — a statement about the
+   * chart, standing in for results the team did have. That is what a delivery
+   * manager found on production after closing their first check.
+   */
+  const canDrawTrend = sessions.length >= 2;
+  const hasAnyResults = sessions.length >= 1;
   const anonymousMode = privacyMode === 'anonymous';
 
   /**
@@ -239,29 +248,6 @@ export default function TrendDashboardPage({ params }: PageProps) {
       </div>
     ) : null;
 
-  if (!hasEnoughData) {
-    return (
-      <div className="min-h-screen bg-gray-50 py-6 px-4">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-2xl font-bold text-gray-800 mb-4">
-            Trend Dashboard
-          </h1>
-
-          {lifecyclePanel}
-          <GuidanceBanner items={guidance} />
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <p className="text-gray-500 text-lg">
-              More data needed
-            </p>
-            <p className="text-gray-600 text-sm mt-2">
-              At least 2 closed sessions are required to display trends.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4">
       <div className="max-w-3xl mx-auto">
@@ -272,15 +258,26 @@ export default function TrendDashboardPage({ params }: PageProps) {
         {lifecyclePanel}
         <GuidanceBanner items={guidance} />
 
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <TrendChart sessions={sessions} />
-        </div>
+        {canDrawTrend ? (
+          <div className="bg-white rounded-lg shadow p-4 mb-6">
+            <TrendChart sessions={sessions} />
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow p-8 text-center mb-6">
+            <p className="text-gray-500 text-lg">More data needed</p>
+            <p className="text-gray-600 text-sm mt-2">
+              At least 2 closed sessions are required to display trends.
+            </p>
+          </div>
+        )}
 
-        <LatestSessionPanel
-          sessions={sessions}
-          questions={questions}
-          anonymousMode={anonymousMode}
-        />
+        {hasAnyResults && (
+          <LatestSessionPanel
+            sessions={sessions}
+            questions={questions}
+            anonymousMode={anonymousMode}
+          />
+        )}
 
         {trendDistribution.length > 0 && (
           <div className="bg-white rounded-lg shadow p-4">

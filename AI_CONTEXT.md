@@ -543,7 +543,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1567 tests across 173 files**, including
+The Vitest suite now contains **1573 tests across 173 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
@@ -729,6 +729,17 @@ stopped cron to the person who could restart it.
   between them; they had two wordings for suppression, and "Insufficient data"
   read as a fault in the data when the truth was a small team. Both now say
   *Hidden until 3 people have answered*.
+
+**And the panels were unreachable for the team most likely to need them.** The
+trends route withheld *sessions* whenever fewer than two had closed, so a team
+that had closed exactly one check was told "more data needed" — a statement
+about the chart — and shown no scores at all. That is what Matt saw on
+production after closing the first check. A trend needs two points; a result
+needs one. The route now returns the closed sessions either way and
+ keeps its original meaning, while the page gates only the
+chart on it. Proven in a browser: a seeded single-close team shows its scores,
+and a seeded team whose closes were never materialised reports *overdue* on
+both surfaces rather than accusing anyone of silence.
 
 Each of the four states is axe-audited on both surfaces, proven live by
 mutation rather than assumed — an audit of a state the page never entered

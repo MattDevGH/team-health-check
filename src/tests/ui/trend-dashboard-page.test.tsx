@@ -14,9 +14,19 @@ import TrendDashboardPage from '@/app/teams/[teamId]/dashboard/page';
 
 const TEAM_ID = 'team-1';
 
+/** One closed check, with one theme answered and one not. */
+const ONE_SESSION = {
+  sessionId: 's1',
+  closedAt: '2025-01-08T17:00:00Z',
+  materialisedAt: '2025-01-08T17:01:00Z',
+  averages: [{ questionId: 'q-delivering-value', averageScore: 3.5, responseCount: 5 }],
+};
+
 interface SessionData {
   sessionId: string;
   closedAt: string;
+  /** Sent by the real route; the panels distinguish four silences with it. */
+  materialisedAt?: string | null;
   averages: Array<{
     questionId: string;
     averageScore: number;
@@ -35,11 +45,18 @@ function mockTrendsApi(options: {
   sessions?: SessionData[];
   trendDistribution?: TrendDistributionData[];
   privacyMode?: string;
+  /**
+   * The fixed catalogue. The real route always sends it, and without it the
+   * panels fall back to naming only the themes that have answers — which is
+   * the absence they exist to make visible.
+   */
+  questions?: Array<{ id: string; title: string; description: string }>;
 } = {}) {
   const {
     sessions = [],
     trendDistribution = [],
     privacyMode,
+    questions,
   } = options;
 
   server.use(
@@ -49,6 +66,7 @@ function mockTrendsApi(options: {
         trendDistribution,
         // Mirrors the real route, which includes privacyMode in the response
         ...(privacyMode ? { privacyMode } : {}),
+        ...(questions ? { questions } : {}),
       });
     }),
   );
@@ -222,23 +240,76 @@ describe('Trend Dashboard Page', () => {
       });
     });
 
-    it('displays "More data needed" when only 1 session exists', async () => {
-      mockTrendsApi({
-        sessions: [
-          {
-            sessionId: 's1',
-            closedAt: '2025-01-08T17:00:00Z',
-            averages: [
-              { questionId: 'q-delivering-value', averageScore: 3.5, responseCount: 5 },
-            ],
-          },
-        ],
-      });
+    it('still says a trend needs a second session when only 1 exists', async () => {
+      mockTrendsApi({ sessions: [ONE_SESSION] });
       render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
 
       await waitFor(() => {
         expect(screen.getByText(/more data needed/i)).toBeInTheDocument();
       });
+    });
+  });
+
+  /**
+   * Explaining Itself 1.1, 1.5.
+   *
+   * A delivery manager closed their first check on production and found a
+   * dashboard reporting "more data needed" and nothing else. The check had
+   * results; the page was talking about the chart. One session is a trend of
+   * nothing and a result of something, and the two were conflated.
+   */
+  describe('a team that has closed exactly one check', () => {
+    const QUESTIONS = [
+      { id: 'q-delivering-value', title: 'Delivering Value', description: 'How well…?' },
+      { id: 'q-psychological-safety', title: 'Psychological Safety', description: 'How safe…?' },
+    ];
+
+    it('shows the scores it has, rather than only talking about the chart', async () => {
+      mockTrendsApi({ sessions: [ONE_SESSION], questions: QUESTIONS });
+      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+      const panel = await screen.findByRole('region', { name: /latest session/i });
+      expect(within(panel).getByText('3.5')).toBeInTheDocument();
+    });
+
+    it('names a theme nobody answered instead of omitting it', async () => {
+      mockTrendsApi({ sessions: [ONE_SESSION], questions: QUESTIONS });
+      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+      const panel = await screen.findByRole('region', { name: /latest session/i });
+      expect(within(panel).getByText(/no responses/i)).toBeInTheDocument();
+    });
+
+    it('says results are being prepared while the first close is uncomputed', async () => {
+      /*
+       * The minutes after a first close, which is exactly when a new team
+       * looks. Without this the page reports "more data needed" for a check
+       * whose results are on their way.
+       */
+      mockTrendsApi({
+        sessions: [
+          {
+            sessionId: 's1',
+            closedAt: new Date(Date.now() - 60_000).toISOString(),
+            materialisedAt: null,
+            averages: [],
+          },
+        ],
+        questions: QUESTIONS,
+      });
+      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+      const panel = await screen.findByRole('region', { name: /latest session/i });
+      expect(within(panel).getAllByText(/being prepared/i).length).toBeGreaterThan(0);
+    });
+
+    it('draws no chart, which is the one thing a second session is needed for', async () => {
+      mockTrendsApi({ sessions: [ONE_SESSION], questions: QUESTIONS });
+      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+      await screen.findByRole('region', { name: /latest session/i });
+      expect(screen.queryByRole('img', { name: /trend/i })).not.toBeInTheDocument();
+      expect(screen.getByText(/more data needed/i)).toBeInTheDocument();
     });
   });
 

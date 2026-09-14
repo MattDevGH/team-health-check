@@ -169,3 +169,108 @@ test.describe('dashboard below the anonymity threshold', () => {
     await expect(detail).not.toContainText('5.0');
   });
 });
+
+/**
+ * The first close, which is where a new team starts.
+ *
+ * Requirements: Explaining Itself 1.1, 1.4, 1.5
+ *
+ * A delivery manager closed their first check on production and found a page
+ * saying "more data needed" and nothing else. The check had results; the
+ * message was about the chart. Seeded here because reaching this state through
+ * the flows takes a full open-answer-close cycle, and the point of the test is
+ * the page rather than the cycle.
+ */
+test.describe('a team that has closed exactly one check', () => {
+  const EMAIL = 'dashboard-first-close@e2e.invalid';
+  let teamId = '';
+
+  test.beforeAll(() => {
+    const seeded = seedClosedSessions({
+      teamName: 'First Close Team',
+      memberEmail: EMAIL,
+      privacyMode: 'attributed',
+      sessions: [
+        {
+          closedAt: NEWER,
+          aggregates: [
+            aggregate({ questionId: 'q-delivering-value', averageScore: 3.5, responseCount: 5 }),
+          ],
+        },
+      ],
+    });
+    teamId = seeded.teamId;
+  });
+
+  test('shows the scores from that one check', async ({ page }) => {
+    await signIn(page, EMAIL);
+    await page.goto(`/teams/${teamId}/dashboard`);
+
+    const panel = page.getByRole('region', { name: /latest session/i });
+    await expect(panel.getByText('3.5')).toBeVisible();
+  });
+
+  test('still says a second check is needed before a trend can be drawn', async ({ page }) => {
+    // The message was never wrong — it was standing in for everything else
+    await signIn(page, EMAIL);
+    await page.goto(`/teams/${teamId}/dashboard`);
+
+    await expect(page.getByText(/more data needed/i)).toBeVisible();
+  });
+
+  test('names a theme that check recorded nothing for', async ({ page }) => {
+    await signIn(page, EMAIL);
+    await page.goto(`/teams/${teamId}/dashboard`);
+
+    const detail = await openQuestionDetail(page, /psychological safety/i);
+    await expect(detail).toContainText(/no responses/i);
+  });
+});
+
+/**
+ * A close whose results never arrived.
+ *
+ * Requirements: Explaining Itself 1.1, 1.4
+ *
+ * The state a stopped scheduler produces. Before `materialisedAt` existed this
+ * was indistinguishable from "nobody answered", so a tool that had stopped
+ * running reported that a team had ignored its health check.
+ */
+test.describe('a closed check whose results were never computed', () => {
+  const EMAIL = 'dashboard-unmaterialised@e2e.invalid';
+  let teamId = '';
+
+  test.beforeAll(() => {
+    const seeded = seedClosedSessions({
+      teamName: 'Stalled Scheduler Team',
+      memberEmail: EMAIL,
+      privacyMode: 'attributed',
+      sessions: [
+        { closedAt: OLDER, aggregates: [] },
+        {
+          closedAt: NEWER,
+          aggregates: [],
+        },
+      ],
+    });
+    teamId = seeded.teamId;
+  });
+
+  test('reports the results as overdue rather than accusing the team', async ({ page }) => {
+    await signIn(page, EMAIL);
+    await page.goto(`/teams/${teamId}/dashboard`);
+
+    const panel = page.getByRole('region', { name: /latest session/i });
+    await expect(panel.getByText(/overdue/i).first()).toBeVisible();
+    await expect(panel).not.toContainText(/no responses/i);
+  });
+
+  test('says the same thing in the themes list a reader opens next', async ({ page }) => {
+    await signIn(page, EMAIL);
+    await page.goto(`/teams/${teamId}/dashboard`);
+
+    const detail = await openQuestionDetail(page, /delivering value/i);
+    await expect(detail).toContainText(/overdue/i);
+    await expect(detail).not.toContainText(/no responses/i);
+  });
+});
