@@ -54,6 +54,20 @@ interface PageProps {
   params: Promise<{ teamId: string }>;
 }
 
+/**
+ * What to show when there was nothing before.
+ *
+ * Two routes write that: `team.service.ts` records the literal string "null"
+ * for a first schedule configuration, and team creation and member addition
+ * record an empty string. Both surfaced raw — a production log read
+ * `null→{"cadence":"weekly",…}`, which is a database artefact reaching an
+ * interface whose entire job is being understood by a person.
+ */
+function describePreviousValue(previousValue: string): string {
+  const nothing = previousValue.trim() === '' || previousValue.trim() === 'null';
+  return nothing ? 'No previous value' : previousValue;
+}
+
 export default function AuditLogPage({ params }: PageProps) {
   const [loading, setLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
@@ -188,11 +202,26 @@ export default function AuditLogPage({ params }: PageProps) {
                     {formatTimestamp(entry.timestamp)}
                   </time>
                 </div>
-                <div className="mt-2 text-sm text-gray-600">
-                  <span>{entry.previousValue}</span>
-                  <span className="mx-2" aria-label="changed to">→</span>
-                  <span>{entry.newValue}</span>
-                </div>
+                {/*
+                  Labelled rather than joined by an arrow.
+                  
+                  An arrow between two unlabelled blobs asks the reader to
+                  infer which is which, and carried its meaning only visually —
+                  `aria-label` on a decorative span does less than it looks.
+                  This screen exists to be understood by a person months later.
+                  
+                  `break-all` because audit values are JSON by design: one long
+                  string with no spaces to break on, which the default wrapping
+                  cannot help with, so it ran past the edge of its card.
+                */}
+                <dl className="mt-2 text-sm text-gray-600">
+                  <dt className="font-medium text-gray-700">Before</dt>
+                  <dd data-audit-value className="mb-2 break-all">
+                    {describePreviousValue(entry.previousValue)}
+                  </dd>
+                  <dt className="font-medium text-gray-700">After</dt>
+                  <dd data-audit-value className="break-all">{entry.newValue}</dd>
+                </dl>
                 <div className="mt-1 text-xs text-gray-600">
                   Changed by: {describeActor(entry.actor)}
                 </div>
