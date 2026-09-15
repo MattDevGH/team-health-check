@@ -812,11 +812,21 @@ know that 1 means Monday. Labels and values, with day names, is the fix. Raised
 by Matt; small and self-contained, and it belongs with whatever next touches the
 audit log.
 
-**The application is slower than it should be, and the cause is geography.**
-Measured 2026-09-15: `x-vercel-id` reports `lhr1::iad1::…`, so requests enter at
-London and execute in Washington, while the database is in Dublin. One query
-cost ~65ms of round trip — 249ms median for a single-query endpoint against
-189ms for one that touches no database, and 1.1s on a cold start.
+**The application was slower than it should be, and the cause was geography —
+fixed 2026-09-15.** `x-vercel-id` read `lhr1::iad1::…`: requests entering at
+London and executing in Washington, against a database in Dublin. `vercel.json`
+now pins functions to `dub1`, and PR #50 records the measurement either side.
+
+| Endpoint | `iad1` | `dub1` |
+|---|---|---|
+| `/api/me` signed out, no database work | 189ms | 89ms |
+| session-link lookup, one query | 249ms | 98ms |
+| **implied cost per query** | **~60ms** | **~9ms** |
+
+Warm medians, ten samples, from a UK client. Cold starts stay around 1.1s and
+are a Hobby-tier fact.
+
+What remains is architectural, and is specced as `.kiro/specs/feeling-responsive/`.
 
 That multiplies. A dashboard load makes four requests — the shell’s `/api/me`,
 the page’s *second* `/api/me`, `/trends`, and `/sessions` — whose queries are
@@ -827,6 +837,14 @@ when it meant one local query.
 The pop-in Matt described in the navigation is structural rather than a bug:
 every page is a client component that fetches on mount, and the shell honestly
 renders the destinations it can name before `/api/me` resolves.
+
+**The milestone exists for the gates rather than the milliseconds.** The
+slowness was found by a person using the application — which is where every
+significant defect in this project has been found — and nothing in a
+1614-test suite could have told him. Phase 1 builds a query counter and
+request-count gates before anything is changed, so the regression is visible
+to the suite before it is fixed. Budgets are ratchets set at what the code
+does today, never wall-clock timings in CI.
 
 ### Reaching your health check — spec written 2026-09-14, not started
 
