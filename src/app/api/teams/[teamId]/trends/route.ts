@@ -71,16 +71,6 @@ export const GET = withErrorHandling(async (request: Request, context) => {
   const allSessions = await repos.session.findByTeamId(teamId);
   const closedSessions = allSessions.filter(s => s.status === 'closed' && s.actualCloseAt);
 
-  // Fewer than 2 closed sessions → requiresMoreData
-  if (closedSessions.length < 2) {
-    return Response.json({
-      sessions: [],
-      trendDistribution: [],
-      privacyMode,
-      questions,
-      requiresMoreData: true,
-    });
-  }
 
   // Sort closed sessions chronologically (oldest first)
   closedSessions.sort((a, b) =>
@@ -103,16 +93,46 @@ export const GET = withErrorHandling(async (request: Request, context) => {
     });
   }
 
+  /*
+   * A trend needs two points; a result needs one.
+   *
+   * These were conflated: fewer than two closed sessions returned no sessions
+   * at all, so a team that had closed exactly one check was told "more data
+   * needed" — a statement about trends — and shown no scores. That is what a
+   * delivery manager saw on production after closing their first check, and it
+   * made every explanation on the panels below unreachable for precisely the
+   * team most likely to need one. requiresMoreData still says what it said;
+   * the session is no longer withheld with it.
+   */
+  const requiresMoreData = closedSessions.length < 2;
+
   // Build sessions array matching the frontend contract
   const sessions = closedSessions.map(session => ({
     sessionId: session.id,
     closedAt: session.actualCloseAt!.toISOString(),
+    /*
+     * Whether the aggregates were computed, not merely whether they exist.
+     *
+     * Zero aggregates means "nobody answered" or "not computed yet", and those
+     * are different news — one resolves in minutes, the other never. Without
+     * this the dashboard could only guess from the clock, and a stalled
+     * scheduler would have it report that a team ignored a check.
+     */
+    materialisedAt: session.materialisedAt ? session.materialisedAt.toISOString() : null,
     averages: averagesBySession.get(session.id) ?? [],
   }));
 
-  // Get trend distribution for the most recent closed session
+  /*
+   * Trend indicators for the most recent closed session.
+   *
+   * Computed for a single session too, because an indicator is what a
+   * respondent said about their own direction rather than a comparison
+   * between sessions. One closed check has them; it just has no line to draw.
+   */
   const mostRecentSession = closedSessions[closedSessions.length - 1];
-  const rawDistribution = await container.trend.getTrendIndicatorDistribution(mostRecentSession.id);
+  const rawDistribution = mostRecentSession
+    ? await container.trend.getTrendIndicatorDistribution(mostRecentSession.id)
+    : [];
   const trendDistribution = rawDistribution.map(d => ({
     questionId: d.questionId,
     improving: d.improvingCount,
@@ -125,5 +145,8 @@ export const GET = withErrorHandling(async (request: Request, context) => {
     trendDistribution,
     privacyMode,
     questions,
+    // Omitted rather than false when trends can be drawn, which is the shape
+    // the dashboard and its mock have always agreed on.
+    ...(requiresMoreData ? { requiresMoreData: true } : {}),
   });
 });

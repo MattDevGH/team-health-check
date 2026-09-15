@@ -574,7 +574,7 @@ test.describe('a theme suppressed for anonymity', () => {
      * seeding or the threshold ever changes so the notice stops rendering, this
      * fails here rather than quietly passing an audit of the wrong page.
      */
-    await expect(page.getByText(/insufficient data/i).first()).toBeVisible();
+    await expect(page.getByText(/hidden until 3 people have answered/i).first()).toBeVisible();
 
     await expectNoViolations(page, 'dashboard with a theme suppressed for anonymity');
   });

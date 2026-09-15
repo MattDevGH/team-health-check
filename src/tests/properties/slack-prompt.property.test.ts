@@ -88,6 +88,7 @@ describe('Slack Prompt Properties', () => {
             scheduledCloseAt: null,
             actualOpenAt: new Date(),
             actualCloseAt: null,
+            materialisedAt: null,
             createdAt: new Date(),
           };
 
@@ -150,6 +151,7 @@ describe('Slack Prompt Properties', () => {
               scheduledCloseAt: null,
               actualOpenAt: new Date(),
               actualCloseAt: null,
+              materialisedAt: null,
               createdAt: new Date(),
             };
 

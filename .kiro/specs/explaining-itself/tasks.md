@@ -12,28 +12,51 @@ Every phase is independent and shippable on its own.
 
 ### 1.1 Name the three silences
 
-- [ ] Failing test: a closed session with no aggregates is reported as *pending*
-- [ ] Failing test: a value below the anonymity threshold is reported as
+- [x] Failing test: a closed session with no aggregates is reported as *pending*
+- [x] Failing test: a value below the anonymity threshold is reported as
       *suppressed*
-- [ ] Failing test: a question nobody answered is reported as *unanswered*
-- [ ] Failing test: pending is only possible for a closed session — an open one
+- [x] Failing test: a question nobody answered is reported as *unanswered*
+- [x] Failing test: pending is only possible for a closed session — an open one
       has no results due yet
-- [ ] Failing test: suppression applies only in anonymous mode
-- [ ] A pure selector over the data the dashboard already receives, so the rule
+- [x] Failing test: suppression applies only in anonymous mode
+- [x] A pure selector over the data the dashboard already receives, so the rule
       is testable without rendering
 - _Requirements: 1.4_
 - _Properties: 1, 2_
 
 ### 1.2 Say it on the panels people read
 
-- [ ] Failing test: the latest-session panel says results are being prepared for
+- [x] Failing test: the latest-session panel says results are being prepared for
       a just-closed check
-- [ ] Failing test: it says how long — minutes, not an unbounded wait
-- [ ] Failing test: it distinguishes that from suppression and from unanswered
-- [ ] Failing test: the same in the question themes list, which is where a
+- [x] Failing test: it says how long — minutes, not an unbounded wait
+- [x] Failing test: it distinguishes that from suppression and from unanswered
+- [x] Failing test: the same in the question themes list, which is where a
       reader goes next
-- [ ] axe on each new state
+- [x] axe on each new state
 - _Requirements: 1.1, 1.2, 1.3, 1.5, NFR 2.1_
+
+### 1.3 Make the panels reachable for a team with one closed check
+
+- [x] Failing test: the trends route returns a single closed session rather
+      than withholding it with the trend
+- [x] Failing test: the dashboard shows that session’s scores while still
+      saying a second check is needed before a trend can be drawn
+- [x] Failing test: an uncomputed first close reads as *being prepared*, not
+      as *more data needed*
+- [x] Browser tests for both, plus a team whose closes were never materialised
+- _Requirements: 1.1, 1.5_
+
+Not in the original plan. Found while building 1.2: every explanation above
+was unreachable for a team that had closed exactly one check, because the
+route withheld the session whenever it could not draw a trend. That is the
+state the delivery manager was actually in on production when this spec was
+written.
+
+**Extra work this phase turned out to need:** `materialisedAt` on
+`HealthCheckSession`. The spec assumed the data already distinguished "not
+computed yet" from "nobody answered"; it did not, and the only remaining
+signal was elapsed time. A fourth state — *overdue* — falls out of the new
+column, and it is the one that would have surfaced a stopped cron.
 
 **Checkpoint:** a reader can tell working from broken. One PR.
 

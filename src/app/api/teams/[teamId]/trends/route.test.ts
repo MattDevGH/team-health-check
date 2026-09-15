@@ -261,7 +261,17 @@ describe('GET /api/teams/[teamId]/trends', () => {
     expect(body.trendDistribution).toEqual([]);
   });
 
-  it('returns requiresMoreData: true when only one closed session exists', async () => {
+  /**
+   * Explaining Itself 1.1, 1.5.
+   *
+   * A team that has closed exactly one check has results to read and no trend
+   * to draw. Withholding the session withheld both: the dashboard said "more
+   * data needed" — a statement about trends — and showed no scores at all.
+   * That is what a delivery manager saw on production after closing their
+   * first check, and the reason every explanation built for the panels below
+   * was unreachable for exactly the team most likely to need one.
+   */
+  it('returns the single closed session, which has results even though it has no trend', async () => {
     const session1 = await repos.session.create({ teamId, status: 'closed' });
     await repos.session.update(session1.id, { status: 'closed', actualCloseAt: new Date('2025-01-10T12:00:00Z') });
     registerSessionTeam(session1.id, teamId);
@@ -283,8 +293,70 @@ describe('GET /api/teams/[teamId]/trends', () => {
 
     const body = await response.json();
     expect(body.requiresMoreData).toBe(true);
-    expect(body.sessions).toEqual([]);
-    expect(body.trendDistribution).toEqual([]);
+    expect(body.sessions).toHaveLength(1);
+    expect(body.sessions[0]).toMatchObject({
+      sessionId: session1.id,
+      closedAt: '2025-01-10T12:00:00.000Z',
+    });
+    expect(body.sessions[0].averages).toContainEqual({
+      questionId: 'q1',
+      averageScore: 4.0,
+      responseCount: 5,
+    });
+  });
+
+  it('reports what one session’s respondents said, while still asking for more data', async () => {
+    /*
+     * A trend indicator is a respondent describing their own direction, not a
+     * comparison between sessions, so one closed check has them. It has no
+     * line to draw, which is what requiresMoreData still says.
+     */
+    const session1 = await repos.session.create({ teamId, status: 'closed' });
+    await repos.session.update(session1.id, { status: 'closed', actualCloseAt: new Date('2025-01-10T12:00:00Z') });
+    registerSessionTeam(session1.id, teamId);
+    await repos.sessionAggregate.create({
+      sessionId: session1.id,
+      questionId: 'q1',
+      averageScore: 4.0,
+      responseCount: 5,
+      improvingCount: 2,
+      stableCount: 2,
+      decliningCount: 1,
+    });
+
+    const request = makeAuthRequest(`http://localhost/api/teams/${teamId}/trends`, sessionToken);
+    const context = { params: Promise.resolve({ teamId }) };
+
+    const body = await (await GET(request, context)).json();
+
+    expect(body.requiresMoreData).toBe(true);
+    expect(body.trendDistribution).toContainEqual({
+      questionId: 'q1',
+      improving: 2,
+      stable: 2,
+      declining: 1,
+    });
+  });
+
+  it('reports an uncomputed single session as uncomputed rather than as unanswered', async () => {
+    /*
+     * The first minutes after a first close, which is when a new team looks.
+     * The session must arrive with materialisedAt null so the dashboard can
+     * say results are being prepared instead of reporting that nobody
+     * answered.
+     */
+    const session1 = await repos.session.create({ teamId, status: 'closed' });
+    await repos.session.update(session1.id, { status: 'closed', actualCloseAt: new Date('2025-01-10T12:00:00Z') });
+    registerSessionTeam(session1.id, teamId);
+
+    const request = makeAuthRequest(`http://localhost/api/teams/${teamId}/trends`, sessionToken);
+    const context = { params: Promise.resolve({ teamId }) };
+
+    const body = await (await GET(request, context)).json();
+
+    expect(body.sessions).toHaveLength(1);
+    expect(body.sessions[0].materialisedAt).toBeNull();
+    expect(body.sessions[0].averages).toEqual([]);
   });
 
   it('does not include requiresMoreData when 2+ closed sessions exist', async () => {

@@ -25,6 +25,7 @@ export class InMemorySessionRepository implements SessionRepository {
       scheduledCloseAt: data.scheduledCloseAt ?? null,
       actualOpenAt: now,
       actualCloseAt: null,
+      materialisedAt: null,
       createdAt: now,
     };
     this.sessions.set(session.id, session);

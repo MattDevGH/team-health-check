@@ -305,9 +305,20 @@ export function seedSession(options: {
     const token = `e2e-link-${slug(sessionId)}`;
     const stamp = (options.closedAt ?? new Date()).toISOString();
 
+    /*
+     * materialisedAt is set when, and only when, this seed produces aggregates.
+     *
+     * That is what the scheduler does, and the dashboard reads the column to
+     * tell "not computed yet" from "nobody answered". Seeding it unconditionally
+     * would make the stalled-scheduler state unreachable from here; seeding it
+     * never would leave every seeded session leaning on the fallback that exists
+     * only for rows predating the column.
+     */
+    const materialised = (options.aggregates ?? []).length > 0 ? stamp : null;
+
     db.prepare(
-      'INSERT INTO HealthCheckSession (id, teamId, status, actualOpenAt, actualCloseAt, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
-    ).run(sessionId, options.teamId, options.status, stamp, options.status === 'closed' ? stamp : null, stamp);
+      'INSERT INTO HealthCheckSession (id, teamId, status, actualOpenAt, actualCloseAt, materialisedAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(sessionId, options.teamId, options.status, stamp, options.status === 'closed' ? stamp : null, materialised, stamp);
 
     db.prepare(
       'INSERT INTO SessionLink (id, token, memberId, sessionId, expiresAt, createdAt) VALUES (?, ?, ?, ?, ?, ?)',

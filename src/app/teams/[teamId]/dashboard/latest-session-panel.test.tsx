@@ -11,6 +11,9 @@
 
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import { axe, toHaveNoViolations } from 'jest-axe';
+
+expect.extend(toHaveNoViolations);
 
 import { LatestSessionPanel } from './latest-session-panel';
 
@@ -177,4 +180,198 @@ describe('LatestSessionPanel', () => {
       expect(screen.queryByRole('row', { name: /psychological safety/i })).not.toBeInTheDocument();
     });
   });
+});
+
+/**
+ * Saying why a value is not there.
+ *
+ * Requirements: Explaining Itself 1.1, 1.2, 1.3, 1.5
+ *
+ * Found by closing a check on production and reading the dashboard. It showed
+ * nothing for five minutes because materialisation runs on the next tick, then
+ * nothing permanently because one response is below the anonymity threshold —
+ * two entirely different silences, indistinguishable from each other and from a
+ * broken tool.
+ */
+describe('LatestSessionPanel explains an empty result', () => {
+  const closedAt = '2026-09-14T19:20:00.000Z';
+  const questions = [
+    { id: 'q-delivering-value', title: 'Delivering Value', description: 'How well…' },
+  ];
+
+  const session = (over: Partial<{ materialisedAt: string | null; averages: unknown[] }> = {}) => [
+    {
+      sessionId: 's1',
+      closedAt,
+      materialisedAt: null,
+      averages: [],
+      ...over,
+    },
+  ];
+
+  it('says results are being prepared just after a close', () => {
+    render(
+      <LatestSessionPanel
+        sessions={session() as never}
+        anonymousMode
+        questions={questions}
+        now={new Date('2026-09-14T19:22:00.000Z')}
+      />,
+    );
+
+    expect(screen.getByText(/being prepared/i)).toBeInTheDocument();
+  });
+
+  it('says how long, so a reader knows whether to wait', () => {
+    render(
+      <LatestSessionPanel
+        sessions={session() as never}
+        anonymousMode
+        questions={questions}
+        now={new Date('2026-09-14T19:22:00.000Z')}
+      />,
+    );
+
+    expect(screen.getByText(/minutes/i)).toBeInTheDocument();
+  });
+
+  it('says results are overdue rather than blaming the team', () => {
+    /*
+     * The message that would have surfaced a stopped scheduler. Reporting
+     * "nobody answered" here is a false claim about a team, on a tool whose
+     * whole purpose is telling you how that team is doing.
+     */
+    render(
+      <LatestSessionPanel
+        sessions={session() as never}
+        anonymousMode
+        questions={questions}
+        now={new Date('2026-09-14T21:00:00.000Z')}
+      />,
+    );
+
+    expect(screen.getByText(/overdue/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no responses/i)).not.toBeInTheDocument();
+  });
+
+  it('says a value is hidden for anonymity, and how many are needed', () => {
+    render(
+      <LatestSessionPanel
+        sessions={session({
+          materialisedAt: closedAt,
+          averages: [{ questionId: 'q-delivering-value', averageScore: 3, responseCount: 1 }],
+        }) as never}
+        anonymousMode
+        questions={questions}
+        now={new Date('2026-09-14T21:00:00.000Z')}
+      />,
+    );
+
+    expect(screen.getByText(/hidden/i)).toBeInTheDocument();
+    expect(screen.getByText(/3/)).toBeInTheDocument();
+  });
+
+  it('still says nobody answered when materialisation ran and found nothing', () => {
+    render(
+      <LatestSessionPanel
+        sessions={session({ materialisedAt: closedAt }) as never}
+        anonymousMode
+        questions={questions}
+        now={new Date('2026-09-14T21:00:00.000Z')}
+      />,
+    );
+
+    expect(screen.getByText(/no responses/i)).toBeInTheDocument();
+  });
+
+  it('never shows two explanations for the same theme', () => {
+    // Property 2: the states are exclusive
+    render(
+      <LatestSessionPanel
+        sessions={session({ materialisedAt: closedAt }) as never}
+        anonymousMode
+        questions={questions}
+        now={new Date('2026-09-14T21:00:00.000Z')}
+      />,
+    );
+
+    expect(screen.queryByText(/being prepared/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/overdue/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Explaining Itself NFR 2.1.
+ *
+ * Each explanation is a state the table can be in, and a state nothing has
+ * ever audited is a state that can ship broken. The colspan cells in
+ * particular are new structure, not new text: a cell spanning three columns
+ * in a table with row headers is exactly the sort of thing that reads fine
+ * and announces badly.
+ *
+ * jsdom's axe cannot judge colour contrast. The amber used here is checked by
+ * hand and recorded where it is applied.
+ */
+describe('LatestSessionPanel accessibility in every state', () => {
+  const CLOSED = '2026-09-14T17:00:00.000Z';
+  const QUESTIONS = [
+    { id: 'q-delivering-value', title: 'Delivering Value', description: 'How well…?' },
+    { id: 'q-psychological-safety', title: 'Psychological Safety', description: 'How safe…?' },
+  ];
+
+  const states = {
+    pending: {
+      sessions: [{ sessionId: 's1', closedAt: CLOSED, averages: [] }],
+      now: new Date('2026-09-14T17:02:00.000Z'),
+      anonymousMode: false,
+    },
+    overdue: {
+      sessions: [{ sessionId: 's1', closedAt: CLOSED, averages: [] }],
+      now: new Date('2026-09-14T19:00:00.000Z'),
+      anonymousMode: false,
+    },
+    unanswered: {
+      sessions: [
+        {
+          sessionId: 's1',
+          closedAt: CLOSED,
+          materialisedAt: CLOSED,
+          averages: [{ questionId: 'q-delivering-value', averageScore: 4, responseCount: 6 }],
+        },
+      ],
+      now: new Date('2026-09-14T19:00:00.000Z'),
+      anonymousMode: false,
+    },
+    suppressed: {
+      sessions: [
+        {
+          sessionId: 's1',
+          closedAt: CLOSED,
+          materialisedAt: CLOSED,
+          averages: [{ questionId: 'q-delivering-value', averageScore: 4, responseCount: 2 }],
+        },
+      ],
+      now: new Date('2026-09-14T19:00:00.000Z'),
+      anonymousMode: true,
+    },
+  };
+
+  for (const [name, props] of Object.entries(states)) {
+    it(`has no axe-detectable violations while ${name}`, async () => {
+      const { container } = render(<LatestSessionPanel {...props} questions={QUESTIONS} />);
+
+      expect(await axe(container)).toHaveNoViolations();
+    });
+
+    it(`keeps every theme addressable by its own row while ${name}`, () => {
+      // The explanation replaces three cells with one. A row whose header no
+      // longer pairs with anything is a table that reads as a list of names.
+      render(<LatestSessionPanel {...props} questions={QUESTIONS} />);
+
+      for (const question of QUESTIONS) {
+        expect(screen.getByRole('row', { name: new RegExp(question.title, 'i') }))
+          .toBeInTheDocument();
+      }
+    });
+  }
 });
