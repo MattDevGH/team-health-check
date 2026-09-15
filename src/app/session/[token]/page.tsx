@@ -174,57 +174,6 @@ export default function SessionLinkPage({ params }: PageProps) {
     );
   }
 
-  // Submission confirmation state with rolling averages
-  if (submitted) {
-    return (
-      <main className="min-h-screen bg-gray-50 py-6 px-4">
-        <div className="max-w-lg mx-auto">
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">
-              Thank you!
-            </h1>
-            <p className="text-gray-600">
-              Your responses have been submitted successfully.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            {results.map((result) => {
-              const question = context.allQuestions.find(
-                (q) => q.id === result.questionId
-              );
-              return (
-                <div
-                  key={result.questionId}
-                  className="bg-white rounded-lg border border-gray-200 p-4"
-                >
-                  <p className="font-medium text-gray-800">
-                    {question?.title ?? result.questionId}
-                  </p>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-sm text-gray-600">
-                      Your score: {result.score}
-                    </span>
-                    <span className="text-sm text-gray-500">·</span>
-                    {result.rollingAverage !== null ? (
-                      <span className="text-sm text-blue-600 font-medium">
-                        Recent team average: {result.rollingAverage}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-gray-600 italic">
-                        More responses needed
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </main>
-    );
-  }
-
   // Active form state
   const sortedQuestions = [...context.questions].sort(
     (a, b) => a.displayOrder - b.displayOrder
@@ -259,6 +208,28 @@ export default function SessionLinkPage({ params }: PageProps) {
           Hi {context.memberName}, rate each area from 1 (needs work) to 5 (great).
         </p>
 
+        {/*
+          The confirmation sits above the form rather than replacing it.
+
+          Submitting used to swap the whole page for a receipt, which said
+          nothing about whether the answers were still yours to change — so
+          pressing the button again read as submitting twice. The product
+          allows revision until close, and a member who believes an answer is
+          final answers more cautiously.
+        */}
+        {submitted && (
+          <div
+            role="status"
+            className="mb-6 rounded-lg border border-green-700 bg-green-50 p-4"
+          >
+            <p className="font-medium text-green-900">Thank you — your answers are saved.</p>
+            <p className="mt-1 text-sm text-green-900">
+              You can change them until this health check closes; just pick a different
+              score and update your answers.
+            </p>
+          </div>
+        )}
+
         {isMicroPulse ? (
           <MicroPulseView
             questions={selectedFormQuestions}
@@ -275,6 +246,42 @@ export default function SessionLinkPage({ params }: PageProps) {
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
           />
+        )}
+
+        {/*
+          What the team is averaging, which is most of why a member looks.
+          Below the form now: it used to be the whole page after submitting,
+          and standing in for the form is what made the loop feel finished.
+        */}
+        {submitted && results.length > 0 && (
+          <section aria-label="Your answers and the team average" className="mt-6 space-y-3">
+            {results.map((result) => {
+              const question = context.allQuestions.find((q) => q.id === result.questionId);
+              return (
+                <div
+                  key={result.questionId}
+                  className="bg-white rounded-lg border border-gray-200 p-4"
+                >
+                  <p className="font-medium text-gray-800">
+                    {question?.title ?? result.questionId}
+                  </p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-sm text-gray-600">Your score: {result.score}</span>
+                    <span className="text-sm text-gray-500">·</span>
+                    {result.rollingAverage !== null ? (
+                      <span className="text-sm text-blue-600 font-medium">
+                        Recent team average: {result.rollingAverage}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-600 italic">
+                        More responses needed
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </section>
         )}
       </div>
     </main>

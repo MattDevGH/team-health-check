@@ -298,3 +298,99 @@ describe('Session Link Page — Response Submission', () => {
     });
   });
 });
+
+/**
+ * Submitting has an ending.
+ *
+ * Requirements: Explaining Itself 2.1, 2.2, 2.4, 2.5
+ * Property: 3
+ *
+ * A member answered on production, pressed the button, and got a page that
+ * gave no sign the answers could still be changed — so pressing the button
+ * again looked like submitting twice. The tool allows revision until close,
+ * and a member who believes their answers are final answers more cautiously.
+ */
+describe('after a member submits', () => {
+  /** Answers every question and presses the button. */
+  async function answerAndSubmit(user: ReturnType<typeof userEvent.setup>, score = 4) {
+    await screen.findByRole('group', { name: /delivering value/i });
+
+    for (const name of [/delivering value/i, /team collaboration/i]) {
+      const group = screen.getByRole('group', { name });
+      await user.click(within(group).getByRole('radio', { name: String(score) }));
+    }
+
+    await user.click(screen.getByRole('button', { name: /responses/i }));
+  }
+
+  beforeEach(() => {
+    // A sibling of the describe above, so it needs its own link context:
+    // the shared handler serves a different question catalogue.
+    server.use(
+      http.get('/api/auth/session-link/:token', () => HttpResponse.json(MOCK_CONTEXT)),
+      http.post('/api/responses', () =>
+        HttpResponse.json({
+          responses: [
+            { questionId: 'q-delivering-value', score: 4, rollingAverage: 3.8 },
+            { questionId: 'q-team-collaboration', score: 4, rollingAverage: null },
+          ],
+        }),
+      ),
+    );
+  });
+
+  it('says the answers were saved', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await answerAndSubmit(user);
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/saved/i);
+  });
+
+  it('says they can still be changed until the check closes', async () => {
+    // The fact that stops a member treating their first answer as final
+    const user = userEvent.setup();
+    renderPage();
+
+    await answerAndSubmit(user);
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/until.*closes/i);
+  });
+
+  it('leaves the form in place rather than replacing it with a receipt', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await answerAndSubmit(user);
+
+    await screen.findByRole('status');
+    expect(screen.getByRole('group', { name: /delivering value/i })).toBeInTheDocument();
+  });
+
+  it('leaves the answers editable, which is the claim the message makes', async () => {
+    /*
+     * A form that is present but frozen would make the confirmation a lie.
+     * Asserted by changing an answer, not by reading an attribute.
+     */
+    const user = userEvent.setup();
+    renderPage();
+
+    await answerAndSubmit(user);
+    await screen.findByRole('status');
+
+    const group = screen.getByRole('group', { name: /delivering value/i });
+    await user.click(within(group).getByRole('radio', { name: '2' }));
+
+    expect(within(group).getByRole('radio', { name: '2' })).toBeChecked();
+  });
+
+  it('still shows what the team is averaging, which is why a member looks', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await answerAndSubmit(user);
+
+    expect(await screen.findByText(/recent team average: 3.8/i)).toBeInTheDocument();
+  });
+});
