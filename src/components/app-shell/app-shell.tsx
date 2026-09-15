@@ -2,37 +2,30 @@
 
 /**
  * Authenticated navigation shell.
- * Requirements: Manager Experience 1.1, 1.2, 1.5
+ * Requirements: Manager Experience 1.1, 1.2, 1.5; Feeling Responsive 1.1, 2.1
  *
  * Wraps the authenticated areas of the app — /teams/[teamId]/* and /me — so a
  * member can move between destinations without knowing URLs. It is mounted by
  * those segments' layouts rather than by a runtime auth check, so an
  * unauthenticated page cannot render it by accident.
  *
- * Team and roles come from GET /api/me, which already resolves the member.
+ * **The context is given, not fetched.** This used to request `/api/me` after
+ * hydration, which cost a round trip on every authenticated page and made the
+ * menu arrive in two pieces: the destinations needing no team id, then the rest
+ * once the request landed. A delivery manager described watching it fill in.
+ * The layouts resolve it on the server now, so the navigation is complete in
+ * the HTML.
+ *
+ * Still a Client Component, because signing out is interactive and the current
+ * destination depends on the pathname. A Server Component parent handing props
+ * to a Client Component child is the ordinary arrangement.
  */
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { destinationsFor, type ShellContext } from './destinations';
-
-/** The subset of GET /api/me the shell depends on. */
-type SessionContext = ShellContext;
-
-
-/**
- * Loading is distinct from unauthenticated. While `/api/me` is in flight the
- * landmark stays put and offers only what is knowable without a team id;
- * an unauthenticated or unreachable response removes the shell entirely and
- * leaves the page to explain itself.
- */
-type ShellState =
-  | { status: 'loading' }
-  | { status: 'ready'; context: SessionContext }
-  | { status: 'anonymous' };
-
 
 /**
  * Compares two paths ignoring a trailing slash. Next.js normalises these, but
@@ -43,39 +36,23 @@ function samePath(a: string, b: string): boolean {
   return strip(a) === strip(b);
 }
 
+export interface AppShellProps {
+  children: React.ReactNode;
+  /**
+   * The signed-in member's team and roles, resolved by the layout.
+   *
+   * Null means no shell at all rather than an empty one: a navigation bar
+   * rendered for a session the server could not resolve shows a member an
+   * application they are not signed in to, and every link in it leads to a 401.
+   */
+  context: ShellContext | null;
+}
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, context }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [state, setState] = useState<ShellState>({ status: 'loading' });
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadContext() {
-      try {
-        const res = await fetch('/api/me');
-        if (!res.ok) {
-          if (!cancelled) setState({ status: 'anonymous' });
-          return;
-        }
-
-        const context: SessionContext = await res.json();
-        if (!cancelled) setState({ status: 'ready', context });
-      } catch {
-        // An unreachable /api/me leaves the page to handle its own error state.
-        // A navigation bar is not worth a second error message about.
-        if (!cancelled) setState({ status: 'anonymous' });
-      }
-    }
-
-    loadContext();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   /**
    * Revokes the session on the server before leaving. Clearing the cookie in
@@ -106,11 +83,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.refresh();
   }
 
-  const context = state.status === 'ready' ? state.context : null;
-
   return (
     <>
-      {state.status !== 'anonymous' && (
+      {context !== null && (
         <>
           <a
             href="#main"
@@ -121,7 +96,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <header className="border-b border-gray-200 bg-white">
             <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-              {context?.team && (
+              {context.team && (
                 <span className="font-semibold text-gray-900">{context.team.name}</span>
               )}
 

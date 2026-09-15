@@ -5,11 +5,15 @@
  * TDD: Red phase — these tests define the expected behaviour before the
  * component exists.
  *
- * The shell wraps authenticated pages. It reads the member's team and roles
- * from GET /api/me, then offers the destinations that member can actually
- * reach. Assertions are on what a user and a screen reader are given: the
- * landmark, the link names and targets, tab order, and which destination is
- * announced as current.
+ * The shell wraps authenticated pages. It is **given** the member's team and
+ * roles by the layout, which resolves them on the server, and offers the
+ * destinations that member can actually reach. Assertions are on what a user
+ * and a screen reader are given: the landmark, the link names and targets, tab
+ * order, and which destination is announced as current.
+ *
+ * It used to fetch `/api/me` itself, and these tests used to vary the answer
+ * through MSW. Passing a prop instead is not only simpler: the in-flight state
+ * those tests described no longer exists, which is the point of the change.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -19,6 +23,7 @@ import { delay, http, HttpResponse } from 'msw';
 
 import { server } from '@/tests/mocks/server';
 import { AppShell } from './app-shell';
+import type { ShellContext } from './destinations';
 
 const mockPathname = vi.hoisted(() => ({ current: '/teams/team-1/dashboard' }));
 const mockRouter = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
@@ -33,10 +38,19 @@ beforeEach(() => {
   mockRouter.refresh.mockClear();
 });
 
-function renderShell(pathname: string) {
+/** A signed-in Delivery Manager, which is the common case. */
+const MANAGER: ShellContext = {
+  team: { id: 'team-1', name: 'Platform Squad' },
+  roles: ['delivery_manager'],
+};
+
+/** The same member without the role that earns the audit log. */
+const CONTRIBUTOR: ShellContext = { team: { id: 'team-1', name: 'Platform Squad' }, roles: [] };
+
+function renderShell(pathname: string, context: ShellContext | null = MANAGER) {
   mockPathname.current = pathname;
   return render(
-    <AppShell>
+    <AppShell context={context}>
       <h1>Page content</h1>
     </AppShell>,
   );
@@ -135,17 +149,8 @@ describe('AppShell', () => {
     );
   });
 
-  it('renders page content regardless of what /api/me returns', async () => {
-    server.use(
-      http.get('/api/me', () =>
-        HttpResponse.json(
-          { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
-          { status: 401 },
-        ),
-      ),
-    );
-
-    renderShell('/teams/team-1/dashboard');
+  it('renders page content even when there is no member to build a shell for', async () => {
+    renderShell('/teams/team-1/dashboard', null);
 
     expect(await screen.findByRole('heading', { name: 'Page content' })).toBeInTheDocument();
   });
@@ -165,23 +170,10 @@ describe('AppShell', () => {
   });
 
   it('omits the audit log from a member who would be refused it', async () => {
-    server.use(
-      http.get('/api/me', () =>
-        HttpResponse.json({
-          id: 'member-2',
-          teamId: 'team-1',
-          name: 'Bo',
-          slackLink: null,
-          team: { id: 'team-1', name: 'Platform Squad' },
-          roles: [],
-        }),
-      ),
-    );
+    renderShell('/teams/team-1/dashboard', CONTRIBUTOR);
 
-    renderShell('/teams/team-1/dashboard');
-
-    // Wait for the loaded state before asserting an absence, or this passes
-    // against a shell that has not finished rendering anything at all
+    // Still asserts a present destination before an absent one, so this cannot
+    // pass against a shell that rendered nothing at all
     await screen.findByRole('link', { name: /dashboard/i });
 
     expect(screen.queryByRole('link', { name: /audit log/i })).not.toBeInTheDocument();
@@ -189,30 +181,30 @@ describe('AppShell', () => {
     expect(screen.getByRole('link', { name: /profile/i })).toBeInTheDocument();
   });
 
-  // Requirement 1.7 and the in-flight state
+  // Requirement 1.7, and Feeling Responsive 2.1
 
-  it('keeps the navigation landmark while /api/me is in flight', async () => {
-    server.use(
-      http.get('/api/me', async () => {
-        await delay('infinite');
-        return HttpResponse.json({});
-      }),
-    );
-
+  it('offers every destination in its first render, with nothing to wait for', () => {
+    /*
+     * The pop-in, as a unit test. This used to render the destinations it could
+     * name without a team id, then the rest when a fetch resolved — which a
+     * delivery manager saw as the menu filling in.
+     *
+     * Synchronous queries on purpose: `findBy` would pass either way, because
+     * it waits for exactly the second render this asserts does not happen.
+     */
     renderShell('/teams/team-1/dashboard');
 
-    expect(await screen.findByRole('navigation', { name: /main/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /settings/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /audit log/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /profile/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /health check/i })).toBeInTheDocument();
   });
 
-  it('does not guess a team id before the team is known', async () => {
-    server.use(
-      http.get('/api/me', async () => {
-        await delay('infinite');
-        return HttpResponse.json({});
-      }),
-    );
-
-    renderShell('/teams/team-1/dashboard');
+  it('does not guess a team id when the team could not be resolved', async () => {
+    // A member whose team row cannot be read. Team-scoped links built from a
+    // guessed id would 404; the ones that need no id still work.
+    renderShell('/teams/team-1/dashboard', { team: null, roles: [] });
 
     await screen.findByRole('navigation', { name: /main/i });
 
@@ -222,17 +214,10 @@ describe('AppShell', () => {
     expect(screen.getByRole('link', { name: /profile/i })).toBeInTheDocument();
   });
 
-  it('renders no navigation at all when the request is unauthenticated', async () => {
-    server.use(
-      http.get('/api/me', () =>
-        HttpResponse.json(
-          { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
-          { status: 401 },
-        ),
-      ),
-    );
-
-    renderShell('/teams/team-1/dashboard');
+  it('renders no navigation at all when there is no member', async () => {
+    // The layout resolves nobody — no cookie, an expired session, or a database
+    // it could not reach — and passes null rather than an empty shell
+    renderShell('/teams/team-1/dashboard', null);
 
     await screen.findByRole('heading', { name: 'Page content' });
 
@@ -240,18 +225,6 @@ describe('AppShell', () => {
       expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
     });
     expect(screen.queryByRole('link', { name: /skip to main content/i })).not.toBeInTheDocument();
-  });
-
-  it('renders no navigation when /api/me cannot be reached', async () => {
-    server.use(http.get('/api/me', () => HttpResponse.error()));
-
-    renderShell('/teams/team-1/dashboard');
-
-    await screen.findByRole('heading', { name: 'Page content' });
-
-    await waitFor(() => {
-      expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
-    });
   });
 
   // Requirement 1.4: sign out revokes the session server-side. Clearing the

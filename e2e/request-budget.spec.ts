@@ -83,17 +83,14 @@ test.describe('what a dashboard load asks for', () => {
     await expect(page.getByRole('region', { name: /latest session/i })).toBeVisible();
   });
 
-  test('makes at most 4 API requests', async ({ page }) => {
+  test('makes at most 3 API requests', async ({ page }) => {
     /*
-     * Four, where the plan for this milestone said three.
+     * Was four: `/api/me`, `/api/me` again, the trends, and the session
+     * lifecycle panel. The shell's copy is gone, resolved by the layout on the
+     * server instead.
      *
-     * Measured: `/api/me`, `/api/me` again, the trends, and the session
-     * lifecycle panel. The third of those was the one nobody had counted —
-     * the panel makes a request of its own, which is easy to miss because it
-     * is a component rather than a page.
-     *
-     * A ratchet at what it does today. NFR 1.1 sets the destination at two,
-     * and phase 2 walks it down by resolving identity on the server.
+     * A ratchet at what it does today. NFR 1.1 sets the destination at two, and
+     * task 2.2 takes the last identity request with it.
      */
     await signIn(page, EMAIL);
 
@@ -102,24 +99,24 @@ test.describe('what a dashboard load asks for', () => {
     expect(
       requests.length,
       `API request budget for a dashboard load. Requests made: ${requests.join(', ')}`,
-    ).toBeLessThanOrEqual(4);
+    ).toBeLessThanOrEqual(3);
   });
 
-  test('asks who is reading twice, which is the defect phase 2 removes', async ({ page }) => {
+  test('asks who is reading once, now that the shell is told', async ({ page }) => {
     /*
-     * A characterisation test, green because the defect is present.
+     * Was two: the navigation shell asked, and the page asked again for the
+     * roles — five database queries each. The layout resolves the member on the
+     * server now, so the shell needs nothing.
      *
-     * The navigation shell asks `/api/me` for the team, and the page asks again
-     * for the roles — five database queries each. When phase 2 resolves identity
-     * once on the server this test fails, which is the point: the fix cannot
-     * land while a test still claims the duplicate exists.
+     * The one that remains belongs to the dashboard page, which still fetches
+     * its own roles. Task 2.2 removes it and this becomes zero.
      */
     await signIn(page, EMAIL);
 
     const requests = await apiRequestsDuring(page, () => page.goto(`/teams/${teamId}/dashboard`));
     const identityRequests = requests.filter(path => path === '/api/me');
 
-    expect(identityRequests, 'known duplicate — see Feeling Responsive 1.1').toHaveLength(2);
+    expect(identityRequests, 'identity requests per dashboard load').toHaveLength(1);
   });
 
   test('asks for the trends it renders', async ({ page }) => {
