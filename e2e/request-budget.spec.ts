@@ -83,14 +83,15 @@ test.describe('what a dashboard load asks for', () => {
     await expect(page.getByRole('region', { name: /latest session/i })).toBeVisible();
   });
 
-  test('makes at most 3 API requests', async ({ page }) => {
+  test('makes at most 2 API requests', async ({ page }) => {
     /*
      * Was four: `/api/me`, `/api/me` again, the trends, and the session
-     * lifecycle panel. The shell's copy is gone, resolved by the layout on the
-     * server instead.
+     * lifecycle panel. Both identity requests are gone — the layout resolves
+     * the member on the server — leaving the two that fetch what the page
+     * actually renders.
      *
-     * A ratchet at what it does today. NFR 1.1 sets the destination at two, and
-     * task 2.2 takes the last identity request with it.
+     * NFR 1.1's number, reached rather than aimed at. It stays a ratchet: the
+     * next request added to this page has to be a decision.
      */
     await signIn(page, EMAIL);
 
@@ -99,24 +100,27 @@ test.describe('what a dashboard load asks for', () => {
     expect(
       requests.length,
       `API request budget for a dashboard load. Requests made: ${requests.join(', ')}`,
-    ).toBeLessThanOrEqual(3);
+    ).toBeLessThanOrEqual(2);
   });
 
-  test('asks who is reading once, now that the shell is told', async ({ page }) => {
+  test('does not ask who is reading at all', async ({ page }) => {
     /*
-     * Was two: the navigation shell asked, and the page asked again for the
-     * roles — five database queries each. The layout resolves the member on the
-     * server now, so the shell needs nothing.
+     * Was two — the shell asked, and the page asked again for the roles, five
+     * database queries each. Now neither does: the layout resolves the member
+     * on the server and the shell offers it to the page.
      *
-     * The one that remains belongs to the dashboard page, which still fetches
-     * its own roles. Task 2.2 removes it and this becomes zero.
+     * Zero rather than "at most one", because there is no request left to make
+     * a threshold out of. `/api/me` still exists for the session page, which
+     * has no shell around it and genuinely has to ask.
      */
     await signIn(page, EMAIL);
 
     const requests = await apiRequestsDuring(page, () => page.goto(`/teams/${teamId}/dashboard`));
-    const identityRequests = requests.filter(path => path === '/api/me');
 
-    expect(identityRequests, 'identity requests per dashboard load').toHaveLength(1);
+    expect(
+      requests.filter(path => path === '/api/me'),
+      'identity requests per dashboard load',
+    ).toHaveLength(0);
   });
 
   test('asks for the trends it renders', async ({ page }) => {

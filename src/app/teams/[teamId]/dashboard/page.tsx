@@ -14,7 +14,8 @@ import { useEffect, useState } from 'react';
 
 import { GuidanceBanner, type GuidanceItem } from '@/components/guidance';
 import { SessionLifecyclePanel } from '@/components/session-lifecycle';
-import { LatestSessionPanel } from './latest-session-panel';
+import { LatestSessionPanel } from './latest-session-panel';
+import { useCanManage } from '@/components/app-shell';
 import { TrendChart } from './trend-chart';
 import { TrendDistribution as TrendDistributionPanel } from './trend-distribution';
 import { QuestionDetailView } from './question-detail-view';
@@ -116,7 +117,19 @@ export default function TrendDashboardPage({ params }: PageProps) {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<TrendsResponse | null>(null);
   const [teamId, setTeamId] = useState<string | null>(null);
-  const [canManage, setCanManage] = useState(false);
+
+  /**
+   * Lifecycle controls are Delivery-Manager-only (Requirement 2.6).
+   *
+   * Taken from the shell, which was given it by the layout. This page used to
+   * fetch `/api/me` for the same answer — five database queries, duplicating
+   * the ones the layout had already made, on a request the browser could not
+   * start until the JavaScript arrived.
+   *
+   * Outside a shell this is false, which is how the page behaved when its own
+   * request failed: a page that cannot read roles offers no controls.
+   */
+  const canManage = useCanManage();
 
   useEffect(() => {
     let cancelled = false;
@@ -129,33 +142,6 @@ export default function TrendDashboardPage({ params }: PageProps) {
       cancelled = true;
     };
   }, [params]);
-
-  /**
-   * Lifecycle controls are Delivery-Manager-only (Requirement 2.6), and the
-   * roles come from the same endpoint the navigation shell uses.
-   *
-   * Fetched again here rather than shared from the shell: a context would
-   * couple this page to being rendered inside that layout, and one small GET is
-   * a fair price for the page standing on its own.
-   */
-  useEffect(() => {
-    let cancelled = false;
-
-    fetch('/api/me')
-      .then(res => (res.ok ? res.json() : null))
-      .then((me: { roles?: string[] } | null) => {
-        if (!cancelled && me) {
-          setCanManage(Array.isArray(me.roles) && me.roles.includes('delivery_manager'));
-        }
-      })
-      .catch(() => {
-        // A page that cannot read roles simply offers no controls
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;

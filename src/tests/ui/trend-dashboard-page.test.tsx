@@ -10,7 +10,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
-import TrendDashboardPage from '@/app/teams/[teamId]/dashboard/page';
+import TrendDashboardPage from '@/app/teams/[teamId]/dashboard/page';
+import { ShellContextProvider } from '@/components/app-shell/shell-context';
 
 const TEAM_ID = 'team-1';
 
@@ -83,19 +84,20 @@ function mockTrendsApiError() {
   );
 }
 
-/** Overrides /api/me so the page sees a member with the given roles. */
-function mockRoles(roles: string[]) {
-  server.use(
-    http.get('/api/me', () =>
-      HttpResponse.json({
-        id: 'member-1',
-        teamId: TEAM_ID,
-        name: 'Alice',
-        slackLink: null,
-        team: { id: TEAM_ID, name: 'Platform Squad' },
-        roles,
-      }),
-    ),
+/**
+ * Renders the dashboard as the shell would: inside the context its layout
+ * resolved on the server.
+ *
+ * The page used to fetch `/api/me` for the roles and these tests used to vary
+ * the answer through MSW. It takes them from the shell now, so the roles are an
+ * argument rather than a request — which is both the change under test and the
+ * reason this helper is simpler than the one it replaces.
+ */
+function renderDashboard(roles: string[] = []) {
+  return render(
+    <ShellContextProvider context={{ team: { id: TEAM_ID, name: 'Platform Squad' }, roles }}>
+      <TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />
+    </ShellContextProvider>,
   );
 }
 
@@ -108,31 +110,28 @@ describe('Trend Dashboard Page', () => {
    */
   describe('session lifecycle panel', () => {
     it('offers the panel to a delivery manager with no data yet', async () => {
-      mockRoles(['delivery_manager']);
       mockTrendsApi({ sessions: [] });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard(['delivery_manager']);
 
       expect(await screen.findByRole('region', { name: /health check/i })).toBeInTheDocument();
       expect(await screen.findByRole('button', { name: /open a health check/i })).toBeInTheDocument();
     });
 
     it('offers the panel alongside a populated dashboard', async () => {
-      mockRoles(['delivery_manager']);
       mockTrendsApi({
         sessions: [
           { sessionId: 's1', closedAt: '2026-08-01T17:00:00Z', averages: [] },
           { sessionId: 's2', closedAt: '2026-08-08T17:00:00Z', averages: [] },
         ],
       });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard(['delivery_manager']);
 
       expect(await screen.findByRole('region', { name: /health check/i })).toBeInTheDocument();
     });
 
     it('withholds it from a member who is not a delivery manager', async () => {
-      mockRoles([]);
       mockTrendsApi({ sessions: [] });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       // Anchor on content the page always renders, so the absence is asserted
       // against a rendered dashboard rather than an empty document
@@ -150,7 +149,6 @@ describe('Trend Dashboard Page', () => {
    * single person had answered — visible to any team where someone is on leave.
    */
   it('agrees in number when a single person has responded', async () => {
-    mockRoles([]);
     mockTrendsApi({
       sessions: [
         {
@@ -165,7 +163,7 @@ describe('Trend Dashboard Page', () => {
         },
       ],
     });
-    render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+    renderDashboard();
 
     expect(await screen.findByText('1 response')).toBeInTheDocument();
     expect(screen.queryByText('1 responses')).not.toBeInTheDocument();
@@ -177,27 +175,24 @@ describe('Trend Dashboard Page', () => {
    */
   describe('first-run guidance', () => {
     it('explains that trends begin once a check closes', async () => {
-      mockRoles(['delivery_manager']);
       mockTrendsApi({ sessions: [] });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard(['delivery_manager']);
 
       const guidance = await screen.findByRole('region', { name: /next steps/i });
       expect(guidance).toHaveTextContent(/trends appear once a health check has closed/i);
     });
 
     it('explains that a second check is what makes a trend', async () => {
-      mockRoles([]);
       mockTrendsApi({
         sessions: [{ sessionId: 's1', closedAt: '2026-08-01T17:00:00Z', averages: [] }],
       });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       const guidance = await screen.findByRole('region', { name: /next steps/i });
       expect(guidance).toHaveTextContent(/one check has closed/i);
     });
 
     it('says what anonymous mode hides, so a gap is not read as silence', async () => {
-      mockRoles([]);
       mockTrendsApi({
         sessions: [
           { sessionId: 's1', closedAt: '2026-08-01T17:00:00Z', averages: [] },
@@ -205,14 +200,13 @@ describe('Trend Dashboard Page', () => {
         ],
         privacyMode: 'anonymous',
       });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       const guidance = await screen.findByRole('region', { name: /next steps/i });
       expect(guidance).toHaveTextContent(/hidden is not the same as unanswered/i);
     });
 
     it('stops offering guidance once there is nothing left to say', async () => {
-      mockRoles([]);
       mockTrendsApi({
         sessions: [
           { sessionId: 's1', closedAt: '2026-08-01T17:00:00Z', averages: [] },
@@ -220,7 +214,7 @@ describe('Trend Dashboard Page', () => {
         ],
         privacyMode: 'attributed',
       });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       // Anchor on content the page always renders, so the absence is asserted
       // against a loaded dashboard. Both checks here closed unanswered, so the
@@ -233,7 +227,7 @@ describe('Trend Dashboard Page', () => {
   describe('Requirement 8.3: Fewer than 2 closed sessions', () => {
     it('displays "More data needed" when no sessions exist', async () => {
       mockTrendsApi({ sessions: [] });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       await waitFor(() => {
         expect(screen.getByText(/more data needed/i)).toBeInTheDocument();
@@ -242,7 +236,7 @@ describe('Trend Dashboard Page', () => {
 
     it('still says a trend needs a second session when only 1 exists', async () => {
       mockTrendsApi({ sessions: [ONE_SESSION] });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       await waitFor(() => {
         expect(screen.getByText(/more data needed/i)).toBeInTheDocument();
@@ -266,7 +260,7 @@ describe('Trend Dashboard Page', () => {
 
     it('shows the scores it has, rather than only talking about the chart', async () => {
       mockTrendsApi({ sessions: [ONE_SESSION], questions: QUESTIONS });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       const panel = await screen.findByRole('region', { name: /latest session/i });
       expect(within(panel).getByText('3.5')).toBeInTheDocument();
@@ -274,7 +268,7 @@ describe('Trend Dashboard Page', () => {
 
     it('names a theme nobody answered instead of omitting it', async () => {
       mockTrendsApi({ sessions: [ONE_SESSION], questions: QUESTIONS });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       const panel = await screen.findByRole('region', { name: /latest session/i });
       expect(within(panel).getByText(/no responses/i)).toBeInTheDocument();
@@ -297,7 +291,7 @@ describe('Trend Dashboard Page', () => {
         ],
         questions: QUESTIONS,
       });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       const panel = await screen.findByRole('region', { name: /latest session/i });
       expect(within(panel).getAllByText(/being prepared/i).length).toBeGreaterThan(0);
@@ -305,7 +299,7 @@ describe('Trend Dashboard Page', () => {
 
     it('draws no chart, which is the one thing a second session is needed for', async () => {
       mockTrendsApi({ sessions: [ONE_SESSION], questions: QUESTIONS });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       await screen.findByRole('region', { name: /latest session/i });
       expect(screen.queryByRole('img', { name: /trend/i })).not.toBeInTheDocument();
@@ -344,7 +338,7 @@ describe('Trend Dashboard Page', () => {
     });
 
     it('renders an SVG chart when 2+ sessions exist', async () => {
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       await waitFor(() => {
         // The chart is a figure with a caption, not an unlabelled image: the
@@ -357,7 +351,7 @@ describe('Trend Dashboard Page', () => {
     });
 
     it('does not show "More data needed" message', async () => {
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       await waitFor(() => {
         // The chart is a figure with a caption, not an unlabelled image: the
@@ -398,7 +392,7 @@ describe('Trend Dashboard Page', () => {
     });
 
     it('displays response counts for the most recent session', async () => {
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       // Scoped to the Latest Session panel: the chart's data table now reports
       // counts too, so an unscoped search matches both and proves neither
@@ -433,7 +427,7 @@ describe('Trend Dashboard Page', () => {
     });
 
     it('displays trend indicator distribution for the most recent session', async () => {
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       await waitFor(() => {
         expect(screen.getByText(/improving: 3/i)).toBeInTheDocument();
@@ -447,14 +441,14 @@ describe('Trend Dashboard Page', () => {
   describe('Loading and error states', () => {
     it('displays loading state initially', () => {
       mockTrendsApi({ sessions: [] });
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       expect(screen.getByText(/loading/i)).toBeInTheDocument();
     });
 
     it('displays error message when API fails', async () => {
       mockTrendsApiError();
-      render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+      renderDashboard();
 
       await waitFor(() => {
         expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
@@ -472,7 +466,6 @@ describe('Trend Dashboard Page', () => {
  */
 describe('Trend indicators explanation', () => {
   it('says the counts are what people chose, not a calculation', async () => {
-    mockRoles([]);
     mockTrendsApi({
       sessions: [
         { sessionId: 's1', closedAt: '2026-08-01T17:00:00Z', averages: [] },
@@ -482,8 +475,72 @@ describe('Trend indicators explanation', () => {
         { questionId: 'q-delivering-value', improving: 1, stable: 0, declining: 0 },
       ],
     });
-    render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+    renderDashboard();
 
     expect(await screen.findByText(/not a trend calculated from the scores/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Feeling Responsive 1.2, 1.3.
+ *
+ * The page took its roles from a request of its own — five database queries to
+ * answer a question the layout had already answered, on a request the browser
+ * could not start until the JavaScript had arrived.
+ */
+describe('where the dashboard gets its roles', () => {
+  it('makes no identity request of its own', async () => {
+    /*
+     * Counted at the network boundary rather than by trusting the absence of a
+     * fetch call: a handler that is never hit is the only proof that nothing
+     * asked.
+     */
+    let identityRequests = 0;
+    server.use(
+      http.get('/api/me', () => {
+        identityRequests += 1;
+        return HttpResponse.json({ id: 'member-1', team: null, roles: [] });
+      }),
+    );
+    mockTrendsApi({ sessions: [] });
+
+    renderDashboard(['delivery_manager']);
+    await screen.findByRole('region', { name: /health check/i });
+
+    expect(identityRequests, 'the layout already resolved this').toBe(0);
+  });
+
+  it('offers the manager controls from the context it was given', async () => {
+    mockTrendsApi({ sessions: [] });
+
+    renderDashboard(['delivery_manager']);
+
+    expect(await screen.findByRole('button', { name: /open a health check/i })).toBeInTheDocument();
+  });
+
+  it('offers no manager controls to a contributor in the same context', async () => {
+    // The role is absent rather than the context, which is the case a member
+    // is actually in
+    mockTrendsApi({ sessions: [] });
+
+    renderDashboard([]);
+    await screen.findByText(/more data needed/i);
+
+    expect(screen.queryByRole('button', { name: /open a health check/i })).not.toBeInTheDocument();
+  });
+
+  it('still renders outside a shell, offering nothing behind a role', async () => {
+    /*
+     * Requirement 1.3. The duplicate fetch was defended on the grounds that a
+     * page should stand on its own, and the defence was sound — a page that
+     * only renders inside one layout is a page nobody can test. Rendered with
+     * no context it behaves as it did when its own request failed.
+     */
+    mockTrendsApi({ sessions: [] });
+
+    render(<TrendDashboardPage params={Promise.resolve({ teamId: TEAM_ID })} />);
+
+    expect(await screen.findByText(/more data needed/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /open a health check/i })).not.toBeInTheDocument();
   });
 });

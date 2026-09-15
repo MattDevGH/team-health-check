@@ -24,6 +24,7 @@ import { delay, http, HttpResponse } from 'msw';
 import { server } from '@/tests/mocks/server';
 import { AppShell } from './app-shell';
 import type { ShellContext } from './destinations';
+import { useCanManage } from './shell-context';
 
 const mockPathname = vi.hoisted(() => ({ current: '/teams/team-1/dashboard' }));
 const mockRouter = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
@@ -293,5 +294,49 @@ describe('AppShell', () => {
       // signed out while their session token is still valid
       expect(mockRouter.push).not.toHaveBeenCalled();
     });
+  });
+});
+
+/**
+ * Feeling Responsive 1.2.
+ *
+ * A layout cannot pass props to the page it wraps, so the shell offers the
+ * context it was given to everything inside it. Without this the dashboard
+ * would quietly lose its Delivery-Manager controls — it takes the roles from
+ * here, and a missing provider reads exactly like a member without the role.
+ *
+ * Added after a mutation survived: removing the provider from the shell broke
+ * nothing, because every other test supplies the context directly.
+ */
+describe('what the shell offers the page inside it', () => {
+  function RoleProbe() {
+    return <p>{useCanManage() ? 'can manage' : 'cannot manage'}</p>;
+  }
+
+  function renderProbe(context: ShellContext | null) {
+    mockPathname.current = '/teams/team-1/dashboard';
+    return render(
+      <AppShell context={context}>
+        <RoleProbe />
+      </AppShell>,
+    );
+  }
+
+  it('passes the roles through to a page that asks for them', () => {
+    renderProbe(MANAGER);
+
+    expect(screen.getByText('can manage')).toBeInTheDocument();
+  });
+
+  it('passes a contributor through as a contributor', () => {
+    renderProbe(CONTRIBUTOR);
+
+    expect(screen.getByText('cannot manage')).toBeInTheDocument();
+  });
+
+  it('offers nothing behind a role when there is no member', () => {
+    renderProbe(null);
+
+    expect(screen.getByText('cannot manage')).toBeInTheDocument();
   });
 });

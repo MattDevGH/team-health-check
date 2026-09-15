@@ -26,6 +26,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { destinationsFor, type ShellContext } from './destinations';
+import { ShellContextProvider } from './shell-context';
 
 /**
  * Compares two paths ignoring a trailing slash. Next.js normalises these, but
@@ -150,7 +151,12 @@ export function AppShell({ children, context }: AppShellProps) {
         screen reader is never told it arrived.
       */}
       <main id="main" tabIndex={-1}>
-        {children}
+        {/*
+          The same context the navigation was built from, offered to the pages
+          inside it. A layout cannot pass props to its page, and the dashboard
+          needed the roles badly enough to fetch them again.
+        */}
+        <ShellContextProvider context={context}>{children}</ShellContextProvider>
       </main>
     </>
   );
