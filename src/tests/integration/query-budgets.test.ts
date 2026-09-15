@@ -166,21 +166,23 @@ describe('GET /api/teams/[teamId]/trends', () => {
     expect(body.sessions, 'two closed sessions were seeded').toHaveLength(2);
   });
 
-  it('issues at most 9 queries', async () => {
+  it('issues at most 8 queries', async () => {
     /*
-     * Nine, where the spec for this milestone estimated seven.
+     * Nine when this budget was first measured, against an estimate of seven:
+     * two of the queries live inside the services the route calls rather than
+     * in the route, which is the argument for measuring rather than reading.
      *
-     * The estimate came from counting the awaits visible in the route, and the
-     * route is not where all the queries are: two more live inside the
-     * services it calls. That is the whole argument for building the
-     * instrument before making the change — an estimate of how much work a
-     * request does is a guess about code somebody else wrote.
+     * Eight now, and the one that went is worth recording. The privacy mode
+     * and the session averages each read the same team row. Awaited in turn
+     * they were two round trips; started together they land in the same tick,
+     * and Prisma coalesces identical findUnique calls into one
+     * `WHERE id IN (?,?)`. Overlapping the waits also removed one of them.
      */
     const queries = await db.countQueries(async () => {
       await getTrends(signedIn(`http://localhost/api/teams/${teamId}/trends`), context());
     });
 
-    expect(queries, 'GET /api/teams/[teamId]/trends query budget').toBeLessThanOrEqual(9);
+    expect(queries, 'GET /api/teams/[teamId]/trends query budget').toBeLessThanOrEqual(8);
   });
 });
 

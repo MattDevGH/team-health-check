@@ -21,7 +21,8 @@ import { NextRequest } from 'next/server';
 import { withErrorHandling } from '@/lib/api-utils';
 import { container, repos } from '@/lib/container-production';
 import { createGetAuthContext } from '@/lib/auth/with-auth';
-import { createAuthorizeTeamMember } from '@/lib/auth/authorize-team-member';
+import { createAuthorizeTeamMember } from '@/lib/auth/authorize-team-member';
+import { loadTrendInputs } from '@/lib/services/trend-inputs.service';
 
 // Test seam: allows route tests to seed data via repos
 export { repos as _testRepos };
@@ -49,36 +50,41 @@ export const GET = withErrorHandling(async (request: Request, context) => {
   // Authorization: verify member belongs to team
   await authorizeTeamMember(auth.memberId, teamId);
 
-  // Get privacy mode
-  const privacyMode = await container.privacy.getMode(teamId);
-
-  /**
-   * The question catalogue: five fixed rows, the same for every team.
+  /*
+   * Four reads, together.
    *
-   * Sent with the trends response rather than from a route of its own because
-   * the dashboard already makes this request, and this data never changes. It
-   * is what lets the dashboard name a question theme that has no aggregates —
-   * previously such a theme did not exist as far as the page was concerned.
+   * The privacy mode, the question catalogue, the sessions and their
+   * averages were awaited one after another, and given a team id none of
+   * them needs any of the others. Deliberately after the authorisation
+   * check above: reads about a team the member may not belong to should not
+   * be in flight while the check that says so is still running.
+   *
+   * The question catalogue is five fixed rows, the same for every team, sent
+   * with this response because the dashboard already makes this request and
+   * needs it to name a theme that has no aggregates — previously such a
+   * theme did not exist as far as the page was concerned.
    */
-  const catalogue = await repos.question.findAll();
+  const { privacyMode, questions: catalogue, sessions: allSessions, averages } =
+    await loadTrendInputs(
+      {
+        getPrivacyMode: id => container.privacy.getMode(id),
+        findQuestions: () => repos.question.findAll(),
+        findSessions: id => repos.session.findByTeamId(id),
+        getSessionAverages: id => container.trend.getSessionAverages(id),
+      },
+      teamId,
+    );
+
   const questions = catalogue.map(question => ({
     id: question.id,
     title: question.title,
     description: question.description,
   }));
 
-  // Get all sessions for this team to identify closed ones
-  const allSessions = await repos.session.findByTeamId(teamId);
   const closedSessions = allSessions.filter(s => s.status === 'closed' && s.actualCloseAt);
 
-
   // Sort closed sessions chronologically (oldest first)
-  closedSessions.sort((a, b) =>
-    (a.actualCloseAt!.getTime()) - (b.actualCloseAt!.getTime())
-  );
-
-  // Get session averages from trend service
-  const averages = await container.trend.getSessionAverages(teamId);
+  closedSessions.sort((a, b) => a.actualCloseAt!.getTime() - b.actualCloseAt!.getTime());
 
   // Group averages by sessionId
   const averagesBySession = new Map<string, Array<{ questionId: string; averageScore: number; responseCount: number }>>();

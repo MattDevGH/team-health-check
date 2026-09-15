@@ -108,22 +108,39 @@ the thing it was written for and says nothing is decoration, so the budget is
 
 ### 3.1 Independent queries run together
 
-- [ ] Failing test: `/api/me` returns exactly what it returns today
-- [ ] The Slack link and the team resolve concurrently; roles still wait on the
-      team, because they depend on it
-- [ ] Failing test: `/trends` returns exactly what it returns today
-- [ ] The question catalogue resolves alongside the work it does not depend on
-- [ ] No write is parallelised
+- [x] Failing test: `/api/me` returns exactly what it returns today
+- [x] The Slack link, the team **and the roles** resolve concurrently — the
+      roles were held back at first on the reasoning that they depend on the
+      team, and a surviving mutation proved that wrong: they are looked up by
+      team *id*, which the member row already carries
+- [x] Failing test: `/trends` returns exactly what it returns today
+- [x] The question catalogue resolves alongside the work it does not depend on
+- [x] No write is parallelised
 - _Requirements: 3.1, 3.3_
 - _Properties: 2, 3_
 
-### 3.2 Lower the ratchets to the new counts
+### 3.2 Re-measure the budgets
 
-- [ ] Update the budgets from 1.2 to what the routes now issue
-- [ ] Mutation check: each new budget fails when a query is added
+- [x] Re-measure and update what the routes issue
+- [x] Mutation check: each budget fails when a query is added, and when the
+      reads are made sequential again
 - _Requirements: 3.2, 4.4_
 
+**"Lower the ratchets" assumed the wrong thing.** Running queries concurrently
+does not change how many are issued — it changes how many must finish in
+sequence, which a count cannot see. `/api/me` still issues 5.
+
+`/trends` did fall, 9 to 8, for a reason worth keeping: the privacy mode and
+the session averages each read the same team row, and identical `findUnique`
+calls landing in the same tick are coalesced by Prisma into one
+`WHERE id IN (?,?)`. Overlapping the waits removed a round trip as well as
+hiding one. Verified by reading the SQL, not inferred from the count.
+
 **Checkpoint:** nothing waits for something it does not need. One PR.
+
+Two routes became thin in passing. `/api/me` assembled its response from four
+repository calls inline, which the architecture rules say a handler should not
+do — and code with no seam cannot be asked "does this wait for that?".
 
 ---
 
