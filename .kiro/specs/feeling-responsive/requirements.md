@@ -107,7 +107,7 @@ nothing in the suite can tell when it comes back.
 ### NFR 1: Responsiveness
 
 1. A dashboard load SHALL make at most 2 server requests for its data.
-2. `GET /api/me` SHALL issue at most 5 database queries; `GET /api/teams/[teamId]/trends` at most 7. Ratchets, set at today's counts.
+2. `GET /api/me` SHALL issue at most 5 database queries; `GET /api/teams/[teamId]/trends` at most 9. Ratchets, set at today's **measured** counts — the trends figure was estimated at 7 from the awaits visible in the route, and measurement found two more inside the services it calls.
 3. Authenticated pages SHALL record a Cumulative Layout Shift below 0.1.
 
 ### NFR 2: No Regression In What Already Works
