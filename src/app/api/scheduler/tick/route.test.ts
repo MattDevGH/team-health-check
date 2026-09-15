@@ -345,3 +345,56 @@ describe('POST /api/scheduler/tick', () => {
     expect(reminders).toHaveLength(1);
   });
 });
+
+/**
+ * What the tick tells the service that called it.
+ *
+ * Requirements: Knowing What Happened 1.4, 1.5
+ *
+ * It returned `{ ok: true }` whatever it did. cron-job.org shows the response
+ * body of every call it makes — a dashboard the maintainer already has open,
+ * refreshed daily — so a check that failed to open looked exactly like a
+ * Wednesday.
+ */
+describe('the tick response', () => {
+  // A sibling of the describe above, so it stubs the secret for itself
+  beforeEach(() => {
+    vi.stubEnv('CRON_SECRET', CRON_SECRET);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('says what it did, not merely that it ran', async () => {
+    const response = await POST(tickRequest(), { params: Promise.resolve({}) });
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(body).toMatchObject({ ok: true });
+    expect(body).toHaveProperty('opened');
+    expect(body).toHaveProperty('closed');
+    expect(body).toHaveProperty('materialised');
+    expect(body).toHaveProperty('prompts');
+  });
+
+  it('carries the tick id, so a response ties to the lines it produced', async () => {
+    const body = (await (
+      await POST(tickRequest(), { params: Promise.resolve({}) })
+    ).json()) as { tickId?: string };
+
+    expect(body.tickId).toEqual(expect.any(String));
+  });
+
+  it('carries counts and ids only, never anything a member answered', async () => {
+    /*
+     * The response goes to a third-party service and is displayed in its
+     * dashboard. A score in it would leave the product's anonymity promise
+     * behind on somebody else's website.
+     */
+    const body = await (
+      await POST(tickRequest(), { params: Promise.resolve({}) })
+    ).text();
+
+    expect(body).not.toMatch(/score|trend|improving|declining/i);
+  });
+});

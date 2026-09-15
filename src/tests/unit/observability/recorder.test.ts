@@ -286,3 +286,44 @@ describe('the recorder the application uses', () => {
     }
   });
 });
+
+describe('ids survive the redactor', () => {
+  it('writes a UUID team id intact', () => {
+    /*
+     * Found by running the scheduler against real ids rather than the `team-1`
+     * the earlier tests used. A UUID is thirty-six characters of letters,
+     * digits and hyphens, which is exactly what the token pattern matches — so
+     * every event came out carrying `teamId: "[redacted]"`.
+     *
+     * The record was destroying the one thing it exists to carry, and passing
+     * its own tests while doing it.
+     */
+    const { sink, events } = capturingSink();
+    const teamId = '2a6830d8-69b6-4b54-9a46-1ced31ffa5b9';
+
+    createRecorder({ sink }).info('session.opened', { teamId });
+
+    expect(events()[0].teamId).toBe(teamId);
+  });
+
+  it('writes a cuid session id intact', () => {
+    const { sink, events } = capturingSink();
+    const sessionId = 'cmu1k7zph000004l7hswbpoeg';
+
+    createRecorder({ sink }).info('session.closed', { sessionId });
+
+    expect(events()[0].sessionId).toBe(sessionId);
+  });
+
+  it('still redacts a token inside prose', () => {
+    // The protection that motivated redaction has to survive narrowing it
+    const { sink, lines } = capturingSink();
+
+    createRecorder({ sink }).error('prompt.failed', {
+      message: 'POST /session/Hs82kdMz0qLpWnTyUvBxRc41 failed',
+      route: '/session/Hs82kdMz0qLpWnTyUvBxRc41',
+    });
+
+    expect(lines[0]).not.toContain('Hs82kdMz0qLpWnTyUvBxRc41');
+  });
+});

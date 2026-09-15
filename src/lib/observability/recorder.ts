@@ -94,6 +94,20 @@ const PERMITTED = new Set<string>(ALLOWED_KEYS);
  */
 const TOKEN_SHAPED = /[A-Za-z0-9_-]{24,}/g;
 
+/**
+ * The fields that carry prose, and so can carry a URL.
+ *
+ * Redaction is applied here and nowhere else. It was applied to every field
+ * first, and ate the ids: a team id is a UUID, a UUID is thirty-six characters
+ * of letters, digits and hyphens, and the pattern that catches a session token
+ * catches that exactly. Every event came out carrying `teamId: "[redacted]"` —
+ * the record destroying the one thing it exists to carry.
+ *
+ * An id field cannot hold a token, because the allowlist decides what an id
+ * field is. Prose can hold anything.
+ */
+const PROSE_FIELDS = new Set(['message', 'reason', 'route']);
+
 function redact(value: string): string {
   return value.replace(TOKEN_SHAPED, '[redacted]');
 }
@@ -106,7 +120,8 @@ function clean(context: EventContext): Record<string, string | number> {
     if (!PERMITTED.has(key)) continue;
     if (value === undefined || value === null) continue;
 
-    cleaned[key] = typeof value === 'string' ? redact(value) : value;
+    cleaned[key] =
+      typeof value === 'string' && PROSE_FIELDS.has(key) ? redact(value) : value;
   }
 
   return cleaned;

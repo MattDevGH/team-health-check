@@ -53,26 +53,27 @@ Phases 2 and 3 are independent of each other and either can ship alone.
 
 ### 2.1 The scheduler records its decisions
 
-- [ ] Failing test: opening a session records which team and which session
-- [ ] Failing test: closing one does the same
-- [ ] Failing test: materialising one does the same
-- [ ] Failing test: a team with no schedule records *why* it was skipped, not
+- [x] Failing test: opening a session records which team and which session
+- [x] Failing test: closing one does the same
+- [x] Failing test: materialising one does the same
+- [x] Failing test: a team with no schedule records *why* it was skipped, not
       merely that nothing happened
-- [ ] Failing test: a team outside its collection window records that reason
+- [x] Failing test: a team outside its collection window records that reason
       rather than the same one
-- [ ] Failing test: every event from one tick carries the tick's id
+- [x] Failing test: every event from one tick carries the tick's id
 - _Requirements: Knowing What Happened 1.1, 1.2, 1.3, 2.1, 2.2, 2.3_
 - _Property: 1, 4_
 
 ### 2.2 The response says it too
 
-- [ ] Failing test: the tick's response carries counts of what it opened,
+- [x] Failing test: the tick's response carries counts of what it opened,
       closed and materialised
-- [ ] Failing test: it carries the tick id, so a response can be tied to the
+- [x] Failing test: it carries the tick id, so a response can be tied to the
       lines it produced
-- [ ] Failing test: it carries no answer content — counts and ids only
+- [x] Failing test: it carries no answer content — counts and ids only
 - [ ] Verify against production: read a real tick's response from cron-job.org
-      and confirm it says something a person can act on
+      and confirm it says something a person can act on — needs a deploy and the
+      next scheduled run
 - _Requirements: Knowing What Happened 1.4, 1.5_
 
 **Checkpoint:** "why did no check open on Monday?" is answerable. One PR.
