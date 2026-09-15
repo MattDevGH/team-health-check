@@ -543,7 +543,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1627 tests across 176 files**, including
+The Vitest suite now contains **1646 tests across 177 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
@@ -842,8 +842,30 @@ route, and the fourth request belongs to the session lifecycle panel, which is
 a component rather than a page. Neither was careless, and that is the point of
 having an instrument.
 
-One characterisation test asserts the duplicate `/api/me` **exists**, and fails
-when it is fixed. Phase 2 cannot land quietly.
+A characterisation test asserted the duplicate `/api/me` **existed**, so that it
+would fail when fixed. It did exactly that, twice — once when the shell stopped
+asking and once when the page did.
+
+**Phase 2 is done.** The authenticated layouts are Server Components that
+resolve the member from the session cookie and hand the shell a context;
+`resolveShellContext` is a function of a token, because a Server Component reads
+cookies through `cookies()` and has no NextRequest. The shell stays a Client
+Component — signing out is interactive — and offers the same context to the
+pages inside it through `useShellContext`, since a layout cannot pass props to
+its page. The default is null and load-bearing: a page rendered outside a shell
+offers nothing behind a role, which is how it behaved when its own fetch failed.
+
+A dashboard load went from **4 API requests to 2**, and from asking who is
+reading **twice to not at all**. The navigation is in the HTML the server sends
+— asserted by reading the document as bytes, because a rendered assertion would
+pass against a shell that fetched and re-rendered while Playwright waited.
+
+**Two mutations survived first drafts, and both mattered.** Removing the
+provider from the shell broke nothing, because every test supplied the context
+directly — the dashboard would have lost its manager controls in production with
+the suite green. And the layout-shift budget, written to the standard 0.1,
+watched the pop-in and said nothing: the page scores 0.046 with the defect and
+0.016 without. It is 0.03 now, a ratchet like every other budget here.
 
 That multiplies. A dashboard load makes four requests — the shell’s `/api/me`,
 the page’s *second* `/api/me`, `/trends`, and `/sessions` — whose queries are

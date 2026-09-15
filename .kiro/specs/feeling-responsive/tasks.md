@@ -68,32 +68,39 @@ the suite. One PR.
 
 ### 2.1 The authenticated layout resolves the member
 
-- [ ] Failing test: the layout renders the shell with its destinations already
+- [x] Failing test: the layout renders the shell with its destinations already
       present, with no client request for identity
-- [ ] Failing test: an unresolvable member renders no shell, exactly as today
-- [ ] Read `node_modules/next/dist/docs/` on layouts, `cookies()` and Server
+- [x] Failing test: an unresolvable member renders no shell, exactly as today
+- [x] Read `node_modules/next/dist/docs/` on layouts, `cookies()` and Server
       Components before writing any of it
 - _Requirements: 1.1, 2.1, 2.3_
 
 ### 2.2 Pages take identity rather than fetching it
 
-- [ ] Failing test: the dashboard shows Delivery-Manager controls from the
+- [x] Failing test: the dashboard shows Delivery-Manager controls from the
       identity it was given, with no request of its own
-- [ ] Failing test: rendered without one, the page behaves as it does today —
+- [x] Failing test: rendered without one, the page behaves as it does today —
       the isolation the duplicate fetch was protecting
-- [ ] Failing test: `/api/me` still answers, for the session page that needs it
-- [ ] The request-count gate from 1.3 now expects one fewer
+- [x] Failing test: `/api/me` still answers, for the session page that needs it
+- [x] The request-count gate from 1.3 now expects one fewer
 - _Requirements: 1.2, 1.3, 1.4, NFR 1.1_
 
 ### 2.3 Prove the pop-in is gone
 
-- [ ] Failing test: Cumulative Layout Shift below 0.1 on the dashboard
-- [ ] Failing test: the navigation's full destination set is present in first
+- [x] Failing test: Cumulative Layout Shift below 0.1 on the dashboard
+- [x] Failing test: the navigation's full destination set is present in first
       paint for a signed-in member
-- [ ] Mutation check: restore the client fetch and confirm both fail
+- [x] Mutation check: restore the client fetch and confirm both fail
 - _Requirements: 2.1, 2.2, 4.3, NFR 1.3_
 
-**Checkpoint:** the menu arrives whole and the dashboard asks once. One PR.
+**The layout-shift budget had to be a ratchet, and mutation is what said so.**
+Written first to 0.1 — the industry threshold, and what the requirement
+asked for — it survived the mutation that restores the pop-in: the dashboard
+scored 0.046 *with* the defect, against 0.016 without. A test that watches
+the thing it was written for and says nothing is decoration, so the budget is
+0.03 and the requirement now says why.
+
+**Checkpoint:** the menu arrives whole and the dashboard asks nothing. One PR.
 
 ---
 
