@@ -543,7 +543,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1661 tests across 179 files**, including
+The Vitest suite now contains **1671 tests across 180 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
@@ -803,17 +803,17 @@ anonymity threshold — was fixed immediately and is out of scope here.
 
 ## Outstanding Work
 
-### Noticed on production, 2026-09-15 — not yet specced
+### Noticed on production, 2026-09-15
 
 **The audit log prints a JSON object where a sentence belongs.** Now that the
 rest of the entry reads like English, the `after` state of a `schedule_change`
 stands out: it exposes variable names and numeric day ids, so a reader has to
 know that 1 means Monday. Labels and values, with day names, is the fix. Raised
 by Matt; small and self-contained, and it belongs with whatever next touches the
-audit log.
+audit log. **Still outstanding.**
 
-**The application was slower than it should be, and the cause was geography —
-fixed 2026-09-15.** `x-vercel-id` read `lhr1::iad1::…`: requests entering at
+**The application was slower than it should be — fixed 2026-09-15, milestone
+complete.** The first cause was geography. `x-vercel-id` read `lhr1::iad1::…`: requests entering at
 London and executing in Washington, against a database in Dublin. `vercel.json`
 now pins functions to `dub1`, and PR #50 records the measurement either side.
 
@@ -826,7 +826,21 @@ now pins functions to `dub1`, and PR #50 records the measurement either side.
 Warm medians, ten samples, from a UK client. Cold starts stay around 1.1s and
 are a Hobby-tier fact.
 
-What remains is architectural, and is specced as `.kiro/specs/feeling-responsive/`.
+The rest was architectural, specced and built as
+`.kiro/specs/feeling-responsive/`. **All four phases are done.**
+
+| | Before | After |
+|---|---|---|
+| API requests per dashboard load | 4 | **2** |
+| Identity requests per load | 2 | **0** |
+| Queries per `/trends` | 9 | **8** |
+| Queries per `/api/me` | 5 | 5, three of them now concurrent |
+| Layout shift on the dashboard | 0.046 | **0.016** |
+| Cost of one database round trip | ~60ms | **~8ms** |
+
+How to measure it again, and what the gates are, is in `docs/performance.md`.
+The short version: gates count things and run in CI; timings and Lighthouse
+are commands you run deliberately. No wall-clock budget goes near CI.
 
 **Phase 1 is done: the work is now measured rather than estimated.**
 `src/tests/integration/support/counted-database.ts` counts statements through
