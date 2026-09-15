@@ -487,7 +487,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (1661 tests across 179 Vitest files)
+npm test            # unit + property tests (1671 tests across 180 Vitest files)
 npm run test:watch  # watch mode for TDD (unit only)
 npm run test:e2e    # Playwright browser tests
 npm run test:a11y   # Playwright axe tests
@@ -501,6 +501,7 @@ npm run test:a11y   # Playwright axe tests
 | Real-file integration | Adapter and query behaviour — the libSQL and database-path tests run against actual SQLite files |
 | Accessibility tests | WCAG violations, through jest-axe and Playwright axe-core |
 | E2E tests | Hydration, cookies, navigation — invisible below this tier |
+| Performance gates | Queries per route, requests per page load, layout shift |
 
 ### When each runs
 
@@ -520,6 +521,31 @@ enough to run on every pull request rather than only at merge.
 
 See the Testing Rules in `AGENTS.md` for how these tests must be written — in
 particular, why asserting that a collaborator was called is not evidence.
+
+### Performance
+
+The application was slow for months and nothing in the suite noticed; it was
+found by someone using it. There are gates now, set as ratchets at what the
+code does today:
+
+| Budget | Value | Where |
+|---|---|---|
+| Queries per `GET /api/me` | ≤ 5 | `src/tests/integration/query-budgets.test.ts` |
+| Queries per `GET /api/teams/[teamId]/trends` | ≤ 8 | same |
+| API requests per dashboard load | ≤ 2 | `e2e/request-budget.spec.ts` |
+| Identity requests per dashboard load | 0 | same |
+| Cumulative Layout Shift, dashboard | < 0.03 | same |
+
+**No wall-clock timing runs in CI.** Those vary with the machine and would be
+disabled within a month. Timings and Lighthouse are deliberate commands:
+
+```bash
+npx tsx scripts/measure-production.ts
+```
+
+See `docs/performance.md` for what each measurement isolates, the baseline to
+compare against, how to point Lighthouse at a page behind a session, and why
+the same metric reads differently through different tools.
 
 Manual browser acceptance has passed for team settings, editable feedback,
 optional trend clearing, two complete session lifecycles, close/materialisation,

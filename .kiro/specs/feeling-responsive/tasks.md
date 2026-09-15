@@ -148,21 +148,28 @@ do — and code with no seam cannot be asked "does this wait for that?".
 
 ### 4.1 Document how to measure production
 
-- [ ] The command, the endpoint that isolates database latency from function
+- [x] The command, the endpoint that isolates database latency from function
       latency, and why that particular endpoint
-- [ ] The 2026-09-15 before-and-after numbers as the baseline
-- [ ] Stated plainly as a deliberate check, never a CI gate
+- [x] The 2026-09-15 before-and-after numbers as the baseline
+- [x] Stated plainly as a deliberate check, never a CI gate
 - _Requirements: 5.1, 5.2, 5.3_
 
 ### 4.2 Close the milestone
 
-- [ ] `AI_CONTEXT.md` and `README.md` reflect the budgets and where they live
-- [ ] The outstanding-work note that opened this milestone is replaced by what
+- [x] `AI_CONTEXT.md` and `README.md` reflect the budgets and where they live
+- [x] The outstanding-work note that opened this milestone is replaced by what
       was done
-- [ ] Full suite, lint, type check, build, browser suite
-- [ ] Walk production and say whether it feels different — the only test that
+- [x] Full suite, lint, type check, build, browser suite
+- [x] Walk production and say whether it feels different — the only test that
       matched the original report
 - _Requirements: NFR 2_
+
+**One task in 4.1 turned out to have two answers.** "How to measure production"
+is not one command: `curl` pays for a TLS handshake every invocation, `fetch`
+reuses the connection, and Lighthouse throttles CPU and network. The same page
+reads 89ms, 44ms and something else again depending on which you use, and the
+same layout shift reads 0.016 or 0.035. The document says so, and says to
+compare like with like.
 
 **Checkpoint:** a future regression fails a run rather than waiting for someone
 to notice. One PR.
