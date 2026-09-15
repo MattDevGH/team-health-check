@@ -6,6 +6,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { axe, toHaveNoViolations } from 'jest-axe';
+
+expect.extend(toHaveNoViolations);
 import { http, HttpResponse } from 'msw';
 
 import { server } from '@/tests/mocks/server';
@@ -565,5 +568,144 @@ describe('pressing the button a second time', () => {
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent(/no changes/i);
     });
+  });
+});
+
+/**
+ * A way onward, for whoever is actually reading.
+ *
+ * Requirements: Explaining Itself 2.3, NFR 2.1
+ *
+ * Opening a session link signs the member in until the check closes, so in
+ * practice everyone who reaches this confirmation has somewhere to go. The
+ * spec assumed otherwise and a browser test corrected it.
+ *
+ * The link is still offered only on a confirmed session, because the cases
+ * where there is none are real and bad to get wrong: a browser refusing
+ * cookies, or a session that expired when the check closed. Sending either of
+ * those to `/me` is sending them to a sign-in page dressed as a destination.
+ */
+describe('where a member goes after answering', () => {
+  async function submitAs(user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByRole('group', { name: /delivering value/i });
+    for (const name of [/delivering value/i, /team collaboration/i]) {
+      const group = screen.getByRole('group', { name });
+      await user.click(within(group).getByRole('radio', { name: '4' }));
+    }
+    await user.click(screen.getByRole('button', { name: /^submit/i }));
+    await screen.findByRole('status');
+  }
+
+  function signedIn() {
+    server.use(
+      http.get('/api/me', () =>
+        HttpResponse.json({ id: 'member-1', team: { id: 'team-1' }, roles: [] }),
+      ),
+    );
+  }
+
+  function signedOut() {
+    server.use(
+      http.get('/api/me', () =>
+        HttpResponse.json({ error: { code: 'UNAUTHORIZED' } }, { status: 401 }),
+      ),
+    );
+  }
+
+  beforeEach(() => {
+    server.use(
+      http.get('/api/auth/session-link/:token', () => HttpResponse.json(MOCK_CONTEXT)),
+      http.post('/api/responses', () => HttpResponse.json({ responses: [] })),
+    );
+  });
+
+  it('offers a signed-in member their health check page', async () => {
+    const user = userEvent.setup();
+    signedIn();
+    renderPage();
+
+    await submitAs(user);
+
+    const link = await screen.findByRole('link', { name: /health check/i });
+    expect(link).toHaveAttribute('href', '/me/health-check');
+  });
+
+  it('offers nothing when the application does not recognise the reader', async () => {
+    /*
+     * A browser refusing cookies, or a session that expired as the check
+     * closed. A link into /me would send them to a sign-in page, which is a
+     * dead end wearing the clothes of a way onward.
+     */
+    const user = userEvent.setup();
+    signedOut();
+    renderPage();
+
+    await submitAs(user);
+
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('still confirms the answers where no link applies', async () => {
+    // The confirmation is the point; the link is a bonus for those it fits
+    const user = userEvent.setup();
+    signedOut();
+    renderPage();
+
+    await submitAs(user);
+
+    expect(screen.getByRole('status')).toHaveTextContent(/saved/i);
+  });
+
+  it('does not ask who is reading until there is something to offer them', async () => {
+    // Every anonymous visit would otherwise make a request whose only possible
+    // answer is 401
+    let asked = 0;
+    server.use(http.get('/api/me', () => { asked += 1; return HttpResponse.json({}, { status: 401 }); }));
+
+    renderPage();
+    await screen.findByRole('group', { name: /delivering value/i });
+
+    expect(asked).toBe(0);
+  });
+
+  it('has no axe-detectable violations once confirmed, signed in', async () => {
+    const user = userEvent.setup();
+    signedIn();
+    const { container } = renderPage();
+
+    await submitAs(user);
+    await screen.findByRole('link', { name: /health check/i });
+
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('has no axe-detectable violations once confirmed, signed out', async () => {
+    const user = userEvent.setup();
+    signedOut();
+    const { container } = renderPage();
+
+    await submitAs(user);
+
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('puts the way onward in the keyboard path, not only on screen', async () => {
+    /*
+     * The confirmation appears above the form, so tabbing forward from the
+     * button never reaches it. Asserted by moving focus the way a keyboard
+     * user would rather than by reading a tabindex.
+     */
+    const user = userEvent.setup();
+    signedIn();
+    renderPage();
+
+    await submitAs(user);
+    const link = await screen.findByRole('link', { name: /health check/i });
+
+    link.focus();
+    expect(link).toHaveFocus();
+
+    await user.keyboard('{Tab}');
+    expect(link).not.toHaveFocus();
   });
 });

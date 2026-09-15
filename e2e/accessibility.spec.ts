@@ -167,7 +167,9 @@ test.describe('feedback states', () => {
     }
 
     await page.getByRole('button', { name: /submit responses/i }).click();
-    await expect(page.getByText(/submitted successfully/i)).toBeVisible();
+    // The confirmation is a live region now, and it sits above a form that
+    // stays put — answers can still be changed until the check closes
+    await expect(page.getByRole("status")).toContainText(/your answers are saved/i);
 
     await expectNoViolations(page, 'submission confirmation');
   });

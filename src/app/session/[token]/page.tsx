@@ -65,6 +65,16 @@ export default function SessionLinkPage({ params }: PageProps) {
    */
   const [savedAnswers, setSavedAnswers] = useState<Answer[] | null>(null);
   const [lastOutcome, setLastOutcome] = useState<'saved' | 'unchanged'>('saved');
+  /**
+   * Whether the reader has an application to return to.
+   *
+   * Usually yes: opening a session link establishes a session for that member
+   * until the check closes. Asked rather than assumed because the exceptions
+   * are real — a browser refusing cookies, or a session that expired as the
+   * check closed — and sending either of those to `/me` would be sending them
+   * to a sign-in page wearing the clothes of a destination.
+   */
+  const [canReturnToApp, setCanReturnToApp] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [results, setResults] = useState<RollingAverageResult[]>([]);
 
@@ -165,6 +175,31 @@ export default function SessionLinkPage({ params }: PageProps) {
     }
   }, [context, savedAnswers]);
 
+  /*
+   * Asked after a submission rather than on arrival: until then there is
+   * nothing to offer, and every anonymous visit would make a request whose
+   * only possible answer is 401.
+   */
+  useEffect(() => {
+    if (!submitted) return;
+
+    let cancelled = false;
+
+    async function askWhoIsReading() {
+      try {
+        const res = await fetch('/api/me');
+        if (!cancelled) setCanReturnToApp(res.ok);
+      } catch {
+        // A failed request is not a signed-out member, but offering a link
+        // that may not work is worse than offering none.
+        if (!cancelled) setCanReturnToApp(false);
+      }
+    }
+
+    askWhoIsReading();
+    return () => { cancelled = true; };
+  }, [submitted]);
+
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -263,6 +298,21 @@ export default function SessionLinkPage({ params }: PageProps) {
               You can change them until this health check closes; just pick a different
               score and update your answers.
             </p>
+
+            {/*
+              Offered only where it leads somewhere. This page carries no
+              navigation of its own — it is reached from a prompt, not from
+              inside the application — so this link is the door back in, and
+              where there is no session the confirmation stands on its own.
+            */}
+            {canReturnToApp && (
+              <a
+                href="/me/health-check"
+                className="mt-3 inline-block font-medium text-green-900 underline underline-offset-2 hover:text-green-950 focus:outline-none focus:ring-2 focus:ring-green-700 focus:ring-offset-2"
+              >
+                Go to your health check page
+              </a>
+            )}
           </div>
         )}
 

@@ -183,6 +183,22 @@ export function seedTeam(options: {
       db.prepare(`DELETE FROM ${table} WHERE memberId IN (${membersOfTeam})`).run(teamId);
     }
 
+    /*
+      Team-scoped rows, which the member-scoped sweep above cannot reach.
+
+      A team with a seeded session could not be reseeded at all: deleting the
+      Team failed a foreign key, and it failed on the retry that follows a
+      first failure — turning one readable error into two, the second of them
+      about the fixture rather than the test.
+    */
+    const sessionsOfTeam = 'SELECT id FROM HealthCheckSession WHERE teamId = ?';
+    for (const table of ['Response', 'SessionLink', 'SessionAggregate']) {
+      db.prepare(`DELETE FROM ${table} WHERE sessionId IN (${sessionsOfTeam})`).run(teamId);
+    }
+    for (const table of ['HealthCheckSession', 'TeamSchedule', 'AuditLogEntry']) {
+      db.prepare(`DELETE FROM ${table} WHERE teamId = ?`).run(teamId);
+    }
+
     db.prepare('DELETE FROM TeamMember WHERE teamId = ?').run(teamId);
     db.prepare('DELETE FROM Team WHERE id = ?').run(teamId);
 
