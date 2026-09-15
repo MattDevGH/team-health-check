@@ -803,6 +803,37 @@ anonymity threshold — was fixed immediately and is out of scope here.
 
 ## Outstanding Work
 
+### Knowing what happened — spec written 2026-09-16, not started
+
+`.kiro/specs/knowing-what-happened/`. The application keeps no record of what
+it does. Eleven `console` calls exist in the whole codebase, all but one in a
+catch block, and the scheduler tick — which opens checks, closes them, computes
+results and sends every prompt — logs nothing and returns `{ ok: true }`
+whatever it did.
+
+**The cost is already paid.** The dashboard says "Results are overdue — the
+scheduler may not be running" because a stalled scheduler is indistinguishable
+from a silent team *from the outside*, and there was no inside to look at. That
+message is a user interface compensating for an absent record, and the
+deployment spec’s open task "establish how a stopped trigger would be noticed"
+is the same gap from the other side.
+
+The five lines that do exist say things like `Slack delivery failed after 3
+attempts: Error` — not which member, team, session or check.
+
+**Scope: boundaries only**, decided with Matt. An agent can reconstruct what the
+code *would* do; nothing can reconstruct what it *did* at 15:30 on a Monday. So
+decisions and outcomes at the edges, and no narration of internal steps — that
+was always a substitute for reading the code and is now a substitute for
+something much cheaper.
+
+One module writing JSON to stdout, no dependency. Two things the design is firm
+about: an allowlist enforced by a property test, because a log line carrying a
+score would step around the anonymity threshold the rest of the product
+observes; and the tick answering in its HTTP response as well as its logs,
+because cron-job.org shows that response and it is a dashboard Matt already has
+open.
+
 ### The specs now say what is built — reconciled 2026-09-15
 
 Matt asked whether the `.md` files were drifting from the code. Measured:
