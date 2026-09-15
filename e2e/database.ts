@@ -5,7 +5,7 @@
  * the web server, and any test that needs to read state directly — so there is
  * exactly one definition of where E2E data lives.
  *
- * Requirements: 10.2, 10.5, 10.6
+ * Requirements: Integration 10.2, 10.5, 10.6
  */
 
 import path from 'node:path';

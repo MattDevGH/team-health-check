@@ -10,6 +10,37 @@ Read AI_CONTEXT.md at the start of every session.
 
 **After every commit:** update both AI_CONTEXT.md and README.md to reflect any changes to project structure, behaviour, test coverage, or conventions. Do not leave these files out of sync with the codebase.
 
+# The Requirement Comes First
+
+Every source file here cites the requirement it serves — 872 citations across
+219 files. That thread is the only thing connecting what was asked for to what
+was built, and nobody reads it until something is wrong.
+
+- **Open the requirement before writing the code.** For anything more than a
+  typo. The rule exists because a fix was once small enough that nobody
+  bothered, and the citation that came out of it — "Manager Experience 5.x" —
+  named a requirement that had never existed. It reached a pull request
+  description before a person noticed.
+- **If no requirement covers the change, add one.** A requirements commit is
+  legitimate work, not overhead. `Manager Experience 2.8` was written this way,
+  after a test was found citing a criterion nobody had ever added.
+- **A bare number means the original spec** (`team-health-check`). A citation
+  belonging to any other spec names it: `Explaining Itself 1.4`,
+  `Integration 10.6`. `Original` and `Integration` are accepted aliases.
+- **`npx tsx scripts/check-requirement-references.ts` must pass.** It runs in
+  CI. It catches a citation that leads nowhere; it cannot catch one that leads
+  somewhere wrong — `10.2` in the test-mode files resolved for months against a
+  requirement about response data integrity. Only reading the requirement
+  catches that, which is why this section leads with a rule for people.
+- **When a requirement stops describing what was built, correct it and say
+  what it replaced.** Requirement 18.4 claimed the audit log lived on the
+  settings page long after it had a route of its own. A silent rewrite loses
+  the fact that the design changed.
+- **Tick a task only when its behaviour exists and a test covers it.** The
+  2026-08-23 closure audit found tasks marked complete before the behaviour
+  existed and cost days of re-verification. An unticked box that is done is a
+  small lie; a ticked box that is not is an expensive one.
+
 # Commit Discipline
 
 - **One green behaviour per commit**: Each commit should deliver one testable vertical slice, including its failing test, minimal production change, and passing validation. Do not bundle an entire top-level task or unrelated fixes.

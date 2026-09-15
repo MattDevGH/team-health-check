@@ -6,7 +6,7 @@
  * project root rather than the schema directory, which is the usual source of
  * "the migration went somewhere else" confusion.
  *
- * Requirements: 10.2, 10.5, 10.6, 13.5
+ * Requirements: Integration 10.2, 10.5, 10.6, 13.5
  */
 
 import path from 'node:path';

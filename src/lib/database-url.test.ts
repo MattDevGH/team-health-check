@@ -5,7 +5,7 @@
  * entirely, so an E2E run configured with `DATABASE_URL=file:./test.db` still
  * read and wrote the development database holding accepted acceptance data.
  *
- * Requirements: 10.2, 10.5, 10.6
+ * Requirements: Integration 10.2, 10.5, 10.6
  */
 
 import path from 'node:path';

@@ -10,7 +10,7 @@
  * If a scenario ever genuinely should not run, delete it or make its absence
  * fail loudly. Do not reach for `skip`.
  *
- * Requirements: 10.5, 10.6
+ * Requirements: Integration 10.5, 10.6
  */
 
 import type { FullResult, Reporter, TestCase, TestResult } from '@playwright/test/reporter';

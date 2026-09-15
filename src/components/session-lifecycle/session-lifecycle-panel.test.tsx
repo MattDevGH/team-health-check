@@ -436,7 +436,7 @@ describe('SessionLifecyclePanel', () => {
 
 /**
  * Closing a check that nobody has answered.
- * Requirements: Dashboard Refinement 4.5
+ * Requirements: Manager Experience 2.8
  *
  * A check nobody answered is real information — disengagement, bad timing, a
  * team underwater — so the tool records it rather than refusing to. What it

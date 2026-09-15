@@ -8,7 +8,7 @@
  * writes through a real client and checks both that the configured file
  * received the data and that `prisma/dev.db` was not touched.
  *
- * Requirements: 10.2, 10.5, 10.6
+ * Requirements: Integration 10.2, 10.5, 10.6
  */
 
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
