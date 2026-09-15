@@ -26,30 +26,38 @@ Merged as PR #50. `lhr1::iad1::…` became `lhr1::dub1::…`; a query fell from
 
 ### 1.1 A query counter that can fail
 
-- [ ] Failing test: a known operation reports its known query count
-- [ ] Failing test: the counter reports zero for an operation that makes none —
+- [x] Failing test: a known operation reports its known query count
+- [x] Failing test: the counter reports zero for an operation that makes none —
       the case that would make every later budget vacuous
-- [ ] Failing test: counts are isolated between operations, so one test cannot
+- [x] Failing test: counts are isolated between operations, so one test cannot
       inherit another's total
-- [ ] Wraps the libSQL client used by the real-file integration tier, so it
+- [x] Wraps the libSQL client used by the real-file integration tier, so it
       counts what the adapter actually sends rather than what a fake was asked
 - _Requirements: 4.2_
 - _Property: covered by its own test, since a counter is an instrument_
 
 ### 1.2 Record today's counts as ratchets
 
-- [ ] Failing test: `GET /api/me` issues at most 5 queries
-- [ ] Failing test: `GET /api/teams/[teamId]/trends` issues at most 7
-- [ ] Mutation check: add a query to each route and confirm the gate fails
+- [x] Failing test: `GET /api/me` issues at most 5 queries
+- [x] Failing test: `GET /api/teams/[teamId]/trends` issues at most 9 — the estimate said 7
+- [x] Mutation check: add a query to each route and confirm the gate fails
 - _Requirements: 4.2, 4.4, NFR 1.2_
 
 ### 1.3 Count the requests a page makes
 
-- [ ] Failing test: a dashboard load makes at most 3 `/api/` requests today
-- [ ] Failing test: it requests `/api/me` exactly once — which fails now, because
+- [x] Failing test: a dashboard load makes at most 4 `/api/` requests today — the estimate said 3
+- [x] Failing test: it requests `/api/me` exactly once — which fails now, because
       it asks twice
-- [ ] Mutation check: remove one fetch and confirm the count moves
+- [x] Mutation check: remove one fetch and confirm the count moves
 - _Requirements: 4.1, 1.1_
+
+**Two estimates in this plan were wrong, and the instrument found both.**
+`/trends` issues 9 queries rather than 7, because two of them live inside the
+services the route calls rather than in the route. A dashboard load makes 4
+requests rather than 3, because the session lifecycle panel makes one of its
+own — easy to miss, since it is a component rather than a page. Neither
+estimate was careless; both were arrived at by reading code, which is exactly
+what an instrument is for not doing.
 
 **Checkpoint:** the regression that prompted this milestone is now visible to
 the suite. One PR.
