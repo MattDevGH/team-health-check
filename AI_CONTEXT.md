@@ -543,7 +543,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1614 tests across 174 files**, including
+The Vitest suite now contains **1627 tests across 176 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
@@ -827,6 +827,23 @@ Warm medians, ten samples, from a UK client. Cold starts stay around 1.1s and
 are a Hobby-tier fact.
 
 What remains is architectural, and is specced as `.kiro/specs/feeling-responsive/`.
+
+**Phase 1 is done: the work is now measured rather than estimated.**
+`src/tests/integration/support/counted-database.ts` counts statements through
+Prisma's query event over the libSQL adapter — production's path — against a
+real file. The event was verified empirically before anything was designed
+around it. Budgets live in `query-budgets.test.ts` (routes) and
+`e2e/request-budget.spec.ts` (page loads), as ratchets set at measured values.
+
+Today: `GET /api/me` issues **5** queries, `GET /trends` **9**, and a dashboard
+load makes **4** API requests. The spec had estimated 7 and 3 — both arrived at
+by reading code. Two of the trends queries live inside services rather than the
+route, and the fourth request belongs to the session lifecycle panel, which is
+a component rather than a page. Neither was careless, and that is the point of
+having an instrument.
+
+One characterisation test asserts the duplicate `/api/me` **exists**, and fails
+when it is fixed. Phase 2 cannot land quietly.
 
 That multiplies. A dashboard load makes four requests — the shell’s `/api/me`,
 the page’s *second* `/api/me`, `/trends`, and `/sessions` — whose queries are
