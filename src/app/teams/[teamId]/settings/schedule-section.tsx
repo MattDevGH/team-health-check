@@ -7,6 +7,8 @@
 
 import { useState } from 'react';
 
+import { WEEK_DAYS } from '@/lib/week-days';
+
 export interface ScheduleData {
   cadence: string;
   openDay: number;
@@ -22,15 +24,11 @@ interface ScheduleSectionProps {
   onUpdated: (schedule: ScheduleData) => void;
 }
 
-const DAYS = [
-  { value: 0, label: 'Sunday' },
-  { value: 1, label: 'Monday' },
-  { value: 2, label: 'Tuesday' },
-  { value: 3, label: 'Wednesday' },
-  { value: 4, label: 'Thursday' },
-  { value: 5, label: 'Friday' },
-  { value: 6, label: 'Saturday' },
-];
+/**
+ * Shared with the audit log, which has to name the day a stored number means.
+ * Two lists of the same thing is one list and a future defect.
+ */
+const DAYS = WEEK_DAYS;
 
 export function ScheduleSection({ teamId, schedule, onUpdated }: ScheduleSectionProps) {
   const [openDay, setOpenDay] = useState(String(schedule?.openDay ?? 1));

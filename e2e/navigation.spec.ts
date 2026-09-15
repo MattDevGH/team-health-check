@@ -189,6 +189,44 @@ test.describe('using the shell', () => {
     );
   });
 
+  /**
+ * A schedule change, as a person reads it.
+   *
+   * Raised against the production log, which showed
+   * `{"cadence":"weekly","openDay":1,…}` in the After state. Everything else on
+   * the card had been made to read like English; this had not.
+   *
+   * In a browser because the unit tests know the formatter returns the right
+   * strings, not that they reach the page a manager opens.
+   */
+  test('reads a stored schedule back in words, not JSON', async ({ page }) => {
+    seedAuditEntry({
+      teamId,
+      userId: memberIds['audit-log']!,
+      changeType: 'schedule_change',
+      previousValue: 'null',
+      newValue:
+        '{"cadence":"weekly","openDay":1,"openTime":"15:30","closeDay":5,"closeTime":"17:00","timezone":"Europe/London"}',
+    });
+
+    await signIn(page, emailFor('audit-log'));
+    await page.goto(`/teams/${teamId}/audit-log`);
+
+    const entry = page
+      .getByRole('article')
+      .filter({ hasText: /schedule_change/ })
+      .first();
+
+    await expect(entry).toContainText(/opens/i);
+    await expect(entry).toContainText(/monday at 15:30/i);
+    await expect(entry).toContainText(/friday at 17:00/i);
+    await expect(entry).toContainText(/no previous value/i);
+
+    // The complaint in full: no braces, no quotes, no field names
+    await expect(entry).not.toContainText('{');
+    await expect(entry).not.toContainText(/openDay|closeTime|timezone/);
+  });
+
   test('puts the shell in a sensible tab order before the page content', async ({ page }) => {
     // Axe cannot judge focus order — it is one of the things an automated pass
     // structurally misses, and the reason a manual keyboard check is still
