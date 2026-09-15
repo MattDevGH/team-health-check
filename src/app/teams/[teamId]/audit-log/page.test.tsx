@@ -136,22 +136,22 @@ describe('Audit Log Page', () => {
     it('displays entries in reverse chronological order (most recent first)', async () => {
       renderPage();
       await waitFor(() => {
-        expect(screen.getByText(/privacy_mode_changed/i)).toBeInTheDocument();
+        expect(screen.getByText(/privacy mode changed/i)).toBeInTheDocument();
       });
 
       const entries = screen.getAllByRole('article');
       expect(entries).toHaveLength(2);
 
       // First entry should be the most recent one
-      expect(entries[0]).toHaveTextContent(/privacy_mode_changed/i);
-      expect(entries[1]).toHaveTextContent(/schedule_changed/i);
+      expect(entries[0]).toHaveTextContent(/privacy mode changed/i);
+      expect(entries[1]).toHaveTextContent(/schedule changed/i);
     });
 
     it('displays change type for each entry', async () => {
       renderPage();
       await waitFor(() => {
-        expect(screen.getByText(/privacy_mode_changed/i)).toBeInTheDocument();
-        expect(screen.getByText(/schedule_changed/i)).toBeInTheDocument();
+        expect(screen.getByText(/privacy mode changed/i)).toBeInTheDocument();
+        expect(screen.getByText(/schedule changed/i)).toBeInTheDocument();
       });
     });
 
@@ -252,7 +252,7 @@ describe('Audit Log Page', () => {
       renderPage();
 
       await waitFor(() => {
-        expect(screen.getByText(/privacy_mode_changed/i)).toBeInTheDocument();
+        expect(screen.getByText(/privacy mode changed/i)).toBeInTheDocument();
       });
 
       expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument();
@@ -299,7 +299,7 @@ describe('Audit Log Page', () => {
       await user.click(screen.getByRole('button', { name: /load more/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/member_added/i)).toBeInTheDocument();
+        expect(screen.getByText(/member added/i)).toBeInTheDocument();
       });
 
       // All 3 entries should now be visible
@@ -490,5 +490,29 @@ describe('a value that was stored as JSON', () => {
     await screen.findByText(/^opens$/i);
 
     expect(await axe(container)).toHaveNoViolations();
+  });
+});
+
+describe('the kind of change', () => {
+  it('says what happened rather than naming the field that changed', async () => {
+    setupHandlers();
+    renderPage();
+
+    expect(await screen.findByText('Privacy mode changed')).toBeInTheDocument();
+    expect(screen.queryByText('privacy_mode_changed')).not.toBeInTheDocument();
+  });
+
+  it('keeps the stored identifier on the element for anyone correlating records', async () => {
+    /*
+     * Matt's question, answered both ways: a manager reads a sentence, and the
+     * token a system record would carry is still there to be found. Requirement
+     * 18 makes this screen the manager's; the identifier costs them nothing.
+     */
+    setupHandlers();
+    const { container } = renderPage();
+
+    await screen.findByText('Privacy mode changed');
+
+    expect(container.querySelector('[data-change-type="privacy_mode_changed"]')).not.toBeNull();
   });
 });

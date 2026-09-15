@@ -119,3 +119,42 @@ export function describeAuditValue(value: string): AuditValueView {
 
   return fields.length > 0 ? { kind: 'fields', fields } : { kind: 'text', text: value };
 }
+
+/**
+ * Names for change types where the obvious rewording would be wrong or vague.
+ *
+ * Everything else is handled by the general rule below, so a type added later
+ * reads properly without anyone remembering to come back here.
+ */
+const CHANGE_TYPE_LABELS: Record<string, string> = {
+  // "Delivery window changed" could be the health check's; it is Slack's
+  delivery_window_change: 'Slack delivery window changed',
+  schedule_change: 'Schedule changed',
+  name_change: 'Team renamed',
+  data_deletion: 'Data deleted',
+};
+
+/**
+ * What kind of change this was, as a person reads it.
+ *
+ * Requirement 18's user story settles what this screen is for: a delivery
+ * manager understanding when and why configuration decisions were made. That is
+ * a person reading their own team's history, so `schedule_change` is a variable
+ * name where a sentence belongs — the same defect as the JSON beneath it.
+ *
+ * The stored identifier is not lost: the page keeps it on the element as
+ * `data-change-type`, so an entry can still be correlated with a system record
+ * without a manager having to read a token.
+ */
+export function describeChangeType(changeType: string): string {
+  const trimmed = changeType.trim();
+
+  // A record with no type is broken, and a blank heading would hide it
+  if (trimmed === '') return 'Change';
+
+  const known = CHANGE_TYPE_LABELS[trimmed];
+  if (known) return known;
+
+  const words = trimmed.replace(/[_-]+/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+}

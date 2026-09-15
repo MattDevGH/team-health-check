@@ -543,7 +543,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1694 tests across 181 files**, including
+The Vitest suite now contains **1702 tests across 181 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
@@ -832,11 +832,17 @@ plausible.
 Sunday is 0, matching `Date.prototype.getDay`; two lists of the same thing is
 one list and a future defect.
 
-**Still open on that screen:** the change type itself renders as
-`schedule_change`, which is a variable name in the same place. Left alone
-deliberately — it is the stable identifier a reader might match against a
-record or a support conversation, and trading that for "Schedule changed" is a
-call for whoever owns the screen rather than a defect to fix in passing.
+**The change type followed**, once Matt asked what the screen is actually for.
+Requirement 18 answers it: "As a delivery manager, I want a record of
+significant team setting changes, so that I can understand when and why
+configuration decisions were made." A person reading their own team’s history —
+so `schedule_change` was a variable name where a sentence belongs, the same
+defect as the JSON beneath it. It reads **Schedule changed** now.
+
+The token is not lost: it stays on the element as `data-change-type`, so an
+entry can be correlated with a system record without a manager having to read
+it. That is the mapping Matt asked about, and the audit entry id is the join
+key if operational logging is ever built.
 
 **The application was slower than it should be — fixed 2026-09-15, milestone
 complete.** The first cause was geography. `x-vercel-id` read `lhr1::iad1::…`: requests entering at

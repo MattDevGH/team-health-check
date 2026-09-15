@@ -18,7 +18,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { describeAuditValue } from './audit-value';
+import { describeAuditValue, describeChangeType } from './audit-value';
 
 const SCHEDULE =
   '{"cadence":"weekly","openDay":1,"openTime":"15:30","closeDay":1,"closeTime":"15:54","timezone":"Europe/London"}';
@@ -125,5 +125,55 @@ describe('describeAuditValue', () => {
 
   it('shows null inside an object as the absence it is', () => {
     expect(lines('{"description":null}')).toEqual(['Description: None']);
+  });
+});
+
+/**
+ * The kind of change, as a person reads it.
+ *
+ * Requirement 18's user story settles what this screen is for: "As a delivery
+ * manager, I want a record of significant team setting changes, so that I can
+ * understand when and why configuration decisions were made." That is a person
+ * reading their own team's history, not an engineer reading a system log — so
+ * `schedule_change` is a variable name where a sentence belongs, exactly as the
+ * JSON beneath it was.
+ *
+ * The stored identifier does not disappear: it stays on the element as
+ * `data-change-type`, so anyone correlating this entry with a system record can
+ * still find it without a manager having to read it.
+ */
+describe('describeChangeType', () => {
+  it('says what happened, in words', () => {
+    expect(describeChangeType('schedule_change')).toBe('Schedule changed');
+  });
+
+  it('names the other changes a manager makes', () => {
+    expect(describeChangeType('privacy_mode_changed')).toBe('Privacy mode changed');
+    expect(describeChangeType('member_added')).toBe('Member added');
+    expect(describeChangeType('member_removed')).toBe('Member removed');
+  });
+
+  it('is specific about which window a delivery window is', () => {
+    // "Delivery window changed" could be the health check's; it is Slack's
+    expect(describeChangeType('delivery_window_change')).toBe('Slack delivery window changed');
+  });
+
+  it('reads an unfamiliar type rather than hiding it', () => {
+    /*
+     * A change type nobody has named yet is still a record of something that
+     * happened. Turning it into a sentence beats both showing the raw token and
+     * showing nothing — and a new one appearing in the log is how you find out
+     * it was added.
+     */
+    expect(describeChangeType('slack_channel_renamed')).toBe('Slack channel renamed');
+  });
+
+  it('leaves an already-readable type alone', () => {
+    expect(describeChangeType('Team created')).toBe('Team created');
+  });
+
+  it('never returns an empty label', () => {
+    // An entry with no type is a broken record, and a blank heading hides it
+    expect(describeChangeType('')).toBe('Change');
   });
 });

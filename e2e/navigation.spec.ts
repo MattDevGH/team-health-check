@@ -177,7 +177,7 @@ test.describe('using the shell', () => {
 
     await expect(page).toHaveURL(`/teams/${teamId}/audit-log`);
     await expect(page.getByRole('heading', { name: 'Audit Log' })).toBeVisible();
-    await expect(page.getByText('privacy_mode_changed')).toBeVisible();
+    await expect(page.getByText('Privacy mode changed')).toBeVisible();
     await expect(page.getByText(/no audit log entries/i)).toHaveCount(0);
 
     // The entry was seeded against this member, so the log should recognise
@@ -214,7 +214,7 @@ test.describe('using the shell', () => {
 
     const entry = page
       .getByRole('article')
-      .filter({ hasText: /schedule_change/ })
+      .filter({ hasText: /schedule changed/i })
       .first();
 
     await expect(entry).toContainText(/opens/i);

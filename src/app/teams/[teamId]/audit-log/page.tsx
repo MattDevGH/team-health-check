@@ -11,7 +11,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 
-import { describeAuditValue, type AuditValueView } from './audit-value';
+import { describeAuditValue, describeChangeType, type AuditValueView } from './audit-value';
 
 /** Who made a change, resolved by the server. */
 interface AuditActor {
@@ -227,8 +227,17 @@ export default function AuditLogPage({ params }: PageProps) {
                 className="bg-white rounded-lg shadow p-4"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <span className="text-sm font-semibold text-gray-800">
-                    {entry.changeType}
+                  {/*
+                    The stored type stays on the element, so an entry can be
+                    correlated with a system record without a manager having to
+                    read a token. Requirement 18 says this screen is for a
+                    delivery manager understanding their own team’s history.
+                  */}
+                  <span
+                    className="text-sm font-semibold text-gray-800"
+                    data-change-type={entry.changeType}
+                  >
+                    {describeChangeType(entry.changeType)}
                   </span>
                   <time
                     className="text-xs text-gray-500"
