@@ -803,6 +803,31 @@ anonymity threshold — was fixed immediately and is out of scope here.
 
 ## Outstanding Work
 
+### Noticed on production, 2026-09-15 — not yet specced
+
+**The audit log prints a JSON object where a sentence belongs.** Now that the
+rest of the entry reads like English, the `after` state of a `schedule_change`
+stands out: it exposes variable names and numeric day ids, so a reader has to
+know that 1 means Monday. Labels and values, with day names, is the fix. Raised
+by Matt; small and self-contained, and it belongs with whatever next touches the
+audit log.
+
+**The application is slower than it should be, and the cause is geography.**
+Measured 2026-09-15: `x-vercel-id` reports `lhr1::iad1::…`, so requests enter at
+London and execute in Washington, while the database is in Dublin. One query
+cost ~65ms of round trip — 249ms median for a single-query endpoint against
+189ms for one that touches no database, and 1.1s on a cold start.
+
+That multiplies. A dashboard load makes four requests — the shell’s `/api/me`,
+the page’s *second* `/api/me`, `/trends`, and `/sessions` — whose queries are
+sequential awaits, about nineteen round trips in total. The duplicate `/api/me`
+is documented in the dashboard as "one small GET… a fair price", which it was
+when it meant one local query.
+
+The pop-in Matt described in the navigation is structural rather than a bug:
+every page is a client component that fetches on mount, and the shell honestly
+renders the destinations it can name before `/api/me` resolves.
+
 ### Reaching your health check — spec written 2026-09-14, not started
 
 `.kiro/specs/reaching-your-health-check/`. Written because production opened a
