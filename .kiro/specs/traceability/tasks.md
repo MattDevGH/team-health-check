@@ -75,7 +75,7 @@ here follows Requirement 4.
 - [ ] Anything that cannot be confirmed stays unticked, with a note saying so
 - _Requirements: Traceability 3.1, 3.2_
 
-**Checkpoint:** "what is left?" is answered by reading. One PR.
+**Checkpoint:** "what is left?" is answered by reading. One PR — the only phase not in the first.
 
 ---
 
@@ -89,4 +89,4 @@ here follows Requirement 4.
 - [x] Says what to do when no requirement covers the change — add one
 - _Requirements: Traceability 4.1, 4.2, 4.3_
 
-**Checkpoint:** the rule outlives the conversation. Same PR as phase 3.
+**Checkpoint:** the rule outlives the conversation. Landed with phases 1 and 2, since the rule is what the rest is for.
