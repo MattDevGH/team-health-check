@@ -330,4 +330,89 @@ test.describe('reaching your own health check', () => {
     await expect(page).toHaveURL(/\/session\/[^/]+$/);
     await expect(page.getByRole('heading', { name: /health check/i }).first()).toBeVisible();
   });
-});
+
+  /**
+   * Requirements: Explaining Itself 2.1, 2.2, 2.3, 2.4, 2.5
+   *
+   * Answering used to end in a receipt with nowhere to go, and a button whose
+   * words never changed. Only a browser proves a member is not stranded: the
+   * unit tests know the link renders, not that it leads anywhere.
+   */
+  test('answering ends somewhere, and says the answers can still change', async ({ page }) => {
+    await signIn(page, EMAIL);
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /health check/i }).click();
+    await page.getByRole('link', { name: /answer the health check/i }).click();
+
+    // Answer every question on the form
+    /*
+      Every question, scored.
+
+      The count is asserted first because `all()` does not wait: called before
+      the form has rendered it returns an empty list, and a loop over nothing
+      passes silently — which is how the first version of this test reached a
+      validation error while claiming to have answered everything.
+
+      The radio inputs are sr-only, so the wrapping label is both the visible
+      control and what a real user clicks.
+    */
+    const scores = page.getByRole('radiogroup');
+    await expect(scores).toHaveCount(5);
+    for (const group of await scores.all()) {
+      await group.locator('label').filter({ hasText: /^4$/ }).click();
+    }
+    await page.getByRole('button', { name: /^submit responses$/i }).click();
+
+    const confirmation = page.getByRole('status');
+    await expect(confirmation).toContainText(/saved/i);
+    await expect(confirmation).toContainText(/until this health check closes/i);
+
+    // The form is still there, and the control now says which thing it does
+    await expect(page.getByRole('button', { name: /^update responses$/i })).toBeVisible();
+
+    // Pressing it again is harmless, and says so
+    await page.getByRole('button', { name: /^update responses$/i }).click();
+    await expect(confirmation).toContainText(/no changes/i);
+
+    // And there is a door back into the application
+    await confirmation.getByRole('link', { name: /health check/i }).click();
+    await expect(page).toHaveURL(/\/me\/health-check$/);
+  });
+
+  /**
+   * Requirements: Explaining Itself 2.3
+   *
+   * Written first as "a member holding only a session link is offered no door
+   * they cannot open", and it was wrong about the product. Opening a session
+   * link establishes a session for that member until the check closes —
+   * `/api/auth/session-link/[token]` sets the cookie — so there is no audience
+   * that reaches this confirmation signed in to nothing. The spec assumed one,
+   * and so did the first version of this test, which then passed by racing the
+   * request it should have been waiting for.
+   *
+   * What matters is the same either way: the door leads somewhere.
+   */
+  test('a member who arrived on a session link alone can still get into the app', async ({ page, context }) => {
+    await signIn(page, EMAIL);
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /health check/i }).click();
+    await page.getByRole('link', { name: /answer the health check/i }).click();
+    const formUrl = page.url();
+
+    // Drop the sign-in: now the link is all they hold, as it is for someone
+    // who followed a prompt on a device that has never seen this application
+    await context.clearCookies();
+    await page.goto(formUrl);
+
+    const scores = page.getByRole('radiogroup');
+    await expect(scores).toHaveCount(5);
+    for (const group of await scores.all()) {
+      await group.locator('label').filter({ hasText: /^3$/ }).click();
+    }
+    await page.getByRole('button', { name: /responses$/i }).click();
+
+    const confirmation = page.getByRole('status');
+    await expect(confirmation).toContainText(/saved/i);
+
+    await confirmation.getByRole('link', { name: /health check/i }).click();
+    await expect(page).toHaveURL(/\/me\/health-check$/);
+    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+  });});

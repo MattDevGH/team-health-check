@@ -12,6 +12,7 @@
 import { useEffect, useState, useCallback } from 'react';
 
 import { FeedbackForm } from '@/components/feedback-form/feedback-form';
+import { answersMatch, type Answer } from '@/lib/answers-match';
 import type { FeedbackFormProps, Question, ResponseInput } from '@/components/feedback-form/types';
 
 interface QuestionData {
@@ -55,6 +56,25 @@ export default function SessionLinkPage({ params }: PageProps) {
   const [context, setContext] = useState<SessionContext | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  /**
+   * What the server holds, as far as this page knows.
+   *
+   * Null until the link context arrives. Compared against each submission so
+   * a repeat can be named as one — a member pressed the button twice on
+   * production and had no way to tell whether they had answered twice.
+   */
+  const [savedAnswers, setSavedAnswers] = useState<Answer[] | null>(null);
+  const [lastOutcome, setLastOutcome] = useState<'saved' | 'unchanged'>('saved');
+  /**
+   * Whether the reader has an application to return to.
+   *
+   * Usually yes: opening a session link establishes a session for that member
+   * until the check closes. Asked rather than assumed because the exceptions
+   * are real — a browser refusing cookies, or a session that expired as the
+   * check closed — and sending either of those to `/me` would be sending them
+   * to a sign-in page wearing the clothes of a destination.
+   */
+  const [canReturnToApp, setCanReturnToApp] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [results, setResults] = useState<RollingAverageResult[]>([]);
 
@@ -78,6 +98,13 @@ export default function SessionLinkPage({ params }: PageProps) {
         const data: SessionContext = await res.json();
         if (!cancelled) {
           setContext(data);
+          setSavedAnswers(
+            data.responses.map((response) => ({
+              questionId: response.questionId,
+              score: response.score,
+              trendIndicator: response.trendIndicator as Answer['trendIndicator'],
+            })),
+          );
           setSessionEnded(data.sessionStatus === 'closed');
           setLoading(false);
         }
@@ -132,13 +159,46 @@ export default function SessionLinkPage({ params }: PageProps) {
 
       const data = await res.json();
       setResults(data.responses ?? []);
+      /*
+        Compared after the request rather than before it. Re-sending is
+        harmless — the server upserts — and skipping it would strand a member
+        whose first attempt failed, which is the case where pressing the
+        button again is exactly the right instinct.
+      */
+      setLastOutcome(savedAnswers && answersMatch(savedAnswers, responses) ? 'unchanged' : 'saved');
+      setSavedAnswers(responses);
       setSubmitted(true);
       setIsSubmitting(false);
     } catch {
       setIsSubmitting(false);
       throw new Error('Submission failed. Please retry.');
     }
-  }, [context]);
+  }, [context, savedAnswers]);
+
+  /*
+   * Asked after a submission rather than on arrival: until then there is
+   * nothing to offer, and every anonymous visit would make a request whose
+   * only possible answer is 401.
+   */
+  useEffect(() => {
+    if (!submitted) return;
+
+    let cancelled = false;
+
+    async function askWhoIsReading() {
+      try {
+        const res = await fetch('/api/me');
+        if (!cancelled) setCanReturnToApp(res.ok);
+      } catch {
+        // A failed request is not a signed-out member, but offering a link
+        // that may not work is worse than offering none.
+        if (!cancelled) setCanReturnToApp(false);
+      }
+    }
+
+    askWhoIsReading();
+    return () => { cancelled = true; };
+  }, [submitted]);
 
   if (loading) {
     return (
@@ -174,57 +234,6 @@ export default function SessionLinkPage({ params }: PageProps) {
     );
   }
 
-  // Submission confirmation state with rolling averages
-  if (submitted) {
-    return (
-      <main className="min-h-screen bg-gray-50 py-6 px-4">
-        <div className="max-w-lg mx-auto">
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">
-              Thank you!
-            </h1>
-            <p className="text-gray-600">
-              Your responses have been submitted successfully.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            {results.map((result) => {
-              const question = context.allQuestions.find(
-                (q) => q.id === result.questionId
-              );
-              return (
-                <div
-                  key={result.questionId}
-                  className="bg-white rounded-lg border border-gray-200 p-4"
-                >
-                  <p className="font-medium text-gray-800">
-                    {question?.title ?? result.questionId}
-                  </p>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-sm text-gray-600">
-                      Your score: {result.score}
-                    </span>
-                    <span className="text-sm text-gray-500">·</span>
-                    {result.rollingAverage !== null ? (
-                      <span className="text-sm text-blue-600 font-medium">
-                        Recent team average: {result.rollingAverage}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-gray-600 italic">
-                        More responses needed
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </main>
-    );
-  }
-
   // Active form state
   const sortedQuestions = [...context.questions].sort(
     (a, b) => a.displayOrder - b.displayOrder
@@ -247,6 +256,13 @@ export default function SessionLinkPage({ params }: PageProps) {
     trendIndicator: r.trendIndicator as ResponseInput['trendIndicator'],
   }));
 
+  /*
+   * Answers exist if the link context arrived with some, or if this visit has
+   * just saved some. The second half is what a member was missing: they
+   * submitted, saw an identical button, and pressed it again to find out.
+   */
+  const hasSavedAnswers = submitted || context.responses.length > 0;
+
   const isMicroPulse = context.cadencePreference === 'micro_pulse';
 
   return (
@@ -259,6 +275,47 @@ export default function SessionLinkPage({ params }: PageProps) {
           Hi {context.memberName}, rate each area from 1 (needs work) to 5 (great).
         </p>
 
+        {/*
+          The confirmation sits above the form rather than replacing it.
+
+          Submitting used to swap the whole page for a receipt, which said
+          nothing about whether the answers were still yours to change — so
+          pressing the button again read as submitting twice. The product
+          allows revision until close, and a member who believes an answer is
+          final answers more cautiously.
+        */}
+        {submitted && (
+          <div
+            role="status"
+            className="mb-6 rounded-lg border border-green-700 bg-green-50 p-4"
+          >
+            <p className="font-medium text-green-900">
+              {lastOutcome === 'unchanged'
+                ? 'No changes — your answers were already saved.'
+                : 'Thank you — your answers are saved.'}
+            </p>
+            <p className="mt-1 text-sm text-green-900">
+              You can change them until this health check closes; just pick a different
+              score and update your answers.
+            </p>
+
+            {/*
+              Offered only where it leads somewhere. This page carries no
+              navigation of its own — it is reached from a prompt, not from
+              inside the application — so this link is the door back in, and
+              where there is no session the confirmation stands on its own.
+            */}
+            {canReturnToApp && (
+              <a
+                href="/me/health-check"
+                className="mt-3 inline-block font-medium text-green-900 underline underline-offset-2 hover:text-green-950 focus:outline-none focus:ring-2 focus:ring-green-700 focus:ring-offset-2"
+              >
+                Go to your health check page
+              </a>
+            )}
+          </div>
+        )}
+
         {isMicroPulse ? (
           <MicroPulseView
             questions={selectedFormQuestions}
@@ -267,6 +324,7 @@ export default function SessionLinkPage({ params }: PageProps) {
             initialResponses={initialResponses}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
+            hasSavedAnswers={hasSavedAnswers}
           />
         ) : (
           <FeedbackForm
@@ -274,7 +332,44 @@ export default function SessionLinkPage({ params }: PageProps) {
             initialResponses={initialResponses}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
+            hasSavedAnswers={hasSavedAnswers}
           />
+        )}
+
+        {/*
+          What the team is averaging, which is most of why a member looks.
+          Below the form now: it used to be the whole page after submitting,
+          and standing in for the form is what made the loop feel finished.
+        */}
+        {submitted && results.length > 0 && (
+          <section aria-label="Your answers and the team average" className="mt-6 space-y-3">
+            {results.map((result) => {
+              const question = context.allQuestions.find((q) => q.id === result.questionId);
+              return (
+                <div
+                  key={result.questionId}
+                  className="bg-white rounded-lg border border-gray-200 p-4"
+                >
+                  <p className="font-medium text-gray-800">
+                    {question?.title ?? result.questionId}
+                  </p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-sm text-gray-600">Your score: {result.score}</span>
+                    <span className="text-sm text-gray-500">·</span>
+                    {result.rollingAverage !== null ? (
+                      <span className="text-sm text-blue-600 font-medium">
+                        Recent team average: {result.rollingAverage}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-600 italic">
+                        More responses needed
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </section>
         )}
       </div>
     </main>
@@ -293,6 +388,7 @@ function MicroPulseView({
   initialResponses,
   onSubmit,
   isSubmitting,
+  hasSavedAnswers,
 }: MicroPulseViewProps) {
   const [showAll, setShowAll] = useState(false);
   const visibleQuestions = showAll ? allQuestions : questions;
@@ -306,6 +402,7 @@ function MicroPulseView({
           initialResponses={initialResponses}
           onSubmit={onSubmit}
           isSubmitting={isSubmitting}
+          hasSavedAnswers={hasSavedAnswers}
         />
       ) : (
         <p className="text-center text-gray-600">

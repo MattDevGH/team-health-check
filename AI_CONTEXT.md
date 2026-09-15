@@ -543,7 +543,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1573 tests across 173 files**, including
+The Vitest suite now contains **1614 tests across 174 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
@@ -746,7 +746,37 @@ mutation rather than assumed — an audit of a state the page never entered
 reports a pass for work it did not do, which is how the amber contrast defect
 survived.
 
-**Submitting has no ending.** No confirmation, no way onward, and a button
+**Submitting has no ending** — **phase 2, done.**
+
+The confirmation is a live region above the form rather than a receipt
+replacing it, the control reads *Update responses* once answers exist, and a
+repeat submission is named as one — `answersMatch` compares what was sent
+against what the page believes is saved, so an answer changed and changed back
+counts as no change, which a dirty flag would have got wrong. The request goes
+out either way: it is idempotent, and skipping it would strand a member whose
+first attempt failed.
+
+**A premise in the spec was wrong, and only a browser found it.** The design
+said a member on a session link alone may be signed in to nothing, so the way
+onward had to work for two audiences. In fact
+`/api/auth/session-link/[token]` establishes a session for that member until
+the check closes — opening the link signs you in — so there is only one
+audience. The guard on the link stays for the cases that are real (cookies
+refused, session expired at close), and the E2E now asserts what is true: a
+member holding only a link reaches `/me/health-check` and the navigation shell
+from the confirmation.
+
+Two test defects were found in the same run, both of the kind that report
+success for work not done: `locator.all()` does not wait, so a loop over it
+before the form rendered clicked nothing while claiming to have answered
+everything; and the first version of the two-audiences test passed by racing
+the `/api/me` request it should have waited for. `seedTeam` also could not
+reseed a team that had a session — the Team delete failed a foreign key, on
+the retry that follows a first failure, turning one readable error into two.
+
+The original finding, for the record:
+
+**Submitting had no ending.** No confirmation, no way onward, and a button
 reading exactly as before anything was saved — so pressing it again looks like
 submitting twice. Decided: confirm and keep the form, because the tool allows
 revision until close and a member who thinks answers are final answers more

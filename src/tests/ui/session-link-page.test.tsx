@@ -195,7 +195,9 @@ describe('Session Link Landing Page', () => {
       expect(within(screen.getByRole('radiogroup', { name: 'Ease of Delivery score' }))
         .getByRole('radio', { name: '3' })).toBeChecked();
 
-      await user.click(screen.getByRole('button', { name: /submit/i }));
+      // Update, not Submit: this fixture arrives with an answer already saved,
+      // which is exactly when the control changes what it says
+      await user.click(screen.getByRole('button', { name: /update responses/i }));
       await waitFor(() => expect(submittedBody).toBeDefined());
       expect(submittedBody?.responses).toEqual([
         { questionId: QUESTIONS[0].id, score: 4 },

@@ -337,3 +337,52 @@ describe('FeedbackForm', () => {
     });
   });
 });
+
+/**
+ * The control says which of the two things it does.
+ *
+ * Requirements: Explaining Itself 2.4
+ *
+ * "Submit responses" reads as a first submission whether or not one has
+ * happened. A member who had already answered pressed it again and could not
+ * tell whether they had just answered twice.
+ */
+describe('FeedbackForm submit control', () => {
+  const QUESTIONS = [
+    { id: 'q-delivering-value', title: 'Delivering Value', description: 'How well…?' },
+  ];
+
+  it('offers to submit when nothing has been answered', () => {
+    render(<FeedbackForm questions={QUESTIONS} onSubmit={async () => {}} />);
+
+    expect(screen.getByRole('button', { name: /^submit/i })).toBeInTheDocument();
+  });
+
+  it('offers to update once answers exist', () => {
+    render(
+      <FeedbackForm
+        questions={QUESTIONS}
+        hasSavedAnswers
+        onSubmit={async () => {}}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /update/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^submit/i })).not.toBeInTheDocument();
+  });
+
+  it('says which of the two it is doing while it is doing it', async () => {
+    // "Submitting…" under a button that says Update is the same confusion,
+    // one step later
+    render(
+      <FeedbackForm
+        questions={QUESTIONS}
+        hasSavedAnswers
+        isSubmitting
+        onSubmit={async () => {}}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /updating/i })).toBeInTheDocument();
+  });
+});

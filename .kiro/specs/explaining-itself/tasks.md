@@ -66,23 +66,32 @@ column, and it is the one that would have surfaced a stopped cron.
 
 ### 2.1 Confirm, and say answers can still change
 
-- [ ] Failing test: after submitting, the page says the answers were saved
-- [ ] Failing test: it says they can be changed until the check closes
-- [ ] Failing test: the form is still there and still editable
-- [ ] Failing test: the control reads as *update* once answers exist, not as a
+- [x] Failing test: after submitting, the page says the answers were saved
+- [x] Failing test: it says they can be changed until the check closes
+- [x] Failing test: the form is still there and still editable
+- [x] Failing test: the control reads as *update* once answers exist, not as a
       first submission
-- [ ] Failing test: resubmitting unchanged answers is harmless and says so
+- [x] Failing test: resubmitting unchanged answers is harmless and says so
 - _Requirements: 2.1, 2.2, 2.4, 2.5_
 - _Property: 3_
 
 ### 2.2 Offer a way onward that works for both audiences
 
-- [ ] Failing test: a signed-in member is offered their health check page
-- [ ] Failing test: someone on a session link alone is not offered a link they
+- [x] Failing test: a signed-in member is offered their health check page
+- [x] Failing test: someone on a session link alone is not offered a link they
       cannot use — they arrived from a prompt and may be signed into nothing
-- [ ] Failing test: the confirmation stands on its own where no link applies
-- [ ] axe and keyboard operation on the confirmed state
+- [x] Failing test: the confirmation stands on its own where no link applies
+- [x] axe and keyboard operation on the confirmed state
 - _Requirements: 2.3, NFR 2.1_
+
+**Corrected while building 2.2:** the spec said a member on a session link
+alone may be signed in to nothing, and that is not how this product works.
+`/api/auth/session-link/[token]` establishes a session for that member until
+the check closes, so everyone who reaches the confirmation has somewhere to
+go. The guard on the link stays for the cases that are real — a browser
+refusing cookies, a session expired at close — and the decision not to
+redirect stands on its own reason: taking the form away is the thing this
+phase exists to stop.
 
 **Checkpoint:** the loop ends somewhere. One PR.
 

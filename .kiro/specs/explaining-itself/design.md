@@ -45,9 +45,16 @@ redirect. A redirect was rejected because a member on a session link may have
 nowhere to be sent — they arrived from a prompt and may not be signed in to
 anything else.
 
-**The way onward has to work for both audiences.** A signed-in member can go to
-their health check page; someone on a session link alone cannot. The link is
-offered where it will work and the confirmation stands alone where it will not.
+**The way onward has to work for whoever is reading.** ~~A signed-in member can
+go to their health check page; someone on a session link alone cannot.~~
+Corrected 2026-09-15, by a browser test: opening a session link *establishes a
+session* for that member until the check closes, so there is no audience that
+reaches the confirmation signed in to nothing. The link is still offered only
+on a confirmed session, for the cases that are real — a browser refusing
+cookies, or a session that expired as the check closed.
+
+The decision not to redirect is unaffected: it stands on revision until close,
+not on the audience.
 
 ### 3. The dashboard stays open to everyone; Settings does not
 
