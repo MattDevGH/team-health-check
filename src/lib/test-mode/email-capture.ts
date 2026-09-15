@@ -12,7 +12,7 @@
  * production container only substitutes this service when the flag is set, and
  * `src/app/api/test/magic-link/route.ts` 404s without it.
  *
- * Requirements: 10.2, 10.5, 10.6
+ * Requirements: Integration 10.2, 10.5, 10.6
  */
 
 import type { EmailService } from '@/lib/services/email.service';

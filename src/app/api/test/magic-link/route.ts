@@ -10,7 +10,7 @@
  * A missing capture is answered with an explicit 404 rather than an empty
  * success, so a caller cannot mistake "no token" for "nothing to test" and skip.
  *
- * Requirements: 10.2, 10.5, 10.6
+ * Requirements: Integration 10.2, 10.5, 10.6
  */
 
 import { isTestMode, latestCapturedToken } from '@/lib/test-mode/email-capture';

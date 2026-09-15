@@ -5,7 +5,7 @@
  * inbox. It hands out live authentication tokens, so its guard matters as much
  * as its function.
  *
- * Requirements: 10.2, 10.5, 10.6
+ * Requirements: Integration 10.2, 10.5, 10.6
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';

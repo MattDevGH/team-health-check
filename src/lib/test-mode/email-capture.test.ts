@@ -6,7 +6,7 @@
  * nothing. This seam replaces that with a real capture: when it is unavailable
  * the caller gets a definite failure, never a skip.
  *
- * Requirements: 10.2, 10.5, 10.6
+ * Requirements: Integration 10.2, 10.5, 10.6
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';

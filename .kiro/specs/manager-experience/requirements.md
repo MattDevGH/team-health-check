@@ -68,6 +68,7 @@ Slack linking, and every team-scoped query.
 
 *As built: a contributor sees no lifecycle panel at all, rather than the Session_State without its controls. The panel exists to act on; the trend data a contributor has a stake in is already on the same page. Verified in `e2e/session-lifecycle.spec.ts`.*
 7. WHEN a session has closed but its aggregates have not yet been materialised, THE Web_Interface SHALL say so explicitly rather than presenting the session as though it has no data.
+8. WHEN a Delivery Manager closes a Health_Check_Session that nobody has answered, THE confirmation SHALL say what closing it will record. *(Added 2026-09-15. The behaviour was built and tested first and cited a criterion that had never been written — `Dashboard Refinement 4.5`, in a requirement about the dashboard panel rather than the close confirmation. A check nobody answered is real information, so the tool records it rather than refusing; what this guards against is the accident, which is how both empty checks in the live database were created.)*
 
 ### Requirement 3: Dashboard Comprehension
 

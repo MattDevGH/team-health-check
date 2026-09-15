@@ -16,7 +16,7 @@
  * database would otherwise surface as confusing assertion failures, or worse,
  * as tests that skip themselves.
  *
- * Requirements: 10.2, 10.5, 10.6
+ * Requirements: Integration 10.2, 10.5, 10.6
  */
 
 import { execFileSync } from 'node:child_process';
