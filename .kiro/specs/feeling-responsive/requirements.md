@@ -108,7 +108,7 @@ nothing in the suite can tell when it comes back.
 
 1. A dashboard load SHALL make at most 2 server requests for its data.
 2. `GET /api/me` SHALL issue at most 5 database queries; `GET /api/teams/[teamId]/trends` at most 9. Ratchets, set at today's **measured** counts — the trends figure was estimated at 7 from the awaits visible in the route, and measurement found two more inside the services it calls.
-3. Authenticated pages SHALL record a Cumulative Layout Shift below 0.1.
+3. Authenticated pages SHALL record a Cumulative Layout Shift below 0.03 — a ratchet at today's measured 0.016, not the 0.1 industry threshold. The dashboard scored 0.046 *with* the pop-in this milestone removes, so a test written to 0.1 would have watched the defect and said nothing.
 
 ### NFR 2: No Regression In What Already Works
 
