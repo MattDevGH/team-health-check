@@ -1,7 +1,7 @@
 /**
  * Turning an audit value into something a person can read.
  *
- * Requirements: Manager Experience 5.x (audit log legibility)
+ * Requirements: 18.2, 18.4
  *
  * Raised by Matt on 2026-09-15, after the rest of the entry had been made
  * readable: the `after` state of a schedule change still rendered as
