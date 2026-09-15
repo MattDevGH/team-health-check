@@ -9,6 +9,9 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { axe, toHaveNoViolations } from 'jest-axe';
+
+expect.extend(toHaveNoViolations);
 
 import { QuestionDetailView } from './question-detail-view';
 
@@ -21,6 +24,7 @@ interface SessionAverage {
 interface SessionData {
   sessionId: string;
   closedAt: string;
+  materialisedAt?: string | null;
   averages: SessionAverage[];
 }
 
@@ -244,14 +248,20 @@ describe('QuestionDetailView', () => {
   });
 
   describe('Requirement 8.7: Anonymity threshold suppression', () => {
-    it('shows "Insufficient data" for sessions below threshold in anonymous mode', async () => {
+    it('names the threshold for sessions below it in anonymous mode', async () => {
+      /*
+       * Was "Insufficient data", which reads as a fault in the data. The data
+       * is fine; the team is small. Naming the threshold tells a reader what
+       * would make the value appear, and matches the latest-session panel
+       * word for word.
+       */
       const user = userEvent.setup();
       render(<QuestionDetailView sessions={SESSIONS} anonymousMode={true} />);
 
       // team-collaboration in s2 has only 2 responses (below threshold of 3)
       await user.click(screen.getByRole('button', { name: /team collaboration/i }));
 
-      expect(screen.getByText('Insufficient data')).toBeInTheDocument();
+      expect(screen.getByText(/hidden until 3 people have answered/i)).toBeInTheDocument();
     });
 
     it('does not suppress data for sessions at or above threshold in anonymous mode', async () => {
@@ -357,4 +367,191 @@ describe('QuestionDetailView question themes and their questions', () => {
 
     expect(screen.getByRole('button', { name: /never answered/i })).toBeInTheDocument();
   });
+});
+
+/**
+ * Explaining Itself 1.1, 1.2, 1.3, 1.5.
+ *
+ * The same four silences as the latest-session panel, in the list a reader
+ * opens next. Getting them right on one surface and not the other would be
+ * worse than getting them wrong on both: the two would disagree about the same
+ * session, and a reader would have no way to tell which was lying.
+ */
+describe('QuestionDetailView says why a score is missing', () => {
+  const CLOSED = '2026-09-14T17:00:00.000Z';
+  const justAfter = new Date('2026-09-14T17:02:00.000Z');
+  const wellAfter = new Date('2026-09-14T19:00:00.000Z');
+
+  /** Closed, and nothing has been computed for any theme. */
+  const notMaterialised: SessionData[] = [
+    { sessionId: 's1', closedAt: CLOSED, averages: [] },
+  ];
+
+  async function openDeliveringValue() {
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /delivering value/i }));
+    return screen.getByRole('region', { name: /delivering value/i });
+  }
+
+  const QUESTIONS = [
+    { id: 'q-delivering-value', title: 'Delivering Value', description: 'How well…?' },
+  ];
+
+  it('says results are being prepared for a check that just closed', async () => {
+    render(
+      <QuestionDetailView
+        sessions={notMaterialised}
+        questions={QUESTIONS}
+        anonymousMode={false}
+        now={justAfter}
+      />,
+    );
+
+    expect(await openDeliveringValue()).toHaveTextContent(/being prepared/i);
+  });
+
+  it('says how long, so the wait is bounded', async () => {
+    render(
+      <QuestionDetailView
+        sessions={notMaterialised}
+        questions={QUESTIONS}
+        anonymousMode={false}
+        now={justAfter}
+      />,
+    );
+
+    expect(await openDeliveringValue()).toHaveTextContent(/minutes/i);
+  });
+
+  it('does not call an uncomputed session unanswered, however long ago it closed', async () => {
+    /*
+     * The claim that would be false. Nobody has been accused of ignoring a
+     * check here — the results were never computed, which is a fact about the
+     * scheduler.
+     */
+    render(
+      <QuestionDetailView
+        sessions={notMaterialised}
+        questions={QUESTIONS}
+        anonymousMode={false}
+        now={wellAfter}
+      />,
+    );
+
+    const detail = await openDeliveringValue();
+    expect(detail).toHaveTextContent(/overdue/i);
+    expect(detail).not.toHaveTextContent(/no responses/i);
+  });
+
+  it('keeps unanswered distinct from suppressed for a materialised session', async () => {
+    render(
+      <QuestionDetailView
+        sessions={[
+          {
+            sessionId: 's1',
+            closedAt: CLOSED,
+            materialisedAt: CLOSED,
+            averages: [{ questionId: 'q-team-collaboration', averageScore: 4, responseCount: 6 }],
+          },
+        ]}
+        questions={QUESTIONS}
+        anonymousMode={true}
+        now={wellAfter}
+      />,
+    );
+
+    const detail = await openDeliveringValue();
+    expect(detail).toHaveTextContent(/no responses/i);
+    expect(detail).not.toHaveTextContent(/being prepared|overdue/i);
+  });
+
+  it('says what would make a suppressed value appear, rather than naming the problem', async () => {
+    // "Insufficient data" told a reader there was a problem with the data. The
+    // truth is that the data is fine and the team is small.
+    render(
+      <QuestionDetailView
+        sessions={[
+          {
+            sessionId: 's1',
+            closedAt: CLOSED,
+            materialisedAt: CLOSED,
+            averages: [{ questionId: 'q-delivering-value', averageScore: 4, responseCount: 2 }],
+          },
+        ]}
+        questions={QUESTIONS}
+        anonymousMode={true}
+        now={wellAfter}
+      />,
+    );
+
+    expect(await openDeliveringValue()).toHaveTextContent(/hidden until 3 people have answered/i);
+  });
+});
+
+/**
+ * Explaining Itself NFR 2.1.
+ *
+ * Audited expanded, which is the only state where the explanations exist. A
+ * collapsed list has none of this markup in the accessibility tree at all, so
+ * auditing it would report a clean result for something it never looked at.
+ */
+describe('QuestionDetailView accessibility in every state', () => {
+  const CLOSED = '2026-09-14T17:00:00.000Z';
+  const QUESTIONS = [
+    { id: 'q-delivering-value', title: 'Delivering Value', description: 'How well…?' },
+  ];
+
+  const states = {
+    pending: {
+      sessions: [{ sessionId: 's1', closedAt: CLOSED, averages: [] }],
+      now: new Date('2026-09-14T17:02:00.000Z'),
+      anonymousMode: false,
+    },
+    overdue: {
+      sessions: [{ sessionId: 's1', closedAt: CLOSED, averages: [] }],
+      now: new Date('2026-09-14T19:00:00.000Z'),
+      anonymousMode: false,
+    },
+    unanswered: {
+      sessions: [
+        {
+          sessionId: 's1',
+          closedAt: CLOSED,
+          materialisedAt: CLOSED,
+          averages: [{ questionId: 'q-team-collaboration', averageScore: 4, responseCount: 6 }],
+        },
+      ],
+      now: new Date('2026-09-14T19:00:00.000Z'),
+      anonymousMode: false,
+    },
+    suppressed: {
+      sessions: [
+        {
+          sessionId: 's1',
+          closedAt: CLOSED,
+          materialisedAt: CLOSED,
+          averages: [{ questionId: 'q-delivering-value', averageScore: 4, responseCount: 2 }],
+        },
+      ],
+      now: new Date('2026-09-14T19:00:00.000Z'),
+      anonymousMode: true,
+    },
+  };
+
+  for (const [name, props] of Object.entries(states)) {
+    it(`has no axe-detectable violations while ${name}`, async () => {
+      const user = userEvent.setup();
+      const { container } = render(<QuestionDetailView {...props} questions={QUESTIONS} />);
+
+      await user.click(screen.getByRole('button', { name: /delivering value/i }));
+
+      // Proof the audit has something to look at. A collapsed list keeps this
+      // markup out of the accessibility tree entirely, and axe would then
+      // report a clean result for a state it never saw.
+      const detail = screen.getByRole('region', { name: /delivering value/i });
+      expect(detail).toHaveTextContent(/being prepared|overdue|no responses|hidden until/i);
+
+      expect(await axe(container)).toHaveNoViolations();
+    });
+  }
 });

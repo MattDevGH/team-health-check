@@ -15,6 +15,12 @@
  */
 
 import { pluralise } from '@/lib/format';
+import {
+  describeResultState,
+  materialisationEvidence,
+  resultState,
+  type ResultState,
+} from './result-state';
 
 interface SessionAverage {
   questionId: string;
@@ -25,6 +31,8 @@ interface SessionAverage {
 interface SessionData {
   sessionId: string;
   closedAt: string;
+  /** When aggregates were computed. Null means never — not the same as empty. */
+  materialisedAt?: string | null;
   averages: SessionAverage[];
 }
 
@@ -36,6 +44,8 @@ interface QuestionCatalogueEntry {
 }
 
 interface LatestSessionPanelProps {
+  /** Injectable so "being prepared" versus "overdue" is testable without waiting. */
+  now?: Date;
   /** Closed sessions, oldest first, as the trends endpoint returns them. */
   sessions: SessionData[];
   /**
@@ -91,12 +101,20 @@ export function LatestSessionPanel({
   sessions,
   questions,
   anonymousMode,
+  now = new Date(),
 }: LatestSessionPanelProps) {
   if (sessions.length === 0) return null;
 
   const latest = sessions[sessions.length - 1];
   const previous = sessions[sessions.length - 2];
 
+  // Derived once for the session rather than per row, so no two themes can
+  // disagree about whether the session was ever materialised.
+  const materialisedAt = materialisationEvidence({
+    materialisedAt: latest.materialisedAt ?? null,
+    closedAt: latest.closedAt,
+    averages: latest.averages,
+  });
   /**
    * Every theme the team is asked about, not only those with answers.
    *
@@ -144,10 +162,16 @@ export function LatestSessionPanel({
           </thead>
           <tbody>
             {rows.map(({ id, title, average }) => {
-              const suppressed =
-                average !== undefined &&
-                anonymousMode &&
-                average.responseCount < ANONYMITY_THRESHOLD;
+              // One selector decides all four outcomes, so the panel and the
+              // themes list cannot drift into disagreeing about the same data.
+              const state = resultState({
+                average,
+                materialisedAt: materialisedAt,
+                closedAt: latest.closedAt,
+                now,
+                anonymousMode,
+                anonymityThreshold: ANONYMITY_THRESHOLD,
+              });
               const previousScore = previous?.averages.find(
                 a => a.questionId === id,
               )?.averageScore;
@@ -158,32 +182,30 @@ export function LatestSessionPanel({
                     {title}
                   </th>
 
-                  {average === undefined ? (
-                    // Nobody answered. Deliberately worded differently from
-                    // suppression: one means silence, the other means people
-                    // answered and there were too few to show safely.
-                    <td colSpan={3} className="py-1 text-gray-500">
-                      No responses
-                    </td>
-                  ) : suppressed ? (
-                    // Said plainly rather than left blank: a gap reads as
-                    // missing data, when in fact the team is too small for this
-                    // answer to stay anonymous
-                    <td colSpan={3} className="py-1 italic text-amber-700">
-                      Hidden until {ANONYMITY_THRESHOLD} people have answered
-                    </td>
-                  ) : (
+                  {/*
+                    Four reasons a cell can be empty, and they are different
+                    news. Being prepared resolves in minutes; overdue means the
+                    scheduler has stopped; hidden never resolves without more
+                    people; and no responses means silence. Rendering all four
+                    as blankness is how a working tool came to look broken.
+
+                    Worded by the shared selector so this panel and the themes
+                    list below it cannot give one session two accounts.
+                  */}
+                  {state.kind === 'shown' ? (
                     <>
                       <td className="py-1 pr-4 font-medium text-gray-900">
-                        {average.averageScore.toFixed(1)}
+                        {state.average.averageScore.toFixed(1)}
                       </td>
                       <td className="py-1 pr-4 text-gray-700">
-                        {describeChange(average.averageScore, previousScore)}
+                        {describeChange(state.average.averageScore, previousScore)}
                       </td>
                       <td className="py-1 text-gray-600">
-                        {pluralise(average.responseCount, 'response')}
+                        {pluralise(state.average.responseCount, 'response')}
                       </td>
                     </>
+                  ) : (
+                    <ResultMessageCell state={state} />
                   )}
                 </tr>
               );
@@ -192,5 +214,27 @@ export function LatestSessionPanel({
         </table>
       </div>
     </section>
+  );
+}
+
+/**
+ * A cell that explains an absent score.
+ *
+ * amber-800 rather than amber-600: amber-600 measures 3.19:1 on white, which
+ * fails AA outright. jsdom’s axe cannot judge colour, so this is checked by
+ * hand and stated here.
+ */
+function ResultMessageCell({ state }: { state: Exclude<ResultState, { kind: 'shown' }> }) {
+  const message = describeResultState(state);
+
+  return (
+    <td
+      colSpan={3}
+      className={`py-1 italic ${
+        message.tone === 'attention' ? 'text-amber-800' : 'text-gray-600'
+      }`}
+    >
+      {message.text}
+    </td>
   );
 }

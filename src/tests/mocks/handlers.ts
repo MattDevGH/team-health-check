@@ -109,7 +109,9 @@ export const handlers = [
    * - sessions[]: { sessionId, closedAt (ISO string), averages[] }
    * - trendDistribution[]: array of { questionId, improving, stable, declining }
    * - privacyMode: string
-   * - requiresMoreData?: boolean
+   * - requiresMoreData?: boolean, present only when fewer than two sessions have
+   *   closed. The sessions themselves are sent either way: one closed check has
+   *   results to read and no trend to draw.
    *
    * Per Requirement 12.4: uses `closedAt` (not `closeDate`), `averages` (not `questions`),
    * and `trendDistribution` is an array (not an object).
@@ -120,6 +122,9 @@ export const handlers = [
         {
           sessionId: 'session-1',
           closedAt: '2025-01-08T17:00:00Z',
+          // When the aggregates were computed. Null would mean never, which the
+          // dashboard reports as pending or overdue rather than as unanswered.
+          materialisedAt: '2025-01-08T17:01:00Z',
           averages: [
             { questionId: 'q-delivering-value', averageScore: 3.5, responseCount: 5 },
             { questionId: 'q-team-collaboration', averageScore: 4.0, responseCount: 4 },
@@ -128,6 +133,7 @@ export const handlers = [
         {
           sessionId: 'session-2',
           closedAt: '2025-01-15T17:00:00Z',
+          materialisedAt: '2025-01-15T17:01:00Z',
           averages: [
             { questionId: 'q-delivering-value', averageScore: 4.0, responseCount: 6 },
             { questionId: 'q-team-collaboration', averageScore: 3.8, responseCount: 5 },

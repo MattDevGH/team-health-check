@@ -43,7 +43,6 @@ describe('Session lifecycle integration', () => {
       teamRepo: repos.team,
       teamScheduleRepo: repos.teamSchedule,
       sessionRepo: repos.session,
-      sessionAggregateRepo: repos.sessionAggregate,
       sessionService: createSessionService({
         sessionRepo: repos.session,
         sessionLinkRepo: repos.sessionLink,

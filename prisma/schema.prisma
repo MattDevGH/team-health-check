@@ -69,6 +69,9 @@ model HealthCheckSession {
   scheduledCloseAt       DateTime?
   actualOpenAt           DateTime            @default(now())
   actualCloseAt          DateTime?
+  /// When aggregates were computed. Null means never — which is not the same
+  /// as computed-and-empty, and the two were indistinguishable before this.
+  materialisedAt         DateTime?
   createdAt              DateTime            @default(now())
 
   team                   Team                @relation(fields: [teamId], references: [id])

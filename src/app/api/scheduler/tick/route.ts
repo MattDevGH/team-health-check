@@ -93,7 +93,6 @@ export const POST = withErrorHandling(async (request: Request) => {
     teamRepo: repos.team,
     teamScheduleRepo: repos.teamSchedule,
     sessionRepo: repos.session,
-    sessionAggregateRepo: repos.sessionAggregate,
     sessionService,
   });
 

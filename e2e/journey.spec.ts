@@ -342,7 +342,7 @@ test.describe.serial('team lifecycle journey', () => {
     // nothing. Exact per-value assertions live in dashboard.spec.ts, where
     // counts are seeded high enough to display.
     const detail = page.getByRole('region', { name: /psychological safety/i });
-    await expect(detail).toContainText(/insufficient data/i);
+    await expect(detail).toContainText(/hidden until 3 people have answered/i);
     await expect(detail).not.toContainText(psychologicalSafety!.averageScore.toFixed(1));
   });
 });

@@ -165,13 +165,33 @@ describe('applyMigrations', () => {
      * manual ledger insert; failing quietly costs a schema nobody can trust.
      */
     const full = await applyMigrations(client);
-    await client.execute(`DELETE FROM ${LEDGER_TABLE} WHERE name = ?`, [
-      full.applied[full.applied.length - 1],
-    ]);
 
-    await expect(applyMigrations(client)).rejects.toThrow(/already exists/i);
+    /*
+     * The first migration, not the last.
+     *
+     * This used to drop the ledger row for whichever migration happened to be
+     * last, and that made the test depend on the last one being impossible to
+     * replay. A backfill was added whose whole job is to be safe to run twice,
+     * and the test failed — reporting a defect in a migration that was behaving
+     * exactly as intended.
+     *
+     * The schema-creating migration can never be replayed safely, so it is the
+     * honest subject for this property. An idempotent migration losing its
+     * ledger row is not a problem this mechanism has to catch: running it again
+     * changes nothing, which is what idempotent means.
+     */
+    const first = full.applied[0];
+    await client.execute(`DELETE FROM ${LEDGER_TABLE} WHERE name = ?`, [first]);
+
+    // Asserts that it fails, not how SQLite phrases it: the wording differs
+    // between a repeated CREATE TABLE and a repeated ALTER TABLE
+    await expect(applyMigrations(client)).rejects.toThrow();
+
+    const error = await applyMigrations(client).catch((e: unknown) => e);
+    expect(String(error), 'the operator has to be able to act on this').toMatch(
+      new RegExp(first.split(String.fromCharCode(95))[1] + String.fromCharCode(124) + 'SQLITE', 'i'),
+    );
   });
-
   it('records every applied migration in the ledger', async () => {
     const result = await applyMigrations(client);
 
@@ -182,5 +202,133 @@ describe('applyMigrations', () => {
     // The first production run meets a database with no ledger table at all
     await expect(applyMigrations(client)).resolves.toBeDefined();
     await expect(applyMigrations(client)).resolves.toBeDefined();
+  });
+});
+
+/**
+ * Sessions that closed before materialisedAt existed.
+ *
+ * Requirements: Explaining Itself 1.1, 1.4
+ *
+ * Production carried two closed sessions when the column was added. One had
+ * aggregates, so it can be recognised as materialised from its own output. The
+ * other had none — nobody answered it — and that is indistinguishable from a
+ * session the scheduler never reached.
+ *
+ * Left alone, the dashboard would have told a delivery manager that his
+ * scheduler might not be running, about a check that closed exactly as it
+ * should have. The backfill states what is true of every row that predates the
+ * column: they have all had their chance to be materialised.
+ *
+ * Asserted by running the shipped SQL against a real file, because the claim
+ * is about what that statement does to rows, not about what it says.
+ */
+describe('the materialisedAt backfill', () => {
+  // Hooks of its own: this is a sibling of the describe above, and its client
+  // is closed by the time these run
+  beforeEach(() => {
+    workDir = mkdtempSync(path.join(tmpdir(), 'thc-backfill-'));
+    const file = path.join(workDir, 'target.db').replace(/\\/g, '/');
+    client = createClient({ url: `file:${file}` });
+  });
+
+  afterEach(() => {
+    client?.close();
+    try {
+      rmSync(workDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch {
+      // Windows can hold the file briefly
+    }
+  });
+
+  /** The moment the column was added, which is the cutoff the migration uses. */
+  const COLUMN_ADDED = '2026-09-15T11:14:01Z';
+
+  async function seedSession(id: string, closedAt: string | null, status = 'closed') {
+    await client.execute({
+      sql: 'INSERT INTO Team (id, name, privacyMode, archived, timezone, preSessionRecipient, createdAt, updatedAt) VALUES (?, ?, ?, 0, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING',
+      args: ['team-1', 'Team', 'anonymous', 'Europe/London', 'delivery_manager', COLUMN_ADDED, COLUMN_ADDED],
+    });
+    await client.execute({
+      sql: 'INSERT INTO HealthCheckSession (id, teamId, status, actualOpenAt, actualCloseAt, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [id, 'team-1', status, closedAt, closedAt, closedAt ?? COLUMN_ADDED],
+    });
+  }
+
+  async function materialisedAtOf(id: string): Promise<string | null> {
+    const result = await client.execute({
+      sql: 'SELECT materialisedAt FROM HealthCheckSession WHERE id = ?',
+      args: [id],
+    });
+    const value = result.rows[0]?.materialisedAt;
+    return value === null || value === undefined ? null : String(value);
+  }
+
+  /** The backfill on its own, so rows can exist before it runs. */
+  async function runBackfill() {
+    const name = readdirSync(MIGRATIONS_DIR)
+      .filter(entry => entry.includes('backfill_materialised_at'))
+      .sort()
+      .at(-1);
+    expect(name, 'the backfill migration is on disk').toBeDefined();
+
+    const sql = readFileSync(path.join(MIGRATIONS_DIR, String(name), 'migration.sql'), 'utf8');
+    await client.executeMultiple(sql);
+  }
+
+  it('marks a check that closed before the column existed as materialised', async () => {
+    await applyMigrations(client);
+    await seedSession('old-session', '2026-09-14T14:55:08.659+00:00');
+
+    await runBackfill();
+
+    expect(await materialisedAtOf('old-session')).not.toBeNull();
+  });
+
+  it('leaves a check that closed afterwards to record its own', async () => {
+    /*
+     * The row the claim must not touch. A check closing now has results on the
+     * way, and saying they already arrived would report "nobody answered" for a
+     * session whose answers are still being counted.
+     */
+    await applyMigrations(client);
+    await seedSession('new-session', '2027-01-01T09:00:00.000+00:00');
+
+    await runBackfill();
+
+    expect(await materialisedAtOf('new-session')).toBeNull();
+  });
+
+  it('leaves an open check alone, since it has no results due', async () => {
+    await applyMigrations(client);
+    await seedSession('open-session', '2026-09-14T10:00:00.000+00:00', 'open');
+
+    await runBackfill();
+
+    expect(await materialisedAtOf('open-session')).toBeNull();
+  });
+
+  it('does not overwrite a time a session already recorded', async () => {
+    await applyMigrations(client);
+    await seedSession('recorded', '2026-09-14T10:00:00.000+00:00');
+    await client.execute({
+      sql: 'UPDATE HealthCheckSession SET materialisedAt = ? WHERE id = ?',
+      args: ['2026-09-14T10:05:00.000+00:00', 'recorded'],
+    });
+
+    await runBackfill();
+
+    expect(await materialisedAtOf('recorded')).toContain('10:05');
+  });
+
+  it('is safe to run twice, as every migration must be', async () => {
+    await applyMigrations(client);
+    await seedSession('old-session', '2026-09-14T14:55:08.659+00:00');
+
+    await runBackfill();
+    const first = await materialisedAtOf('old-session');
+    await runBackfill();
+
+    expect(await materialisedAtOf('old-session')).toBe(first);
   });
 });

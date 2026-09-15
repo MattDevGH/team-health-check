@@ -45,6 +45,7 @@ const sessionArb = fc
     ({ id, status, actualCloseAt }): HealthCheckSession => ({
       id,
       teamId: 'team-1',
+      materialisedAt: null,
       status,
       scheduledOpenAt: null,
       scheduledCloseAt: null,

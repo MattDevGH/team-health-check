@@ -152,6 +152,18 @@ merge.
 
 **Verify by reading the schema back.** An exit code is not evidence.
 
+**Applied 2026-09-15: `20260914212427_add_materialised_at` and
+`20260915111500_backfill_materialised_at`.** The first adds
+`HealthCheckSession.materialisedAt`, which the dashboard reads to tell "results
+not computed yet" from "nobody answered".
+
+The second exists because production carried a closed session with no responses
+and therefore no output to infer materialisation from. Left alone, the dashboard
+would have reported that the scheduler might not be running, about a check that
+closed exactly as it should have. The backfill claims only what is true of rows
+that predate the column — they have all had their chance — and its cutoff is the
+moment the column was added, so a check closing now still records its own time.
+
 **If a run is interrupted** between applying a migration and recording it, the
 next run reports that a table already exists. That is the expected symptom, and
 the safe direction: the alternative — recording first — would mark a migration

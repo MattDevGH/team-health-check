@@ -48,6 +48,8 @@ export interface HealthCheckSession {
   scheduledCloseAt: Date | null;
   actualOpenAt: Date;
   actualCloseAt: Date | null;
+  /** When aggregates were computed. Null means never — not the same as computed-and-empty. */
+  materialisedAt: Date | null;
   createdAt: Date;
 }
 
