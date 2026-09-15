@@ -335,7 +335,7 @@ The MVP focuses on: a fixed set of health-check questions, simple feedback colle
 1. THE Web_Interface SHALL maintain an append-only audit log for each Team, recording significant configuration changes including: privacy mode changes, session schedule changes, team member additions and removals, Slack delivery window changes, and notification recipient changes.
 2. Each audit log entry SHALL record the type of change, the previous value, the new value, the identity of the user who made the change, and a UTC timestamp with at least second-level precision.
 3. THE audit log SHALL be immutable — entries SHALL NOT be editable or deletable through any user-facing interface or API endpoint.
-4. THE Web_Interface SHALL expose the audit log to the delivery manager (or future authorised roles) via the team settings page, ordered chronologically with the most recent entries first.
+4. THE Web_Interface SHALL expose the audit log to the delivery manager (or future authorised roles) at a route of its own, offered in the navigation shell, ordered chronologically with the most recent entries first. *(Was “via the team settings page”; corrected 2026-09-15 to match what was built — the shell offers it as a destination, role-gated, at `/teams/[teamId]/audit-log`.)*
 5. THE API SHALL expose the audit log via a read-only endpoint under the team's resource path.
 6. THE audit log SHALL NOT contain individual Response data or Scores — it records only team-level configuration events.
 

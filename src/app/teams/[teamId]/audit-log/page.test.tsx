@@ -11,7 +11,11 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, it, expect, beforeEach } from 'vitest';
 
+import { axe, toHaveNoViolations } from 'jest-axe';
+
 import { server } from '@/tests/mocks/server';
+
+expect.extend(toHaveNoViolations);
 
 import AuditLogPage from './page';
 
@@ -132,22 +136,22 @@ describe('Audit Log Page', () => {
     it('displays entries in reverse chronological order (most recent first)', async () => {
       renderPage();
       await waitFor(() => {
-        expect(screen.getByText(/privacy_mode_changed/i)).toBeInTheDocument();
+        expect(screen.getByText(/privacy mode changed/i)).toBeInTheDocument();
       });
 
       const entries = screen.getAllByRole('article');
       expect(entries).toHaveLength(2);
 
       // First entry should be the most recent one
-      expect(entries[0]).toHaveTextContent(/privacy_mode_changed/i);
-      expect(entries[1]).toHaveTextContent(/schedule_changed/i);
+      expect(entries[0]).toHaveTextContent(/privacy mode changed/i);
+      expect(entries[1]).toHaveTextContent(/schedule changed/i);
     });
 
     it('displays change type for each entry', async () => {
       renderPage();
       await waitFor(() => {
-        expect(screen.getByText(/privacy_mode_changed/i)).toBeInTheDocument();
-        expect(screen.getByText(/schedule_changed/i)).toBeInTheDocument();
+        expect(screen.getByText(/privacy mode changed/i)).toBeInTheDocument();
+        expect(screen.getByText(/schedule changed/i)).toBeInTheDocument();
       });
     });
 
@@ -248,7 +252,7 @@ describe('Audit Log Page', () => {
       renderPage();
 
       await waitFor(() => {
-        expect(screen.getByText(/privacy_mode_changed/i)).toBeInTheDocument();
+        expect(screen.getByText(/privacy mode changed/i)).toBeInTheDocument();
       });
 
       expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument();
@@ -295,7 +299,7 @@ describe('Audit Log Page', () => {
       await user.click(screen.getByRole('button', { name: /load more/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/member_added/i)).toBeInTheDocument();
+        expect(screen.getByText(/member added/i)).toBeInTheDocument();
       });
 
       // All 3 entries should now be visible
@@ -411,5 +415,104 @@ describe('Audit entries a person can read', () => {
     for (const value of values) {
       expect(value.className).toMatch(/break-all|break-words/);
     }
+  });
+});
+
+/**
+ * A schedule change, as a person reads it.
+ *
+ * Raised by Matt on 2026-09-15 against the production log, which showed
+ * `{"cadence":"weekly","openDay":1,…}` in the After state of a schedule change.
+ * Everything else on the card had been made to read like English; this had not,
+ * which is what made it look out of place.
+ */
+describe('a value that was stored as JSON', () => {
+  const scheduleEntry: AuditEntryFixture = {
+    id: 'entry-schedule',
+    changeType: 'schedule_change',
+    previousValue: 'null',
+    newValue:
+      '{"cadence":"weekly","openDay":1,"openTime":"15:30","closeDay":1,"closeTime":"15:54","timezone":"Europe/London"}',
+    userId: 'member-1',
+    actor: { id: 'member-1', name: 'Matt', isViewer: true, isErased: false },
+    timestamp: '2026-09-15T15:30:00Z',
+  };
+
+  it('names the days rather than numbering them', async () => {
+    setupHandlers({ entries: [scheduleEntry] });
+    renderPage();
+
+    expect(await screen.findByText(/monday at 15:30/i)).toBeInTheDocument();
+    expect(screen.getByText(/monday at 15:54/i)).toBeInTheDocument();
+  });
+
+  it('labels each part instead of showing the variable names', async () => {
+    setupHandlers({ entries: [scheduleEntry] });
+    renderPage();
+
+    expect(await screen.findByText(/^opens$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^closes$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^time zone$/i)).toBeInTheDocument();
+  });
+
+  it('shows no braces, quotes or field names anywhere on the card', async () => {
+    // The complaint in full: a database artefact on a screen whose only job is
+    // being understood by a person
+    setupHandlers({ entries: [scheduleEntry] });
+    renderPage();
+
+    const card = (await screen.findByText(/^opens$/i)).closest('article');
+    expect(card).not.toBeNull();
+    expect(card?.textContent).not.toMatch(/openDay|closeTime|timezone|[{}"]/);
+  });
+
+  it('still says there was nothing before', async () => {
+    setupHandlers({ entries: [scheduleEntry] });
+    renderPage();
+
+    expect(await screen.findByText(/no previous value/i)).toBeInTheDocument();
+  });
+
+  it('leaves a plain value exactly as it was', async () => {
+    // Most entries are already readable, and reformatting them would be a
+    // change in search of a problem
+    setupHandlers();
+    renderPage();
+
+    expect(await screen.findByText('anonymous')).toBeInTheDocument();
+    expect(screen.getByText('attributed')).toBeInTheDocument();
+  });
+
+  it('has no axe-detectable violations with a formatted value on screen', async () => {
+    setupHandlers({ entries: [scheduleEntry] });
+    const { container } = renderPage();
+
+    await screen.findByText(/^opens$/i);
+
+    expect(await axe(container)).toHaveNoViolations();
+  });
+});
+
+describe('the kind of change', () => {
+  it('says what happened rather than naming the field that changed', async () => {
+    setupHandlers();
+    renderPage();
+
+    expect(await screen.findByText('Privacy mode changed')).toBeInTheDocument();
+    expect(screen.queryByText('privacy_mode_changed')).not.toBeInTheDocument();
+  });
+
+  it('keeps the stored identifier on the element for anyone correlating records', async () => {
+    /*
+     * Matt's question, answered both ways: a manager reads a sentence, and the
+     * token a system record would carry is still there to be found. Requirement
+     * 18 makes this screen the manager's; the identifier costs them nothing.
+     */
+    setupHandlers();
+    const { container } = renderPage();
+
+    await screen.findByText('Privacy mode changed');
+
+    expect(container.querySelector('[data-change-type="privacy_mode_changed"]')).not.toBeNull();
   });
 });

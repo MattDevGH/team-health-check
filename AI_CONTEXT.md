@@ -543,7 +543,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1671 tests across 180 files**, including
+The Vitest suite now contains **1702 tests across 181 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
@@ -805,12 +805,44 @@ anonymity threshold — was fixed immediately and is out of scope here.
 
 ### Noticed on production, 2026-09-15
 
-**The audit log prints a JSON object where a sentence belongs.** Now that the
-rest of the entry reads like English, the `after` state of a `schedule_change`
-stands out: it exposes variable names and numeric day ids, so a reader has to
-know that 1 means Monday. Labels and values, with day names, is the fix. Raised
-by Matt; small and self-contained, and it belongs with whatever next touches the
-audit log. **Still outstanding.**
+**The audit log printed a JSON object where a sentence belongs — fixed
+2026-09-15.** The `after` state of a `schedule_change` read
+`{"cadence":"weekly","openDay":1,…}` on a screen whose entire job is being
+understood by a person months later, and a reader had to know that 1 means
+Monday. It now reads:
+
+```
+Opens: Monday at 15:30
+Closes: Friday at 17:00
+Cadence: Weekly
+Time zone: Europe/London
+```
+
+`audit-value.ts` holds the rule. Its governing principle is **never lose
+information**: anything it cannot confidently improve — a value that is not
+JSON, a half-written record, an array, an empty object — is shown exactly as it
+was stored, because an audit log that quietly drops a field it did not
+recognise is worse than an ugly one. An unfamiliar object still gets labelled
+fields rather than a blob, so the change types that store a member summary
+improved without anyone enumerating them. A day number out of range keeps its
+number — "Day 9" — since data that is wrong should look wrong rather than
+plausible.
+
+`WEEK_DAYS` moved to `src/lib/week-days.ts`, shared with the settings page.
+Sunday is 0, matching `Date.prototype.getDay`; two lists of the same thing is
+one list and a future defect.
+
+**The change type followed**, once Matt asked what the screen is actually for.
+Requirement 18 answers it: "As a delivery manager, I want a record of
+significant team setting changes, so that I can understand when and why
+configuration decisions were made." A person reading their own team’s history —
+so `schedule_change` was a variable name where a sentence belongs, the same
+defect as the JSON beneath it. It reads **Schedule changed** now.
+
+The token is not lost: it stays on the element as `data-change-type`, so an
+entry can be correlated with a system record without a manager having to read
+it. That is the mapping Matt asked about, and the audit entry id is the join
+key if operational logging is ever built.
 
 **The application was slower than it should be — fixed 2026-09-15, milestone
 complete.** The first cause was geography. `x-vercel-id` read `lhr1::iad1::…`: requests entering at

@@ -11,6 +11,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 
+import { describeAuditValue, describeChangeType, type AuditValueView } from './audit-value';
+
 /** Who made a change, resolved by the server. */
 interface AuditActor {
   id: string;
@@ -63,9 +65,42 @@ interface PageProps {
  * `null→{"cadence":"weekly",…}`, which is a database artefact reaching an
  * interface whose entire job is being understood by a person.
  */
-function describePreviousValue(previousValue: string): string {
+function describePreviousValue(previousValue: string): AuditValueView {
   const nothing = previousValue.trim() === '' || previousValue.trim() === 'null';
-  return nothing ? 'No previous value' : previousValue;
+  return nothing
+    ? { kind: 'text', text: 'No previous value' }
+    : describeAuditValue(previousValue);
+}
+
+/**
+ * One stored value, as a person reads it.
+ *
+ * Most are already plain — "anonymous", a team name — and are shown exactly
+ * as they were stored. A value stored as JSON becomes labelled lines, because
+ * a production log read `{"cadence":"weekly","openDay":1,…}` on a screen whose
+ * entire job is being understood by a person months later.
+ */
+function AuditValue({ view }: { view: AuditValueView }) {
+  if (view.kind === 'text') return <>{view.text}</>;
+
+  /*
+    A list rather than a nested definition list: this sits inside the Before
+    and After definitions already, and nesting a `dl` inside a `dd` reads to
+    a screen reader as a description of a description.
+  */
+  return (
+    <ul className="space-y-0.5">
+      {view.fields.map(field => (
+        <li key={field.label}>
+          <span className="text-gray-700">{field.label}</span>
+          {/* A colon rather than a separate element: it is punctuation, not
+              content, and a screen reader should read it as the pause it is */}
+          <span className="text-gray-500">: </span>
+          {field.value}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 export default function AuditLogPage({ params }: PageProps) {
@@ -192,8 +227,17 @@ export default function AuditLogPage({ params }: PageProps) {
                 className="bg-white rounded-lg shadow p-4"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <span className="text-sm font-semibold text-gray-800">
-                    {entry.changeType}
+                  {/*
+                    The stored type stays on the element, so an entry can be
+                    correlated with a system record without a manager having to
+                    read a token. Requirement 18 says this screen is for a
+                    delivery manager understanding their own team’s history.
+                  */}
+                  <span
+                    className="text-sm font-semibold text-gray-800"
+                    data-change-type={entry.changeType}
+                  >
+                    {describeChangeType(entry.changeType)}
                   </span>
                   <time
                     className="text-xs text-gray-500"
@@ -210,17 +254,21 @@ export default function AuditLogPage({ params }: PageProps) {
                   `aria-label` on a decorative span does less than it looks.
                   This screen exists to be understood by a person months later.
                   
-                  `break-all` because audit values are JSON by design: one long
-                  string with no spaces to break on, which the default wrapping
-                  cannot help with, so it ran past the edge of its card.
+                  `break-all` on the value itself, where it is inherited by
+                  whatever the formatter produced. A value that is still shown
+                  raw can be one long string with no spaces to break on, which
+                  the default wrapping cannot help with, so it ran past the edge
+                  of its card.
                 */}
                 <dl className="mt-2 text-sm text-gray-600">
                   <dt className="font-medium text-gray-700">Before</dt>
                   <dd data-audit-value className="mb-2 break-all">
-                    {describePreviousValue(entry.previousValue)}
+                    <AuditValue view={describePreviousValue(entry.previousValue)} />
                   </dd>
                   <dt className="font-medium text-gray-700">After</dt>
-                  <dd data-audit-value className="break-all">{entry.newValue}</dd>
+                  <dd data-audit-value className="break-all">
+                    <AuditValue view={describeAuditValue(entry.newValue)} />
+                  </dd>
                 </dl>
                 <div className="mt-1 text-xs text-gray-600">
                   Changed by: {describeActor(entry.actor)}
