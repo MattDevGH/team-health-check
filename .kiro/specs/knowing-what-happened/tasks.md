@@ -12,35 +12,35 @@ Phases 2 and 3 are independent of each other and either can ship alone.
 
 ### 1.1 An event, written as JSON
 
-- [ ] Failing test: an event is written as one line of JSON carrying its name,
+- [x] Failing test: an event is written as one line of JSON carrying its name,
       level and context
-- [ ] Failing test: the sink is injectable, so a test reads what was written
+- [x] Failing test: the sink is injectable, so a test reads what was written
       rather than capturing stdout
-- [ ] Failing test: the default sink is the console, so nothing has to be wired
+- [x] Failing test: the default sink is the console, so nothing has to be wired
       up for it to work in production
-- [ ] Failing test: a timestamp is included, because a line without one cannot
+- [x] Failing test: a timestamp is included, because a line without one cannot
       be placed in a sequence
 - _Requirements: Knowing What Happened 4.1, 4.2, 4.3, 4.4_
 
 ### 1.2 It cannot leak
 
-- [ ] Failing test: a score, a trend indicator or free text passed as context is
+- [x] Failing test: a score, a trend indicator or free text passed as context is
       not written
-- [ ] Failing test: a token or secret passed as context is not written
-- [ ] Property test: for arbitrary context, no forbidden key appears in the
+- [x] Failing test: a token or secret passed as context is not written
+- [x] Property test: for arbitrary context, no forbidden key appears in the
       output — an allowlist is an invariant, not three examples
-- [ ] Failing test: `memberId` is allowed and an email address is not, since one
+- [x] Failing test: `memberId` is allowed and an email address is not, since one
       is already in the database and the other is the person
-- [ ] Mutation check: widen the allowlist and watch the property fail
+- [x] Mutation check: widen the allowlist and watch the property fail
 - _Requirements: Knowing What Happened 5.1, 5.2, 5.3, 5.4_
 - _Property: 2_
 
 ### 1.3 It cannot break anything
 
-- [ ] Failing test: a sink that throws does not propagate to the caller
-- [ ] Failing test: the value an operation returns is identical whether its
+- [x] Failing test: a sink that throws does not propagate to the caller
+- [x] Failing test: the value an operation returns is identical whether its
       logging succeeds, fails, or is silenced
-- [ ] The suite sets a silent sink, so tests do not write their own logs into
+- [x] The suite sets a silent sink, so tests do not write their own logs into
       the run's output
 - _Requirements: Knowing What Happened 6.1, 6.2, 6.3_
 - _Property: 3_
