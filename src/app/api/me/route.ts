@@ -12,7 +12,8 @@
 
 import { NextRequest } from 'next/server';
 
-import { withErrorHandling } from '@/lib/api-utils';
+import { withErrorHandling } from '@/lib/api-utils';
+import { resolveMemberProfile } from '@/lib/services/member-profile.service';
 import { NotFoundError } from '@/lib/errors';
 import { repos } from '@/lib/container-production';
 import { createGetAuthContext } from '@/lib/auth/with-auth';
@@ -32,28 +33,22 @@ export const GET = withErrorHandling(async (request: Request) => {
     );
   }
 
-  const member = await repos.teamMember.findById(auth.memberId);
-  if (!member) {
-    throw new NotFoundError('Member not found');
-  }
+  /*
+   * Assembled by a service, which is where the four repository calls behind
+   * this used to sit inline. Two of them now overlap, because the Slack link
+   * and the team depend on the member and not on each other.
+   */
+  const profile = await resolveMemberProfile(
+    {
+      teamMemberRepo: repos.teamMember,
+      slackIdentityLinkRepo: repos.slackIdentityLink,
+      teamRepo: repos.team,
+      teamMemberRoleRepo: repos.teamMemberRole,
+    },
+    auth.memberId,
+  );
 
-  const slackIdentityLink = await repos.slackIdentityLink.findByMemberId(auth.memberId);
-  const slackLink = slackIdentityLink ? { slackUserId: slackIdentityLink.slackUserId } : null;
+  if (!profile) throw new NotFoundError('Member not found');
 
-  // Prisma enforces the team foreign key, so an unresolvable team is
-  // unreachable in production. When it cannot be resolved the shell is told
-  // nothing rather than being handed an id it cannot name.
-  // privacyMode travels with the team because it is a team setting, and
-  // because the profile page needs it to tell a member whether their
-  // individual answers can be attributed to them
-  const teamRecord = await repos.team.findById(member.teamId);
-  const team = teamRecord
-    ? { id: teamRecord.id, name: teamRecord.name, privacyMode: teamRecord.privacyMode }
-    : null;
-
-  const roles = team
-    ? (await repos.teamMemberRole.findByMemberAndTeam(member.id, team.id)).map((r) => r.role)
-    : [];
-
-  return Response.json({ ...member, slackLink, team, roles });
+  return Response.json(profile);
 });

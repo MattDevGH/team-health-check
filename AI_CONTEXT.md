@@ -543,7 +543,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1646 tests across 177 files**, including
+The Vitest suite now contains **1661 tests across 179 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
@@ -866,6 +866,29 @@ directly — the dashboard would have lost its manager controls in production wi
 the suite green. And the layout-shift budget, written to the standard 0.1,
 watched the pop-in and said nothing: the page scores 0.046 with the defect and
 0.016 without. It is 0.03 now, a ratchet like every other budget here.
+
+**Phase 3 is done: nothing waits for something it does not need.** `/api/me`
+and the trends route each awaited independent reads in turn.
+`member-profile.service.ts` and `trend-inputs.service.ts` fan them out, and
+both routes got thinner in the process — `/api/me` had assembled its response
+from four repository calls inline, which the architecture rules say a handler
+should not do, and which left no seam to ask "does this wait for that?".
+
+**Concurrency is asserted by ordering, never by timing.** A read is held open
+and the others must already have started; a stopwatch would measure the
+machine. Two findings came out of it:
+
+- The roles were held back on the reasoning that they depend on the team. A
+  surviving mutation proved otherwise: they are looked up by team *id*, which
+  the member row already carries. Three-way fan-out, not two.
+- `/trends` fell from 9 queries to 8. The privacy mode and the session
+  averages each read the same team row, and identical `findUnique` calls in
+  the same tick are coalesced by Prisma into one `WHERE id IN (?,?)`.
+  Confirmed by reading the SQL rather than inferred from the count.
+
+`/api/me` still issues 5. Overlapping reads does not change how many queries
+are made — only how many must finish in sequence, which a count cannot see.
+The plan had assumed otherwise and is corrected.
 
 That multiplies. A dashboard load makes four requests — the shell’s `/api/me`,
 the page’s *second* `/api/me`, `/trends`, and `/sessions` — whose queries are
