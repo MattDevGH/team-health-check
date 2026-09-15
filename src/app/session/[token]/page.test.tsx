@@ -394,3 +394,61 @@ describe('after a member submits', () => {
     expect(await screen.findByText(/recent team average: 3.8/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * Requirements: Explaining Itself 2.4
+ *
+ * The page is what knows whether this member has answered — on arrival, from
+ * the link context, and after a submission, from having just made one.
+ */
+describe('the control on a check that has already been answered', () => {
+  it('offers to update when the member arrives with answers already saved', async () => {
+    server.use(
+      http.get('/api/auth/session-link/:token', () =>
+        HttpResponse.json({
+          ...MOCK_CONTEXT,
+          responses: [{ questionId: 'q-delivering-value', score: 3, trendIndicator: null }],
+        }),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: /update/i })).toBeInTheDocument();
+  });
+
+  it('offers to submit when the member has not answered yet', async () => {
+    server.use(
+      http.get('/api/auth/session-link/:token', () => HttpResponse.json(MOCK_CONTEXT)),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: /^submit/i })).toBeInTheDocument();
+  });
+
+  it('changes to update the moment a submission succeeds, without a reload', async () => {
+    /*
+     * The state the member was actually in when they pressed the button a
+     * second time and asked what had just happened.
+     */
+    const user = userEvent.setup();
+    server.use(
+      http.get('/api/auth/session-link/:token', () => HttpResponse.json(MOCK_CONTEXT)),
+      http.post('/api/responses', () =>
+        HttpResponse.json({ responses: [{ questionId: 'q-delivering-value', score: 4, rollingAverage: 4 }] }),
+      ),
+    );
+
+    renderPage();
+    await screen.findByRole('group', { name: /delivering value/i });
+
+    for (const name of [/delivering value/i, /team collaboration/i]) {
+      const group = screen.getByRole('group', { name });
+      await user.click(within(group).getByRole('radio', { name: '4' }));
+    }
+    await user.click(screen.getByRole('button', { name: /^submit/i }));
+
+    expect(await screen.findByRole('button', { name: /update/i })).toBeInTheDocument();
+  });
+});

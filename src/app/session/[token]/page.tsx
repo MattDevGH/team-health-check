@@ -196,6 +196,13 @@ export default function SessionLinkPage({ params }: PageProps) {
     trendIndicator: r.trendIndicator as ResponseInput['trendIndicator'],
   }));
 
+  /*
+   * Answers exist if the link context arrived with some, or if this visit has
+   * just saved some. The second half is what a member was missing: they
+   * submitted, saw an identical button, and pressed it again to find out.
+   */
+  const hasSavedAnswers = submitted || context.responses.length > 0;
+
   const isMicroPulse = context.cadencePreference === 'micro_pulse';
 
   return (
@@ -238,6 +245,7 @@ export default function SessionLinkPage({ params }: PageProps) {
             initialResponses={initialResponses}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
+            hasSavedAnswers={hasSavedAnswers}
           />
         ) : (
           <FeedbackForm
@@ -245,6 +253,7 @@ export default function SessionLinkPage({ params }: PageProps) {
             initialResponses={initialResponses}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
+            hasSavedAnswers={hasSavedAnswers}
           />
         )}
 
@@ -300,6 +309,7 @@ function MicroPulseView({
   initialResponses,
   onSubmit,
   isSubmitting,
+  hasSavedAnswers,
 }: MicroPulseViewProps) {
   const [showAll, setShowAll] = useState(false);
   const visibleQuestions = showAll ? allQuestions : questions;
@@ -313,6 +323,7 @@ function MicroPulseView({
           initialResponses={initialResponses}
           onSubmit={onSubmit}
           isSubmitting={isSubmitting}
+          hasSavedAnswers={hasSavedAnswers}
         />
       ) : (
         <p className="text-center text-gray-600">

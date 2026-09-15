@@ -28,6 +28,16 @@ export interface FeedbackFormProps {
   onSubmit: (responses: ResponseInput[]) => Promise<void>;
   /** Whether the form is currently submitting */
   isSubmitting?: boolean;
+  /**
+   * Whether this member already has answers saved for this check.
+   *
+   * Changes the control from *submit* to *update*. It is a prop rather than
+   * something derived from `initialResponses` because it has to change the
+   * moment a submission succeeds, without the form being remounted — which
+   * is exactly the moment a member looked at an unchanged button and asked
+   * whether they had just answered twice.
+   */
+  hasSavedAnswers?: boolean;
 }
 
 export interface ValidationError {

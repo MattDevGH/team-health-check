@@ -22,6 +22,7 @@ export function FeedbackForm({
   initialResponses,
   onSubmit,
   isSubmitting = false,
+  hasSavedAnswers = false,
 }: FeedbackFormProps) {
   const [responses, setResponses] = useState<ResponseInput[]>(() =>
     responseQuestions.map((q) => {
@@ -219,7 +220,18 @@ export function FeedbackForm({
             }
           `}
         >
-          {isSubmitting ? 'Submitting...' : 'Submit responses'}
+          {/*
+            Four words, and each says which of the two things is happening.
+            "Submitting…" under a button that reads Update would be the same
+            confusion one step later.
+          */}
+          {isSubmitting
+            ? hasSavedAnswers
+              ? 'Updating...'
+              : 'Submitting...'
+            : hasSavedAnswers
+              ? 'Update responses'
+              : 'Submit responses'}
         </button>
       </div>
     </form>
