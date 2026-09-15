@@ -67,13 +67,27 @@ here follows Requirement 4.
 
 ### 3.1 Reconcile the task lists
 
-- [ ] `deployment`: 0 of 62 ticked, phases 1–4 built and running in production
-- [ ] `reaching-your-health-check`: 0 of 48 ticked, phase 1 built with browser
-      coverage
-- [ ] Each box checked against the code or a test that exercises it — never
+- [x] `deployment`: was 0 of 62, now 52 ticked and 10 open
+- [x] `reaching-your-health-check`: was 0 of 48, now 17 ticked and 31 open
+- [x] Each box checked against the code or a test that exercises it — never
       ticked in bulk
-- [ ] Anything that cannot be confirmed stays unticked, with a note saying so
+- [x] Anything that cannot be confirmed stays unticked, with a note saying so
 - _Requirements: Traceability 3.1, 3.2_
+
+**What the reconciliation found, beyond the ticks:**
+
+- `/api/me/health-check` had **no test file at all**, while exporting a
+  `_testRepos` seam "so route tests can seed data". Two boxes could not be
+  ticked; the tests are written now and the boxes are ticked on them.
+- `prisma validate` no longer fails against a Turso URL. The task said it
+  should. It is allowlisted deliberately — it reads the schema without
+  connecting, and blocking it broke `npm run build` on Vercel. Verified with
+  `prisma migrate status`, which is refused and names the migration script.
+- The route task said "redirects to the member’s session link". It offers a
+  link instead, deliberately, and there is a test asserting it does not
+  redirect. Both task texts corrected with the reason.
+- The session lifecycle panel has **no axe coverage at all**, which is a real
+  gap rather than a bookkeeping one. Left unticked and named.
 
 **Checkpoint:** "what is left?" is answered by reading. One PR — the only phase not in the first.
 

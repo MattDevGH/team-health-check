@@ -9,46 +9,68 @@ can ship on its own.
 
 ---
 
+**Status, reconciled 2026-09-15.** Phase 1 shipped and this file still showed 0
+of 48 ticked. Every box below was checked against the code and the test that
+exercises it, one at a time — never in bulk. The 2026-08-23 closure audit found
+the opposite failure, tasks marked complete before the behaviour existed, and it
+cost days.
+
+Two boxes could not honestly be ticked when the reconciliation started, because
+`/api/me/health-check` had no test file at all — while exporting a `_testRepos`
+seam "so route tests can seed data". The behaviour was right; the evidence was
+missing. Those tests are written now and the boxes are ticked on them.
+
+What remains unticked is genuinely unbuilt or genuinely unproven, and says which
+in each case. Phases 2 and 3 are untouched: `EmailService` still has one method,
+`sendMagicLink`, so nothing prompts by email.
+
+---
+
 ## Phase 1 — A member can reach their own check
 
 ### 1.1 Resolve the signed-in member's current session link
 
-- [ ] Failing test: a member with a link for the collecting session gets it
-- [ ] Failing test: a member with no link for it gets nothing, rather than
+- [x] Failing test: a member with a link for the collecting session gets it
+- [x] Failing test: a member with no link for it gets nothing, rather than
       another member's
-- [ ] Failing test: no collecting session returns a "nothing open" result, not
+- [x] Failing test: no collecting session returns a "nothing open" result, not
       an error
-- [ ] Failing test: a closed session is not offered, since answers are no longer
+- [x] Failing test: a closed session is not offered, since answers are no longer
       accepted
-- [ ] Failing test: the member is taken from `AuthContext`, never from input
-- [ ] Mutation check: resolve by team instead of by member and watch the
+- [x] Failing test: the member is taken from `AuthContext`, never from input
+- [x] Mutation check: resolve by team instead of by member and watch the
       cross-member test fail
 - _Requirements: 1.6, 2.1, 2.3, NFR 1.1_
 - _Properties: 1, 2_
 
 ### 1.2 A route of its own, in the navigation shell
 
-- [ ] Failing test: the route redirects to the member's session link when a
-      check is collecting
-- [ ] Failing test: it explains itself when nothing is open, rather than 404ing
-- [ ] Failing test: it works for a contributor, not only a Delivery Manager
-- [ ] Failing test: an unauthenticated visitor is not told whether a check is
+- [x] Failing test: the route **offers** the member's session link when a check
+      is collecting. *(Was "redirects". Changed during the build and the reason
+      is worth keeping: landing straight in a form having clicked "Health check"
+      gives no moment to realise what is about to be asked, and no way back
+      without the browser button. There is a test asserting it does not redirect.)*
+- [x] Failing test: it explains itself when nothing is open, rather than 404ing
+- [x] Failing test: it works for a contributor, not only a Delivery Manager
+- [x] Failing test: an unauthenticated visitor is not told whether a check is
       open
-- [ ] Add it to the shell's destinations, and to the mounting contract test
-- [ ] axe, including the nothing-open state
+- [x] Add it to the shell's destinations, and to the mounting contract test
+- [x] axe, including the nothing-open state
 - _Requirements: 1.2, 1.3, 1.5_
 
 ### 1.3 A link on the dashboard
 
-- [ ] Failing test: while collecting, the lifecycle panel offers a route to
+- [x] Failing test: while collecting, the lifecycle panel offers a route to
       answer
-- [ ] Failing test: it is absent when nothing is collecting
-- [ ] Failing test: it does not replace or disturb the close control — adding a
+- [x] Failing test: it is absent when nothing is collecting
+- [x] Failing test: it does not replace or disturb the close control — adding a
       control can make an existing one ambiguous, which this project has already
       learned once
 - [ ] Failing test: a member who has answered everything can still get back in
-      to review
-- [ ] axe and keyboard operation
+      to review — the link renders unconditionally while a check collects, so
+      the behaviour is there and nothing asserts it
+- [ ] axe and keyboard operation — the panel's test file has no axe coverage at
+      all, which is a gap this reconciliation found rather than one it made
 - _Requirements: 1.1, 1.4_
 
 **Checkpoint:** the defect is fixed. A check that opens can be answered by
@@ -123,11 +145,13 @@ anyone signed in, with no delivery channel involved. One PR.
 
 ### 4.1 End to end
 
-- [ ] A signed-in member opens a check, reaches it from the dashboard, answers,
+- [x] A signed-in member opens a check, reaches it from the dashboard, answers,
       and sees their answers saved
-- [ ] The same from the navigation route
-- [ ] A contributor, not a Delivery Manager, can do both
-- [ ] axe on both new surfaces
+- [x] The same from the navigation route
+- [ ] A contributor, not a Delivery Manager, can do both — the route tests
+      prove the API answers one; no browser test walks it as one
+- [ ] axe on both new surfaces — covered for the `/me/health-check` page in its
+      own tests, not in the browser tier
 - _Requirements: 1.1, 1.2, 1.5, NFR 3.1_
 
 ### 4.2 Against production
