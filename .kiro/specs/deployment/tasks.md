@@ -10,43 +10,69 @@ do — noted where that is the case.
 
 ---
 
+**Status, reconciled 2026-09-15.** This file showed 0 of 62 ticked while the
+application had been live in production for two days. Every box below was
+checked against the code, the test that exercises it, or the deployed
+application itself — one at a time, never in bulk. The 2026-08-23 closure audit
+found the opposite failure, tasks marked complete before the behaviour existed,
+and it cost days.
+
+Three things were verified against production during the reconciliation rather
+than taken on trust: an unauthenticated `POST /api/scheduler/tick` is refused
+(403, and 403 again with a wrong secret), the schema and the five seeded
+questions read back correctly, and the two mutation checks the tasks asked for
+were re-run.
+
+One task had drifted and is corrected below: `prisma validate` no longer fails
+against a Turso URL, deliberately.
+
+What stays unticked is genuinely undone — Resend's domain, Slack's production
+URLs, and the rollback note — with one exception noted where it cannot be
+verified from the repository.
+
+---
+
 ## Phase 1 — Make a wrong configuration impossible
 
 ### 1.1 A production process without a database refuses to start
 
-- [ ] Failing test: `createPrismaClient()` throws when `NODE_ENV` is `production`
+- [x] Failing test: `createPrismaClient()` throws when `NODE_ENV` is `production`
       and `TURSO_DATABASE_URL` is absent
-- [ ] Failing test: it still falls back to local SQLite outside production, so
+- [x] Failing test: it still falls back to local SQLite outside production, so
       development and the test suites are untouched
-- [ ] Failing test: the message names the missing variable, because the reader is
+- [x] Failing test: the message names the missing variable, because the reader is
       someone staring at a failed deployment
-- [ ] Implement in `src/lib/prisma.ts`
-- [ ] Mutation check: remove the guard and watch the production test fail
+- [x] Implement in `src/lib/prisma.ts`
+- [x] Mutation check: remove the guard and watch the production test fail
 - _Requirements: 2.1, 2.3_
 - _Property: 1_
 
 ### 1.2 The Prisma CLI refuses to run against production
 
-- [ ] Failing test: `resolveSqliteFileUrl()` — or a wrapper used by
+- [x] Failing test: `resolveSqliteFileUrl()` — or a wrapper used by
       `prisma.config.ts` — throws when `TURSO_DATABASE_URL` is set
-- [ ] Failing test: the message names `scripts/migrate-production.ts`, so the
+- [x] Failing test: the message names `scripts/migrate-production.ts`, so the
       refusal points at the way forward rather than just saying no
-- [ ] Failing test: normal local resolution is unchanged
-- [ ] Implement, keeping `src/lib/database-url.ts` the single source both the
+- [x] Failing test: normal local resolution is unchanged
+- [x] Implement, keeping `src/lib/database-url.ts` the single source both the
       runtime and `prisma.config.ts` consult
-- [ ] Verify by hand: `TURSO_DATABASE_URL=libsql://x npx prisma validate` fails
-      with the new message rather than validating a local file
+- [x] Verify by hand: a Prisma CLI command that connects fails with the new
+      message rather than migrating a local file. *(Was `prisma validate`.
+      Corrected 2026-09-15: `validate` is allowlisted deliberately — it reads the
+      schema without connecting, and blocking it broke `npm run build` on Vercel,
+      which runs `prisma generate`. Verified with `prisma migrate status`, which
+      is refused and names `scripts/migrate-production.ts`.)*
 - _Requirements: 3.1, 3.2_
 - _Property: 2_
 
 ### 1.3 A production process cannot serve test tokens
 
-- [ ] Failing test: importing the guard with `NODE_ENV=production` and
+- [x] Failing test: importing the guard with `NODE_ENV=production` and
       `TEST_MODE=true` throws
-- [ ] Failing test: production without `TEST_MODE` is fine; non-production with
+- [x] Failing test: production without `TEST_MODE` is fine; non-production with
       `TEST_MODE` is fine
-- [ ] Implement at module load, not inside the request handler
-- [ ] Confirm `/api/test/magic-link` still returns a bare 404 outside `TEST_MODE`
+- [x] Implement at module load, not inside the request handler
+- [x] Confirm `/api/test/magic-link` still returns a bare 404 outside `TEST_MODE`
 - _Requirements: 5.1, 5.2_
 - _Property: 5_
 
@@ -59,25 +85,25 @@ are now loud. Commit each separately; open one PR for the phase.
 
 ### 2.1 Apply committed migrations through libSQL, idempotently
 
-- [ ] Failing test, against a real temporary file: applying the migration set
+- [x] Failing test, against a real temporary file: applying the migration set
       creates the expected tables
-- [ ] Failing test: applying it a second time applies nothing and leaves the
+- [x] Failing test: applying it a second time applies nothing and leaves the
       schema unchanged — the property that makes the script safe to re-run
-- [ ] Failing test: migrations are applied in lexicographic directory order
-- [ ] Failing test: a partially-applied set resumes from the right place
-- [ ] Implement `scripts/migrate-production.ts` with the `_applied_migration`
+- [x] Failing test: migrations are applied in lexicographic directory order
+- [x] Failing test: a partially-applied set resumes from the right place
+- [x] Implement `scripts/migrate-production.ts` with the `_applied_migration`
       ledger, reusing the `executeMultiple` mechanism already proven in
       `src/tests/integration/libsql-repository.test.ts`
-- [ ] The script prints which migrations it applied and which it skipped
+- [x] The script prints which migrations it applied and which it skipped
 - _Requirements: 3.3, 3.4_
 - _Properties: 3, 4_
 
 ### 2.2 Seeding is safe to repeat
 
-- [ ] Failing test: seeding the fixed question catalogue twice leaves five rows,
+- [x] Failing test: seeding the fixed question catalogue twice leaves five rows,
       not ten
-- [ ] Implement or confirm `prisma/seed.ts` upserts rather than inserts
-- [ ] Confirm the seed can run against Turso through the same client the
+- [x] Implement or confirm `prisma/seed.ts` upserts rather than inserts
+- [x] Confirm the seed can run against Turso through the same client the
       migration script uses
 - _Requirements: 3.7_
 
@@ -90,19 +116,19 @@ did. Open a PR for the phase.
 
 ### 3.1 Document every environment variable
 
-- [ ] `docs/deployment.md`: every variable the application reads, its purpose,
+- [x] `docs/deployment.md`: every variable the application reads, its purpose,
       whether production requires it, and whether it is secret
-- [ ] Include the ones that surprised us: `NEXT_PUBLIC_APP_URL` is embedded in
+- [x] Include the ones that surprised us: `NEXT_PUBLIC_APP_URL` is embedded in
       emails and Slack messages, and `CLOSING_REMINDER_LEAD_HOURS` defaults to 24
-- [ ] State plainly that `TEST_MODE` must never be defined in production, and
+- [x] State plainly that `TEST_MODE` must never be defined in production, and
       that the application now refuses to start if it is
-- [ ] Update `.env.example` so every variable is listed with a safe placeholder
-- [ ] Rotation list: where each secret lives, so none is missed
+- [x] Update `.env.example` so every variable is listed with a safe placeholder
+- [x] Rotation list: where each secret lives, so none is missed
 - _Requirements: 9.1, 9.2, 9.3_
 
 ### 3.2 Correct the free-tier claim
 
-- [ ] README and AI_CONTEXT currently say "Vercel (free tier)" without
+- [x] README and AI_CONTEXT currently say "Vercel (free tier)" without
       qualification. Record what Hobby actually buys, why the scheduler is
       triggered externally, and what upgrading to Pro would simplify
 - _Requirements: NFR 1.2_
@@ -116,18 +142,18 @@ repository.
 
 ### 4.1 Turso database
 
-- [ ] Create the production database; note its region
-- [ ] Generate an auth token
-- [ ] Record the backup position: what Turso's plan provides, and what the
+- [x] Create the production database; note its region
+- [x] Generate an auth token
+- [x] Record the backup position: what Turso's plan provides, and what the
       maintainer would do to recover
-- [ ] **Never commit either value**
+- [x] **Never commit either value**
 - _Requirements: 2.1, NFR 2.1, NFR 3.2_
 
 ### 4.2 Apply the schema
 
-- [ ] Run `scripts/migrate-production.ts` against Turso
-- [ ] Seed the question catalogue
-- [ ] Verify by reading the schema back and counting the five questions — not by
+- [x] Run `scripts/migrate-production.ts` against Turso
+- [x] Seed the question catalogue
+- [x] Verify by reading the schema back and counting the five questions — not by
       trusting the exit code
 - _Requirements: 3.5, 3.6, 3.7_
 
@@ -142,20 +168,24 @@ repository.
 
 ### 4.4 Vercel project
 
-- [ ] Connect the repository; confirm production builds from `master`
-- [ ] Set every production environment variable from `docs/deployment.md`
-- [ ] Generate a fresh `CRON_SECRET` for production — not the development value
+- [x] Connect the repository; confirm production builds from `master`
+- [x] Set every production environment variable from `docs/deployment.md`
+- [x] Generate a fresh `CRON_SECRET` for production — not the development value
 - [ ] Confirm preview deployments do not carry production database credentials
-- [ ] Deploy
+      — needs the Vercel dashboard, so it cannot be verified from here
+- [x] Deploy
 - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 4.6, NFR 2.1_
 
 ### 4.5 The external trigger
 
-- [ ] Configure the chosen service to `POST /api/scheduler/tick` with the
+- [x] Configure the chosen service to `POST /api/scheduler/tick` with the
       `Authorization: Bearer <CRON_SECRET>` header
-- [ ] Choose an interval fine enough to open and close a session near its time
-- [ ] Confirm an unauthenticated POST is refused
-- [ ] Establish how a stopped trigger would be noticed
+- [x] Choose an interval fine enough to open and close a session near its time
+- [x] Confirm an unauthenticated POST is refused
+- [ ] Establish how a stopped trigger would be noticed — partly answered since:
+      the dashboard says "Results are overdue — the scheduler may not be running"
+      when a closed check has no aggregates after 15 minutes. That is a reader
+      noticing, not an alert, and the tick itself still logs nothing
 - _Requirements: 4.1, 4.2, 4.5, 4.6_
 
 ### 4.6 Slack
@@ -174,13 +204,15 @@ repository.
 Not a smoke test. The same shape of pass that has found every significant defect
 in this project.
 
-- [ ] Request a magic link; confirm the email arrives at a real address
-- [ ] Sign in; confirm the dashboard loads and the session cookie carries
-      `Secure`
-- [ ] Open a health check; answer it from the session link
-- [ ] Close it; confirm results appear after a tick, not before
-- [ ] Cross-check one aggregate against the Turso database directly
-- [ ] Confirm the trigger is still firing an hour later
+- [x] Request a magic link; confirm the email arrives at a real address
+- [x] Sign in; confirm the dashboard loads. *(The `Secure` half is unverified
+      in production: the code sets it whenever `NODE_ENV === 'production'` and
+      that path has unit coverage, but nobody has read the response header from
+      the deployed application.)*
+- [x] Open a health check; answer it from the session link
+- [x] Close it; confirm results appear after a tick, not before
+- [x] Cross-check one aggregate against the Turso database directly
+- [x] Confirm the trigger is still firing an hour later
 - _Requirements: 1.1, 2.2, 4.1, 8.1, 8.4_
 
 ### 5.2 Rollback
@@ -192,10 +224,10 @@ in this project.
 
 ### 5.3 Reconcile
 
-- [ ] Update README and AI_CONTEXT with the deployed state
-- [ ] Record what the manual pass found, including anything that only appeared
+- [x] Update README and AI_CONTEXT with the deployed state
+- [x] Record what the manual pass found, including anything that only appeared
       in production
-- [ ] Run the full gate set and merge
+- [x] Run the full gate set and merge
 - _Requirements: 9.1_
 
 ---

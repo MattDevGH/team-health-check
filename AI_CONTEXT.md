@@ -543,7 +543,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1726 tests across 182 files**, including
+The Vitest suite now contains **1731 tests across 183 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
@@ -802,6 +802,47 @@ The privacy defect found in the same session — trend indicators bypassing the
 anonymity threshold — was fixed immediately and is out of scope here.
 
 ## Outstanding Work
+
+### The specs now say what is built — reconciled 2026-09-15
+
+Matt asked whether the `.md` files were drifting from the code. Measured:
+**872 citations across 219 files, 858 resolved.** Not fiction — a record that
+stopped being updated at the moment work landed.
+
+`.kiro/specs/traceability/` now holds the rule and the checker.
+`scripts/check-requirement-references.ts` runs in CI and resolves every
+citation to a spec, a requirement, and **a criterion that requirement lists**.
+A bare number means the original spec — a convention 654 citations already
+followed, named rather than invented.
+
+Two task lists were reconciled box by box, never in bulk:
+
+| | Before | After |
+|---|---|---|
+| `deployment` | 0 of 62 | **52 ticked, 10 open** |
+| `reaching-your-health-check` | 0 of 48 | **17 ticked, 31 open** |
+
+What stays open is genuinely undone: Resend’s domain, Slack’s production
+URLs, a rollback note, and browser coverage for a contributor.
+
+**Four things the reconciliation found that ticking in bulk would have
+buried:**
+
+- `/api/me/health-check` had **no test file**, while exporting a `_testRepos`
+  seam "so route tests can seed data". The behaviour was right and the
+  evidence was missing, which is a different problem and not a smaller one.
+- `10.2` and `13.5` in the test-mode and database files had been resolving to
+  the **wrong requirement** for months — integration-hardening’s numbering
+  read against the original spec. Only `10.6` broke loudly enough to notice.
+- `prisma validate` no longer fails against a Turso URL, deliberately, and the
+  task still said it should. Reading the old task would have produced a bug
+  report.
+- The session lifecycle panel has **no axe coverage at all**.
+
+The rule that stops it recurring is in `AGENTS.md`: open the requirement
+before writing the code, and add one if none covers it. The checker catches a
+citation that leads nowhere; only a person catches one that leads somewhere
+wrong.
 
 ### Noticed on production, 2026-09-15
 
