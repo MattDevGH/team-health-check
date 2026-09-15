@@ -12,6 +12,7 @@
 import { useEffect, useState, useCallback } from 'react';
 
 import { FeedbackForm } from '@/components/feedback-form/feedback-form';
+import { answersMatch, type Answer } from '@/lib/answers-match';
 import type { FeedbackFormProps, Question, ResponseInput } from '@/components/feedback-form/types';
 
 interface QuestionData {
@@ -55,6 +56,15 @@ export default function SessionLinkPage({ params }: PageProps) {
   const [context, setContext] = useState<SessionContext | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  /**
+   * What the server holds, as far as this page knows.
+   *
+   * Null until the link context arrives. Compared against each submission so
+   * a repeat can be named as one — a member pressed the button twice on
+   * production and had no way to tell whether they had answered twice.
+   */
+  const [savedAnswers, setSavedAnswers] = useState<Answer[] | null>(null);
+  const [lastOutcome, setLastOutcome] = useState<'saved' | 'unchanged'>('saved');
   const [sessionEnded, setSessionEnded] = useState(false);
   const [results, setResults] = useState<RollingAverageResult[]>([]);
 
@@ -78,6 +88,13 @@ export default function SessionLinkPage({ params }: PageProps) {
         const data: SessionContext = await res.json();
         if (!cancelled) {
           setContext(data);
+          setSavedAnswers(
+            data.responses.map((response) => ({
+              questionId: response.questionId,
+              score: response.score,
+              trendIndicator: response.trendIndicator as Answer['trendIndicator'],
+            })),
+          );
           setSessionEnded(data.sessionStatus === 'closed');
           setLoading(false);
         }
@@ -132,13 +149,21 @@ export default function SessionLinkPage({ params }: PageProps) {
 
       const data = await res.json();
       setResults(data.responses ?? []);
+      /*
+        Compared after the request rather than before it. Re-sending is
+        harmless — the server upserts — and skipping it would strand a member
+        whose first attempt failed, which is the case where pressing the
+        button again is exactly the right instinct.
+      */
+      setLastOutcome(savedAnswers && answersMatch(savedAnswers, responses) ? 'unchanged' : 'saved');
+      setSavedAnswers(responses);
       setSubmitted(true);
       setIsSubmitting(false);
     } catch {
       setIsSubmitting(false);
       throw new Error('Submission failed. Please retry.');
     }
-  }, [context]);
+  }, [context, savedAnswers]);
 
   if (loading) {
     return (
@@ -229,7 +254,11 @@ export default function SessionLinkPage({ params }: PageProps) {
             role="status"
             className="mb-6 rounded-lg border border-green-700 bg-green-50 p-4"
           >
-            <p className="font-medium text-green-900">Thank you — your answers are saved.</p>
+            <p className="font-medium text-green-900">
+              {lastOutcome === 'unchanged'
+                ? 'No changes — your answers were already saved.'
+                : 'Thank you — your answers are saved.'}
+            </p>
             <p className="mt-1 text-sm text-green-900">
               You can change them until this health check closes; just pick a different
               score and update your answers.

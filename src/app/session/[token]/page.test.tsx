@@ -452,3 +452,118 @@ describe('the control on a check that has already been answered', () => {
     expect(await screen.findByRole('button', { name: /update/i })).toBeInTheDocument();
   });
 });
+
+/**
+ * Requirements: Explaining Itself 2.5
+ * Property: 3 — submission is idempotent and visible
+ *
+ * "I hit submit responses again — interested to know what happened here."
+ * Nothing happened, and nothing said so.
+ */
+describe('pressing the button a second time', () => {
+  let posts = 0;
+
+  beforeEach(() => {
+    posts = 0;
+    server.use(
+      http.get('/api/auth/session-link/:token', () => HttpResponse.json(MOCK_CONTEXT)),
+      http.post('/api/responses', () => {
+        posts += 1;
+        return HttpResponse.json({ responses: [{ questionId: 'q-delivering-value', score: 4, rollingAverage: 4 }] });
+      }),
+    );
+  });
+
+  async function answerEverything(user: ReturnType<typeof userEvent.setup>, score: string) {
+    await screen.findByRole('group', { name: /delivering value/i });
+    for (const name of [/delivering value/i, /team collaboration/i]) {
+      const group = screen.getByRole('group', { name });
+      await user.click(within(group).getByRole('radio', { name: score }));
+    }
+  }
+
+  it('says nothing changed, rather than letting it look like a second answer', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await answerEverything(user, '4');
+    await user.click(screen.getByRole('button', { name: /^submit/i }));
+    await screen.findByRole('button', { name: /update/i });
+
+    await user.click(screen.getByRole('button', { name: /update/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/no changes/i);
+    });
+  });
+
+  it('still says the answers are saved, since they are', async () => {
+    // "No changes" on its own could read as a refusal
+    const user = userEvent.setup();
+    renderPage();
+
+    await answerEverything(user, '4');
+    await user.click(screen.getByRole('button', { name: /^submit/i }));
+    await screen.findByRole('button', { name: /update/i });
+
+    await user.click(screen.getByRole('button', { name: /update/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/saved|recorded/i);
+    });
+  });
+
+  it('sends the answers anyway, so a save that failed earlier still lands', async () => {
+    /*
+     * Idempotent at the server, so re-sending costs nothing — and skipping it
+     * would strand a member whose first attempt failed, which is the case
+     * where pressing the button again is exactly the right instinct.
+     */
+    const user = userEvent.setup();
+    renderPage();
+
+    await answerEverything(user, '4');
+    await user.click(screen.getByRole('button', { name: /^submit/i }));
+    await screen.findByRole('button', { name: /update/i });
+
+    await user.click(screen.getByRole('button', { name: /update/i }));
+
+    await waitFor(() => expect(posts).toBe(2));
+  });
+
+  it('reports a real change as saved rather than as nothing', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await answerEverything(user, '4');
+    await user.click(screen.getByRole('button', { name: /^submit/i }));
+    await screen.findByRole('button', { name: /update/i });
+
+    const group = screen.getByRole('group', { name: /delivering value/i });
+    await user.click(within(group).getByRole('radio', { name: '2' }));
+    await user.click(screen.getByRole('button', { name: /update/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).not.toHaveTextContent(/no changes/i);
+    });
+  });
+
+  it('treats an answer changed and changed back as no change at all', async () => {
+    // A dirty flag would call this a revision. It is not one.
+    const user = userEvent.setup();
+    renderPage();
+
+    await answerEverything(user, '4');
+    await user.click(screen.getByRole('button', { name: /^submit/i }));
+    await screen.findByRole('button', { name: /update/i });
+
+    const group = screen.getByRole('group', { name: /delivering value/i });
+    await user.click(within(group).getByRole('radio', { name: '2' }));
+    await user.click(within(group).getByRole('radio', { name: '4' }));
+    await user.click(screen.getByRole('button', { name: /update/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/no changes/i);
+    });
+  });
+});
