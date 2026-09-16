@@ -123,17 +123,26 @@ phase exists to stop.
 
 ### 4.1 Say what each setting does
 
-- [ ] Failing test: cadence preference explains weekly versus micro-pulse in
+- [x] Failing test: cadence preference explains weekly versus micro-pulse in
       terms of what the member will be asked
-- [ ] Failing test: the reminders toggle names what it governs **and** says it
+- [x] Failing test: the reminders toggle names what it governs **and** says it
       does not affect sign-in or opening prompts — a member who turns it off
       expecting silence will still be prompted when a check opens
-- [ ] Failing test: availability explains what it stops and for how long
-- [ ] Failing test: Slack linking explains what linking does and how to get a
+- [x] Failing test: availability explains what it stops and for how long, and
+      that a check already open stays answerable — being away gates
+      notifications and nothing else
+- [x] Failing test: Slack linking explains what linking does and how to get a
       code, beyond naming the command
-- [ ] Failing test: each explanation is associated with its control by
+- [x] Failing test: the code's stated lifetime is pinned to
+      `PAIRING_CODE_EXPIRY_MS`, so copy cannot quietly stop being true
+- [x] Failing test: each explanation is associated with its control by
       `aria-describedby`, not merely placed beside it
-- [ ] axe on the profile page
+- [x] Failing test: every `aria-describedby` on the page resolves to real text
+      — a reference to a missing id is silent, and asserting the attribute
+      alone would pass
+- [x] axe on the profile page, both Slack branches; mutation-checked by
+      removing a label and watching it fail. The browser audit covers it too,
+      with the contrast jsdom cannot see
 - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, NFR 1.1, NFR 1.2_
 
 ### 4.2 An away period can be seen

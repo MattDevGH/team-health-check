@@ -1,10 +1,16 @@
 /**
  * Slack link/unlink section.
- * Requirements: 2.2, 2.3, 2.4, 2.6, 7.1, 7.2
+ * Requirements: 2.2, 2.3, 2.4, 2.6, 7.1, 7.2, Explaining Itself 4.4, 4.5, NFR 1.1
  *
  * When unlinked, shows a pairing-code input so a member can complete the
  * `/healthcheck connect` linking flow from the web interface. When linked,
  * shows the linked status and an unlink button with confirmation.
+ *
+ * The input said "Enter code from /healthcheck connect", which names the
+ * command and nothing else — not what linking buys you, not that the code comes
+ * back in Slack rather than by email, and not that it expires. An expired code
+ * rejected with "Invalid or expired pairing code" reads as a broken code to
+ * anybody who was not told it had a clock on it.
  */
 
 'use client';
@@ -18,6 +24,8 @@ interface SlackLink {
 interface SlackSectionProps {
   slackLink: SlackLink | null;
 }
+
+const EXPLANATION_ID = 'slack-pairing-explanation';
 
 export function SlackSection({ slackLink }: SlackSectionProps) {
   const [confirming, setConfirming] = useState(false);
@@ -66,6 +74,13 @@ export function SlackSection({ slackLink }: SlackSectionProps) {
       <section className="bg-white rounded-lg shadow p-4">
         <h2 className="text-sm font-semibold text-gray-700 mb-1">Slack</h2>
         <p className="text-sm text-gray-500 mb-2">No Slack account linked</p>
+        <p id={EXPLANATION_ID} className="mb-2 text-xs text-gray-600">
+          Linking lets you answer a health check in Slack, and be prompted there when one opens,
+          without coming back to this site. To get a code, run{' '}
+          <code className="rounded bg-gray-100 px-1">/healthcheck connect</code> in Slack — it
+          replies with one only you can see. Codes expire after ten minutes; run the command
+          again for a fresh one.
+        </p>
         <div className="space-y-2">
           <div>
             <label htmlFor="slack-pairing-code" className="block text-xs text-gray-500">
@@ -76,7 +91,12 @@ export function SlackSection({ slackLink }: SlackSectionProps) {
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="Enter code from /healthcheck connect"
+              aria-describedby={EXPLANATION_ID}
+              // Where the code comes from is said above, in text a screen
+              // reader reaches through aria-describedby. The placeholder shows
+              // its shape instead of repeating the instruction — six uppercase
+              // characters, per CODE_LENGTH in auth.service.ts
+              placeholder="A1B2C3"
               className="mt-1 block w-full rounded border-gray-300 text-sm"
             />
           </div>

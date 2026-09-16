@@ -56,7 +56,14 @@ export interface AuthService {
 }
 
 /** Requirement 2.3: Pairing code expiry — 10 minutes */
-const PAIRING_CODE_EXPIRY_MS = 10 * 60 * 1000;
+/**
+ * How long a pairing code lasts.
+ *
+ * Requirements: Explaining Itself 4.4. Exported because the profile page tells
+ * a member "codes expire after ten minutes", and copy that quietly stops being
+ * true is worse than no copy. A test ties the two together.
+ */
+export const PAIRING_CODE_EXPIRY_MS = 10 * 60 * 1000;
 
 /** Requirement 7.5: Rate limit — 5 requests per email per hour */
 const MAGIC_LINK_RATE_LIMIT = 5;

@@ -783,6 +783,28 @@ revision until close and a member who thinks answers are final answers more
 cautiously. A redirect was rejected: someone on a session link alone may have
 nowhere to be sent.
 
+**Phase 4.1 is done: the profile says what its settings do.** Four controls —
+cadence, reminders, availability, Slack — and not one of them said what it
+affected. "Weekly" and "Micro-Pulse" were two words to choose between with
+nothing to choose on.
+
+The reminders toggle was the expensive one, because the code agrees with the
+member's wrong assumption: `sendSlackPrompt` never reads `remindersEnabled`,
+only `sendClosingReminder` and `sendMidSessionNudge` do. Turn reminders off and
+you are still prompted when a check opens. Saying so beat the alternatives —
+changing what the toggle governs would let a member silence the one prompt that
+starts a check.
+
+Availability was the other surprise: being away gates notifications and nothing
+else. No response path consults it, so a member who marks themselves away can
+still answer a check that is open, and now the page says that.
+
+Every explanation is tied to its control with `aria-describedby`, and a test
+follows every reference on the page to real text — an `aria-describedby`
+pointing at a missing id is silent, so asserting the attribute alone would pass
+while a screen reader heard nothing. The "ten minutes" in the Slack copy is
+pinned to `PAIRING_CODE_EXPIRY_MS`, which is exported for that reason.
+
 **Phase 3 is done: Settings left a contributor’s navigation.** Every write
 behind that page is manager-only, so offering the link to everybody
 advertised a page that would refuse them. It is gated on `delivery_manager`
