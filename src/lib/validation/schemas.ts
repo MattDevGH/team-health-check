@@ -20,6 +20,24 @@ export const memberRoleSchema = z.object({
   role: z.enum(['delivery_manager', 'team_member']),
 });
 
+/**
+ * A Slack user id a delivery manager is asserting, or null to clear it.
+ *
+ * Requirements: Slack Sign In 2.1
+ *
+ * Slack ids look like `U01ABCDE` — an upper-case letter followed by
+ * alphanumerics. Constrained so a typed-in value that could never be a Slack
+ * id is refused at the edge rather than stored and puzzled over later, and
+ * bounded so the column cannot be used as free text.
+ */
+export const slackBindingSchema = z.object({
+  slackUserId: z
+    .string()
+    .trim()
+    .regex(/^[UW][A-Z0-9]{2,20}$/, 'That does not look like a Slack member ID')
+    .nullable(),
+});
+
 export const submitResponseSchema = z.object({
   sessionId: z.string().min(1),
   responses: z

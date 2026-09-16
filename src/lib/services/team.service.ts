@@ -3,7 +3,7 @@
  * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.8, 1.9, 1.10, 19.4
  */
 
-import { ValidationError, ConflictError, NotFoundError } from '@/lib/errors';
+import { ValidationError, ConflictError, NotFoundError, AppError } from '@/lib/errors';
 import { addMemberSchema } from '@/lib/validation/schemas';
 import type { MemberSummary, TeamRole } from '@/lib/contracts/member-summary';
 import type { TeamRepository, TeamMemberRepository, TeamMemberRoleRepository, SlackIdentityLinkRepository, AuditLogRepository, SessionRepository } from '@/lib/repositories/types';
@@ -36,6 +36,21 @@ export interface TeamService {
   ): Promise<MemberSummary>;
   removeMember(teamId: string, memberId: string, userId: string): Promise<void>;
   updateMemberRole(teamId: string, memberId: string, role: TeamRole, actorId: string): Promise<MemberSummary>;
+  /**
+   * Record, change or clear which Slack account belongs to a member.
+   *
+   * Requirements: Slack Sign In 2.1, 2.2, 2.3, 2.4
+   *
+   * `null` clears it. The manager asserts *who a Slack account belongs to*;
+   * they never hold a credential and cannot sign in as that member, because
+   * authentication remains that person's own Slack login.
+   */
+  setSlackBinding(
+    teamId: string,
+    memberId: string,
+    slackUserId: string | null,
+    actorId: string,
+  ): Promise<MemberSummary>;
   getMembers(teamId: string): Promise<MemberSummary[]>;
   listTeams(memberId: string): Promise<Team[]>;
   archive(teamId: string, userId: string): Promise<void>;
@@ -191,6 +206,81 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
     return assembleMemberSummary(member, teamMemberRoleRepo, slackIdentityLinkRepo);
   }
 
+  async function setSlackBinding(
+    teamId: string,
+    memberId: string,
+    slackUserId: string | null,
+    actorId: string,
+  ): Promise<MemberSummary> {
+    if (!slackIdentityLinkRepo) {
+      /*
+       * Optional in the deps because most of this service does not need it.
+       * A binding without it is not a degraded binding, it is no binding — so
+       * this refuses rather than silently doing nothing.
+       */
+      throw new AppError(
+        'Slack identity link repository is not configured',
+        'INTERNAL_ERROR',
+        500,
+      );
+    }
+
+    const member = await teamMemberRepo.findById(memberId);
+    if (!member || member.teamId !== teamId) {
+      // The team id in a URL is not a permission on its own
+      throw new NotFoundError('Team member not found in this team');
+    }
+
+    const existing = await slackIdentityLinkRepo.findByMemberId(memberId);
+    const previous = existing?.slackUserId ?? null;
+
+    if (previous === slackUserId) {
+      // Nothing changed, so nothing is written. A log of non-events is a log
+      // nobody reads
+      return assembleMemberSummary(member, teamMemberRoleRepo, slackIdentityLinkRepo);
+    }
+
+    if (slackUserId === null) {
+      await slackIdentityLinkRepo.delete(memberId);
+      await auditLogRepo.create({
+        teamId,
+        changeType: 'slack_binding_removed',
+        previousValue: JSON.stringify({ memberId, slackUserId: previous }),
+        newValue: JSON.stringify({ memberId, slackUserId: null }),
+        userId: actorId,
+      });
+      return assembleMemberSummary(member, teamMemberRoleRepo, slackIdentityLinkRepo);
+    }
+
+    /*
+     * Property 3: one Slack account resolves to at most one member.
+     *
+     * Checked before the write, and the failure it prevents is the serious
+     * one — a mistyped id handing one member the ability to sign in as
+     * another. Refusing leaves the existing binding exactly as it was.
+     */
+    const heldByAnother = await slackIdentityLinkRepo.findBySlackUserId(slackUserId);
+    if (heldByAnother && heldByAnother.memberId !== memberId) {
+      throw new ConflictError('That Slack account is already linked to another member');
+    }
+
+    await slackIdentityLinkRepo.upsertByMemberId(memberId, slackUserId);
+    await auditLogRepo.create({
+      teamId,
+      /*
+       * Named for *how* the binding came about, not just that it did. Phase 3
+       * adds one an email match creates, and a log that could not tell them
+       * apart would answer "who" without answering "on what basis".
+       */
+      changeType: 'slack_binding_asserted',
+      previousValue: JSON.stringify({ memberId, slackUserId: previous }),
+      newValue: JSON.stringify({ memberId, slackUserId }),
+      userId: actorId,
+    });
+
+    return assembleMemberSummary(member, teamMemberRoleRepo, slackIdentityLinkRepo);
+  }
+
   /** Requirement 1.8: Archive a team — sets archived flag, force-closes open session, logs audit */
   async function archive(teamId: string, userId: string): Promise<void> {
     const team = await teamRepo.findById(teamId);
@@ -337,6 +427,7 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
     addMember,
     removeMember,
     updateMemberRole,
+    setSlackBinding,
     getMembers,
     listTeams,
     archive,
