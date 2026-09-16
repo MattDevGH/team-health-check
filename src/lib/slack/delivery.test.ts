@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { createRecorder } from '@/lib/observability';
 import { deliverSlackMessage, type SlackApiClient, type DeliveryResult } from './delivery';
 
 function createMockSlackClient(responses: Array<{ ok: boolean; error?: string } | Error>): SlackApiClient {
@@ -14,6 +15,23 @@ function createMockSlackClient(responses: Array<{ ok: boolean; error?: string } 
   };
 }
 
+/**
+ * Reads what was recorded.
+ *
+ * These tests spied on `console.error` and asserted a string had been passed to
+ * it — which proves a call happened, not that anything useful was written. The
+ * line it checked said "Slack delivery failed after 3 attempts" with no member,
+ * team or channel in it.
+ */
+function capturingRecorder() {
+  const events: Record<string, unknown>[] = [];
+  return {
+    events,
+    recorder: createRecorder({
+      sink: { write: line => events.push(JSON.parse(line) as Record<string, unknown>) },
+    }),
+  };
+}
 describe('deliverSlackMessage', () => {
   it('succeeds on first attempt when API returns ok', async () => {
     const client = createMockSlackClient([{ ok: true }]);
@@ -67,7 +85,13 @@ describe('deliverSlackMessage', () => {
   });
 
   it('fails after all retries are exhausted', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    /*
+     * This asserted that `console.error` had been called with a string. That
+     * proves a call was made, not that anything useful was written — and the
+     * line it checked said `Slack delivery failed after 3 attempts` with no
+     * member, team or channel in it.
+     */
+    const written = capturingRecorder();
 
     const client = createMockSlackClient([
       { ok: false, error: 'channel_not_found' },
@@ -80,6 +104,7 @@ describe('deliverSlackMessage', () => {
       slackUserId: 'U12345',
       blocks: [],
       retryDelayMs: 0,
+      recorder: written.recorder,
     });
 
     expect(result).toEqual<DeliveryResult>({
@@ -88,15 +113,18 @@ describe('deliverSlackMessage', () => {
       error: 'channel_not_found',
     });
     expect(client.postMessage).toHaveBeenCalledTimes(3);
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Slack delivery failed after 3 attempts')
-    );
 
-    consoleErrorSpy.mockRestore();
+    // What the record says, which is what somebody debugging would read
+    expect(written.events[0]).toMatchObject({
+      event: 'slack.delivery.exhausted',
+      channel: 'U12345',
+      attempts: 3,
+      message: 'channel_not_found',
+    });
   });
 
   it('fails after all retries exhausted with network errors', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const written = capturingRecorder();
 
     const client = createMockSlackClient([
       new Error('timeout'),
@@ -109,6 +137,7 @@ describe('deliverSlackMessage', () => {
       slackUserId: 'U12345',
       blocks: [],
       retryDelayMs: 0,
+      recorder: written.recorder,
     });
 
     expect(result).toEqual<DeliveryResult>({
@@ -117,8 +146,7 @@ describe('deliverSlackMessage', () => {
       error: 'timeout',
     });
     expect(client.postMessage).toHaveBeenCalledTimes(3);
-
-    consoleErrorSpy.mockRestore();
+    expect(written.events[0]).toMatchObject({ message: 'timeout', attempts: 3 });
   });
 
   it('returns correct attempt count on second-attempt success', async () => {

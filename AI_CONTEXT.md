@@ -543,7 +543,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1731 tests across 183 files**, including
+The Vitest suite now contains **1786 tests across 187 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
@@ -802,6 +802,66 @@ The privacy defect found in the same session — trend indicators bypassing the
 anonymity threshold — was fixed immediately and is out of scope here.
 
 ## Outstanding Work
+
+### Knowing what happened — built 2026-09-16
+
+`.kiro/specs/knowing-what-happened/`. The application keeps no record of what
+it does. Eleven `console` calls exist in the whole codebase, all but one in a
+catch block, and the scheduler tick — which opens checks, closes them, computes
+results and sends every prompt — logs nothing and returns `{ ok: true }`
+whatever it did.
+
+**The cost is already paid.** The dashboard says "Results are overdue — the
+scheduler may not be running" because a stalled scheduler is indistinguishable
+from a silent team *from the outside*, and there was no inside to look at. That
+message is a user interface compensating for an absent record, and the
+deployment spec’s open task "establish how a stopped trigger would be noticed"
+is the same gap from the other side.
+
+The five lines that do exist say things like `Slack delivery failed after 3
+attempts: Error` — not which member, team, session or check.
+
+**Scope: boundaries only**, decided with Matt. An agent can reconstruct what the
+code *would* do; nothing can reconstruct what it *did* at 15:30 on a Monday. So
+decisions and outcomes at the edges, and no narration of internal steps — that
+was always a substitute for reading the code and is now a substitute for
+something much cheaper.
+
+One module writing JSON to stdout, no dependency. `docs/operations.md` lists
+every event and what to filter on.
+
+**The tick now answers with what it did** —
+`{ opened, closed, materialised, prompts, durationMs, tickId }` — because
+cron-job.org shows the response body and that is the one dashboard anybody
+looks at. And it says *why* it did nothing: `no schedule configured`, `team
+archived`, `outside the collection window`, `this cycle has already been
+served`, `a check is already collecting`. Five different silences that all
+looked identical from outside, which is the reason the dashboard has an
+"overdue" state at all.
+
+A materialisation failure was swallowed with a comment saying it would be
+retried next tick. It is — for ever, silently, if the cause is permanent. It
+is recorded now.
+
+**The redactor ate the ids, and only running it found that.** A team id is
+thirty-six characters of letters, digits and hyphens, which is exactly what a
+session-token pattern matches, so every event came out carrying
+`teamId: "[redacted]"` — the record destroying the one thing it exists to
+carry, while passing its own tests, which all used ids like `team-1`.
+Redaction applies to prose fields only now: an id field cannot hold a token,
+because the allowlist decides what an id field is.
+
+**A stale test went with it.** `delivery.test.ts` spied on `console.error` and
+asserted a string had been passed to it — the "assert the call, not the
+outcome" pattern `AGENTS.md` warns about — and the line it checked said
+"Slack delivery failed after 3 attempts" with no member, team or channel. It
+reads the record now.
+
+One box is left open deliberately: reading a real tick response from
+cron-job.org, which needs a deploy and the next scheduled run.
+
+This also closed the deployment spec’s last observability task, "establish how
+a stopped trigger would be noticed" — three ways now, none of them an alert.
 
 ### The specs now say what is built — reconciled 2026-09-15
 

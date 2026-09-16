@@ -9,6 +9,8 @@
  */
 
 import { withErrorHandling } from '@/lib/api-utils';
+import { recorder } from '@/lib/observability';
+import { recordingSink } from '@/lib/observability/recorded-sink';
 import { ForbiddenError } from '@/lib/errors';
 import { repos } from '@/lib/container-production';
 import { createSchedulerService } from '@/lib/services/scheduler.service';
@@ -94,6 +96,7 @@ export const POST = withErrorHandling(async (request: Request) => {
     teamScheduleRepo: repos.teamSchedule,
     sessionRepo: repos.session,
     sessionService,
+    recorder,
   });
 
   // 3. Snapshot open sessions before tick (to detect newly opened ones)
@@ -108,7 +111,7 @@ export const POST = withErrorHandling(async (request: Request) => {
   }
 
   // 4. Execute tick
-  await scheduler.tick(now);
+  const summary = await scheduler.tick(now);
 
   // 5. Wire NotificationService with production sink and link checker
   const slackLinkChecker = createProductionSlackLinkChecker({
@@ -129,6 +132,13 @@ export const POST = withErrorHandling(async (request: Request) => {
       })
       : { send: async () => {} }); // No-op sink if no Slack token configured
 
+  /*
+   * Wrapped once, here, because every notification the tick sends goes through
+   * this one object — prompts, closing reminders, nudges. "I never got a
+   * message" had no answer before it.
+   */
+  const recordedSink = recordingSink(notificationSink, recorder);
+
   const notificationService = createNotificationService({
     teamRepo: repos.team,
     teamMemberRepo: repos.teamMember,
@@ -137,7 +147,7 @@ export const POST = withErrorHandling(async (request: Request) => {
     availabilityRepo: repos.availability,
     sessionRepo: repos.session,
     notificationDeliveryRepo: repos.notificationDelivery,
-    notificationSink,
+    notificationSink: recordedSink,
     slackLinkChecker,
     now: tickClock,
   });
@@ -145,6 +155,8 @@ export const POST = withErrorHandling(async (request: Request) => {
   // 6. Notify for open sessions (Requirements 8.1, 8.2).
   // NotificationService owns eligibility: Slack link, availability, delivery
   // window, reminder preference, completion, and the once-per-session guard.
+  let prompts = 0;
+
   for (const team of teams) {
     if (team.archived) continue;
 
@@ -156,6 +168,7 @@ export const POST = withErrorHandling(async (request: Request) => {
       const members = await repos.teamMember.findByTeamId(team.id);
       for (const member of members) {
         await notificationService.sendSlackPrompt(member.id, openSession);
+        prompts += 1;
       }
     }
 
@@ -174,5 +187,15 @@ export const POST = withErrorHandling(async (request: Request) => {
     });
   await queue.processPending(deliver, now);
 
-  return Response.json({ ok: true });
+  /*
+   * What it did, not merely that it ran.
+   *
+   * cron-job.org shows the response body of every call it makes: a dashboard
+   * the maintainer already has open, refreshed daily, with no account to
+   * create. `{ ok: true }` told it nothing, so a check that failed to open
+   * looked exactly like a Wednesday.
+   *
+   * Counts and ids only — never anything a member answered.
+   */
+  return Response.json({ ok: true, ...summary, prompts });
 });

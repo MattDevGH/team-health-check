@@ -11,6 +11,7 @@ import {
   ValidationError,
 } from './errors';
 import type { ValidationField } from './errors';
+import { recorder, type Recorder } from '@/lib/observability';
 
 /**
  * Structured API error response body.
@@ -44,7 +45,23 @@ type RouteHandler = (
  * - RateLimitError → 429
  * - Unexpected errors → 500 (generic message, no internal details)
  */
-export function withErrorHandling(handler: RouteHandler): RouteHandler {
+/** The path, or the raw URL if it cannot be parsed. Never throws. */
+function safeRoute(request: Request): string {
+  try {
+    return new URL(request.url).pathname;
+  } catch {
+    return request.url;
+  }
+}
+
+export function withErrorHandling(
+  handler: RouteHandler,
+  /**
+   * Injectable so a test can read what was recorded. Defaults to the
+   * application's recorder, so a route gets this for free.
+   */
+  record: Recorder = recorder,
+): RouteHandler {
   return async (request, context) => {
     try {
       return await handler(request, context);
@@ -74,8 +91,20 @@ export function withErrorHandling(handler: RouteHandler): RouteHandler {
         );
       }
 
-      // Unexpected error — log internally but expose no details
-      console.error('Unexpected error:', error);
+      /*
+       * Unexpected, and therefore the only kind worth recording. A 404 or a
+       * validation failure is the system working; recording those would bury
+       * the ones that matter in the ones that do not.
+       *
+       * The route is the thing a reader needs and the thing the old line
+       * lacked: `Unexpected error:` arrives in a serverless log with no request
+       * beside it.
+       */
+      record.error('request.failed', {
+        route: safeRoute(request),
+        errorName: error instanceof Error ? error.name : typeof error,
+        message: error instanceof Error ? error.message : String(error),
+      });
       return Response.json(
         {
           error: {

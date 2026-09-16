@@ -182,10 +182,13 @@ repository.
       `Authorization: Bearer <CRON_SECRET>` header
 - [x] Choose an interval fine enough to open and close a session near its time
 - [x] Confirm an unauthenticated POST is refused
-- [ ] Establish how a stopped trigger would be noticed — partly answered since:
-      the dashboard says "Results are overdue — the scheduler may not be running"
-      when a closed check has no aggregates after 15 minutes. That is a reader
-      noticing, not an alert, and the tick itself still logs nothing
+- [x] Establish how a stopped trigger would be noticed. Three ways, none of
+      them an alert: the dashboard says "Results are overdue — the scheduler
+      may not be running" when a closed check has no aggregates after 15
+      minutes; the tick’s response now carries what it did, and cron-job.org
+      shows that response; and `tick.started` / `tick.finished` are in the
+      logs with a run id. Making one of them page somebody is a separate
+      decision — see `.kiro/specs/knowing-what-happened/`
 - _Requirements: 4.1, 4.2, 4.5, 4.6_
 
 ### 4.6 Slack
