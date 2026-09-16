@@ -63,30 +63,42 @@ function entry(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/*
+ * At module scope, not inside the first describe.
+ *
+ * They were inside it, and its `afterAll` disconnected Prisma and deleted the
+ * temporary directory before the sibling describe below ever ran — so the
+ * service tests ran against a database that was gone.
+ *
+ * It passed on Windows, where the delete fails while the file is still held
+ * and the catch swallows it, and failed on CI, where the delete works. Sibling
+ * describes do not share a describe's hooks; this repository has now been
+ * caught by that four times.
+ */
+let appliedMigrations = 0;
+
+beforeAll(async () => {
+  workDir = mkdtempSync(path.join(tmpdir(), 'thc-ledger-'));
+  const dbPath = path.join(workDir, 'ledger-test.db').replace(/\\/g, '/');
+  const url = `file:${dbPath}`;
+
+  const client = createClient({ url });
+  appliedMigrations = await applyMigrations(client);
+  client.close();
+
+  prisma = new PrismaClient({ adapter: new PrismaLibSql({ url }) });
+}, 60_000);
+
+afterAll(async () => {
+  await prisma?.$disconnect();
+  try {
+    if (workDir) rmSync(workDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch {
+    // best effort — the OS reclaims the temp directory
+  }
+});
+
 describe('the scheduler ledger over libSQL', () => {
-  let appliedMigrations = 0;
-
-  beforeAll(async () => {
-    workDir = mkdtempSync(path.join(tmpdir(), 'thc-ledger-'));
-    const dbPath = path.join(workDir, 'ledger-test.db').replace(/\\/g, '/');
-    const url = `file:${dbPath}`;
-
-    const client = createClient({ url });
-    appliedMigrations = await applyMigrations(client);
-    client.close();
-
-    prisma = new PrismaClient({ adapter: new PrismaLibSql({ url }) });
-  }, 60_000);
-
-  afterAll(async () => {
-    await prisma?.$disconnect();
-    try {
-      if (workDir) rmSync(workDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-    } catch {
-      // best effort — the OS reclaims the temp directory
-    }
-  });
-
   it('applies the committed migrations through the adapter', () => {
     expect(appliedMigrations).toBeGreaterThan(0);
   });
