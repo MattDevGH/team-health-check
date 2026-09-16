@@ -58,6 +58,17 @@ reading the code, and it is now a substitute for something much cheaper.
 3. WHERE the tick declines to act on a team, IT SHALL record why — no schedule, archived, outside the collection window, or the cycle already served.
 4. THE tick's HTTP response SHALL carry a summary of what it did, since the cron service that calls it shows the response and nobody reads server logs on a schedule.
 5. THE summary SHALL be counts and ids, never the content of any answer.
+6. THE summary SHALL state in plain language what the tick did, and where it
+   did nothing, why — without requiring the reader to know what the field
+   names mean.
+
+*Criterion 6 was added after the first tick reached a live cron dashboard.*
+*The response was `{ opened: 0, closed: 0, materialised: 2, prompts: 3 }`, which*
+*satisfied criteria 1 to 5 and still could not be acted on: `opened: 0` is the*
+*correct outcome on a Wednesday and a failure on Monday at 15:30, and no count*
+*distinguishes them. The verdict at the time was that it needed "a reminder of*
+*what it’s telling me" — and a record that needs a reminder is not a record*
+*that can be read at a glance.*
 
 ### Requirement 2: A Record Says Who It Is About
 

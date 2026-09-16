@@ -854,6 +854,40 @@ served`, `a check is already collecting`. Five different silences that all
 looked identical from outside, which is the reason the dashboard has an
 "overdue" state at all.
 
+**Then the counts were read on the real dashboard, and they were not enough.**
+The response was `{ opened: 0, closed: 0, materialised: 2, prompts: 3 }`, and
+the verdict was that it needed "a reminder of what it’s telling me". A record
+that needs a reminder is not a record anybody reads at a glance — the same
+defect the `explaining-itself` milestone exists to remove, arriving in the
+milestone meant to fix it.
+
+The counts were never the missing piece. `opened: 0` is the correct outcome on
+a Wednesday and a failure on Monday at 15:30, and no number tells them apart.
+The reason does — and the reasons were going to a server log nobody reads on a
+schedule while the response carried only totals. So the tick now returns its
+reasons as well as its counts, and the response leads with a sentence:
+
+> Ran and opened 1 check, prompting 3 members, computed results for 2 checks.
+
+> Ran, nothing was due: 2 teams outside the collection window, 1 team with no
+> schedule configured.
+
+Three things are worth knowing about how it is put together
+(`src/lib/services/tick-summary.ts`, criterion 1.6, added for this):
+
+- **The facts are the service’s, the sentence is the route’s.** Only the route
+  knows how many prompts went out, so only the route can compose the line.
+- **Counting happens where recording happens.** `skip()` inside the tick writes
+  the record and increments the count in one place, so a reason cannot be
+  logged without also reaching the response. A test compares the two sets.
+- **`SKIP_REASONS` is a shared const union** (`tick-reasons.ts`) with a phrase
+  per reason for reading after a count. The first version composed
+  `${count} ${reason}` and produced "Passed over 2 a check is already
+  collecting." A new reason without a phrase is now a compile error.
+
+"Computed results for", never "materialised": the word is ours, and the reader
+is whoever has the cron dashboard open. `docs/operations.md` shows both shapes.
+
 A materialisation failure was swallowed with a comment saying it would be
 retried next tick. It is — for ever, silently, if the cause is permanent. It
 is recorded now.

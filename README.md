@@ -326,6 +326,21 @@ project is finished and quietly relied upon.
 The tick is idempotent and reconciles state, so a missed trigger costs a delay
 rather than a lost session. See docs/deployment.md.
 
+The cron service shows the response body of every call it makes, so the tick
+answers in a sentence rather than in field names:
+
+```json
+{ "ok": true,
+  "summary": "Ran, nothing was due: 2 teams outside the collection window, 1 team with no schedule configured.",
+  "tickId": "p852iwt2", "opened": 0, "closed": 0, "materialised": 0,
+  "prompts": 0, "durationMs": 118,
+  "reasons": { "outside the collection window": 2, "no schedule configured": 1 } }
+```
+
+The counts are still there for anything that parses them. The sentence exists
+because `"opened": 0` is the correct outcome on a Wednesday and a failure on
+Monday at 15:30, and no count tells the two apart. See docs/operations.md.
+
 ### Local Development with Slack
 
 For testing Slack locally:

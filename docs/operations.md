@@ -18,12 +18,37 @@ makes, so the fastest answer to "did it run, and what did it do?" is already on
 a screen you have:
 
 ```json
-{ "ok": true, "tickId": "p852iwt2", "opened": 1, "closed": 0,
-  "materialised": 2, "prompts": 3, "durationMs": 412 }
+{ "ok": true,
+  "summary": "Ran and opened 1 check, prompting 3 members, computed results for 2 checks.",
+  "tickId": "p852iwt2", "opened": 1, "closed": 0,
+  "materialised": 2, "prompts": 3, "durationMs": 412,
+  "reasons": {} }
 ```
 
 It used to return `{ "ok": true }` whatever happened, which made a broken Monday
-look exactly like an ordinary Wednesday.
+look exactly like an ordinary Wednesday. Then it returned the counts, which was
+better and still not enough: `"opened": 0` is the correct outcome on a Wednesday
+and a failure on Monday at 15:30, and no number tells the two apart.
+
+`summary` is the field to read. When nothing opened it says why, and counts the
+teams each reason applied to:
+
+```json
+{ "summary": "Ran, nothing was due: 2 teams outside the collection window, 1 team with no schedule configured.",
+  "opened": 0, "closed": 0, "materialised": 0, "prompts": 0,
+  "reasons": { "outside the collection window": 2, "no schedule configured": 1 } }
+```
+
+The commonest reason comes first, because it is the state of the system. Two
+sentences are worth telling apart: *"nothing was due"* means teams were
+considered and passed over, and *"no teams to check"* means there were none to
+consider — which on a live installation is itself the problem.
+
+`reasons` carries the same breakdown for anything that parses the body. It is
+the same set the `tick.skipped` lines carry, by construction: the tick counts a
+reason at the moment it records one, and a test compares the two. The reasons
+are a shared list, and one added to the scheduler without a phrase to read it
+out by is a compile error.
 
 **Then the logs**, filtered by `tickId` from that response. Every line one run
 produced carries the same one.

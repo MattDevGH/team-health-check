@@ -154,6 +154,21 @@ async function closeAndMaterialise(page: Page, current: typeof state): Promise<v
     headers: { Authorization: `Bearer ${E2E_CRON_SECRET}` },
   });
   expect(tick.ok(), 'scheduler tick should materialise the closed session').toBe(true);
+
+  /*
+   * Requirements: Knowing What Happened 1.6
+   *
+   * The body is what cron-job.org puts in front of a person, and the counts
+   * alone could not be acted on at a glance. This is the only place the real
+   * response is read, so it is where the sentence has to be proved — and it
+   * proves the route composes it from what the tick actually did, not from a
+   * constant.
+   */
+  const body = (await tick.json()) as { summary?: string };
+  expect(body.summary, "the tick should say what it did in a sentence").toMatch(
+    /computed results for 1 check/i,
+  );
+  expect(body.summary, "and never in field names").not.toMatch(/materialised/i);
 }
 
 test.describe.serial('team lifecycle journey', () => {
