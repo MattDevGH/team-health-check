@@ -281,6 +281,82 @@ describe('what a tick returns', () => {
   });
 });
 
+describe('the reasons a tick passed a team over', () => {
+  /*
+   * Requirements: Knowing What Happened 1.6
+   *
+   * The reasons were recorded and then thrown away: they reached the server
+   * log, which nobody reads on a schedule, and not the response, which is the
+   * one thing the cron service puts in front of a person. Counting them here
+   * is what lets the response say why nothing opened.
+   */
+
+  it('says why, when it opened nothing', async () => {
+    const team = await repos.team.create({ name: "Unscheduled" });
+    await repos.teamMember.create({ teamId: team.id, name: "M", email: "m@example.invalid" });
+
+    const summary = await scheduler.tick(MONDAY_0900);
+
+    expect(summary.reasons).toEqual({ 'no schedule configured': 1 });
+  });
+
+  it('counts the teams a reason applied to, rather than listing them', async () => {
+    // The teams are in the records, named individually. The summary is a
+    // shape of the system, and two teams with no schedule is one fact
+    for (const name of ["A", "B"]) {
+      const team = await repos.team.create({ name });
+      await repos.teamMember.create({ teamId: team.id, name: "M", email: `${name}@example.invalid` });
+    }
+
+    const summary = await scheduler.tick(MONDAY_0900);
+
+    expect(summary.reasons['no schedule configured']).toBe(2);
+  });
+
+  it('tells the reasons apart', async () => {
+    await teamWithSchedule("Scheduled");
+    const archived = await repos.team.create({ name: "Gone" });
+    await repos.team.update(archived.id, { archived: true });
+
+    const summary = await scheduler.tick(SATURDAY);
+
+    expect(summary.reasons).toMatchObject({
+      'team archived': 1,
+      'outside the collection window': 1,
+    });
+  });
+
+  it('carries nothing when every team was acted on', async () => {
+    await teamWithSchedule();
+
+    const summary = await scheduler.tick(MONDAY_0900);
+
+    expect(summary.reasons).toEqual({});
+  });
+
+  it('counts every reason the tick records, not a hand-picked few', async () => {
+    /*
+     * The failure this guards against is a new skip reason being added to the
+     * tick and quietly never reaching the response — the count drifting from
+     * the records without anything going red. So the two are compared.
+     */
+    await teamWithSchedule("Scheduled");
+    const archived = await repos.team.create({ name: "Gone" });
+    await repos.team.update(archived.id, { archived: true });
+    const bare = await repos.team.create({ name: "Unscheduled" });
+    await repos.teamMember.create({ teamId: bare.id, name: "M", email: "b@example.invalid" });
+
+    const summary = await scheduler.tick(SATURDAY);
+
+    const recorded: Record<string, number> = {};
+    for (const skip of named('tick.skipped')) {
+      const reason = String(skip.reason);
+      recorded[reason] = (recorded[reason] ?? 0) + 1;
+    }
+    expect(summary.reasons).toEqual(recorded);
+  });
+});
+
 describe('a scheduler given no recorder', () => {
   it('still works, so nothing is forced to wire one up', async () => {
     /*

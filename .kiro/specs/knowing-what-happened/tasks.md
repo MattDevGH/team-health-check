@@ -71,12 +71,58 @@ Phases 2 and 3 are independent of each other and either can ship alone.
 - [x] Failing test: it carries the tick id, so a response can be tied to the
       lines it produced
 - [x] Failing test: it carries no answer content — counts and ids only
-- [ ] Verify against production: read a real tick's response from cron-job.org
-      and confirm it says something a person can act on — needs a deploy and the
-      next scheduled run
+- [x] Verify against production: a real tick's response was read from
+      cron-job.org — and the answer was no. `{ opened: 0, closed: 0,
+      materialised: 2, prompts: 3 }` satisfied every criterion above and still
+      needed "a reminder of what it's telling me". See 2.3.
 - _Requirements: Knowing What Happened 1.4, 1.5_
 
+### 2.3 A person can act on it
+
+The counts were never the missing piece. `opened: 0` is the correct outcome on
+a Wednesday and a failure on Monday at 15:30, and no number tells the two
+apart — the reason does, and the reasons were being recorded to a server log
+nobody reads on a schedule while the response carried only the totals.
+
+- [x] Failing test: the sentence leads with what changed, in the words a
+      person would use — "computed results for", never "materialised"
+- [x] Failing test: a tick that did nothing says so, and says why, counting
+      the teams each reason applied to and putting the commonest first
+- [x] Failing test: a tick with no teams at all says that instead of
+      "nothing was due" — a different fact
+- [x] Failing test: the tick returns its skip reasons, not just its counts
+- [x] Failing test: the reasons returned match the reasons recorded, so a new
+      skip reason cannot be logged without also reaching the response
+- [x] Failing test: the sentence carries no score or trend — it goes to a
+      third party's dashboard
+- [x] End-to-end: read the sentence out of the real response body, which is
+      the only place the route composes one
+- [ ] **Enable "save responses" on the cron-job.org job first.** Reported
+      2026-09-16: the dashboard shows `200 OK` and no body at all until that
+      setting is on. Criterion 1.4 assumed otherwise and has been corrected
+- [ ] Verify against production: read the next scheduled run's response and
+      confirm the sentence reads as intended — needs a deploy and the next run
+- _Requirements: Knowing What Happened 1.4, 1.6_
+
 **Checkpoint:** "why did no check open on Monday?" is answerable. One PR.
+
+### 2.4 Somewhere better than an afternoon — *moved to its own spec*
+
+cron-job.org keeps the last 50 executions over two days, behind a setting that
+is off by default. Vercel's Hobby plan keeps the runtime logs for **one hour**.
+Between them, the milestone named *Knowing What Happened* remembers what
+happened for an afternoon.
+
+Worse, the fifty are counted in executions rather than time, so what survives is
+the most recent fifty — which on a weekly cadence is the least interesting
+fifty. The three ticks a week that did something are evicted within hours by the
+hundreds of quiet ones that follow.
+
+Specified in full at `.kiro/specs/remembering-what-happened/`: a heartbeat every
+tick, a ledger of only the ticks that did something, both pruned by the tick
+itself, and a dashboard that reports instead of inferring.
+
+- _Requirements: Remembering What Happened 1, 2, 3, 5_
 
 ---
 

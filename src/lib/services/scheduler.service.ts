@@ -14,6 +14,7 @@ import type {
 import type { SessionService } from '@/lib/services/session.service';
 import { nextOccurrenceUtc, previousOccurrenceUtc } from '@/lib/local-time';
 import type { Recorder } from '@/lib/observability';
+import type { SkipReason } from '@/lib/services/tick-reasons';
 
 export interface SchedulerServiceDeps {
   teamRepo: TeamRepository;
@@ -36,6 +37,18 @@ export interface TickSummary {
   closed: number;
   materialised: number;
   durationMs: number;
+  /**
+   * How many teams were passed over, by reason.
+   *
+   * Requirements: Knowing What Happened 1.6. The reasons were already
+   * recorded, and the records go to a server log nobody reads on a schedule.
+   * The response is the one place a person looks, and `opened: 0` there means
+   * nothing without the reason beside it.
+   *
+   * Counts rather than team names: the records name the teams individually,
+   * and this is meant to be read at a glance.
+   */
+  reasons: Partial<Record<SkipReason, number>>;
 }
 
 /** Quiet period in milliseconds before materialising aggregates after session close. */
@@ -72,6 +85,17 @@ export function createSchedulerService(deps: SchedulerServiceDeps) {
     const startedAt = Date.now();
     let opened = 0;
     let closed = 0;
+    const reasons: Partial<Record<SkipReason, number>> = {};
+
+    /*
+     * Recording and counting a skip together, so that adding a reason to the
+     * tick cannot record it without also reporting it. A test compares the two
+     * for exactly that drift.
+     */
+    function skip(reason: SkipReason, context: Record<string, string> = {}): void {
+      reasons[reason] = (reasons[reason] ?? 0) + 1;
+      record.info('tick.skipped', { tickId, reason, ...context });
+    }
 
     record.info('tick.started', { tickId });
 
@@ -79,7 +103,7 @@ export function createSchedulerService(deps: SchedulerServiceDeps) {
 
     for (const team of teams) {
       if (team.archived) {
-        record.info('tick.skipped', { tickId, teamId: team.id, reason: 'team archived' });
+        skip('team archived', { teamId: team.id });
         continue;
       }
 
@@ -91,11 +115,7 @@ export function createSchedulerService(deps: SchedulerServiceDeps) {
          * exactly like a broken one — which is the confusion the dashboard’s
          * "the scheduler may not be running" exists to paper over.
          */
-        record.info('tick.skipped', {
-          tickId,
-          teamId: team.id,
-          reason: 'no schedule configured',
-        });
+        skip('no schedule configured', { teamId: team.id });
         continue;
       }
 
@@ -184,19 +204,16 @@ export function createSchedulerService(deps: SchedulerServiceDeps) {
            * fact; already served means it ran and this is simply a later tick
            * in the same week.
            */
-          record.info('tick.skipped', {
-            tickId,
-            teamId: team.id,
-            reason: withinCollectionWindow
+          skip(
+            withinCollectionWindow
               ? 'this cycle has already been served'
               : 'outside the collection window',
-          });
+            { teamId: team.id },
+          );
         }
       } else {
-        record.info('tick.skipped', {
-          tickId,
+        skip('a check is already collecting', {
           teamId: team.id,
-          reason: 'a check is already collecting',
           sessionId: sessionAfterClose.id,
         });
       }
@@ -208,7 +225,7 @@ export function createSchedulerService(deps: SchedulerServiceDeps) {
     const durationMs = Date.now() - startedAt;
     record.info('tick.finished', { tickId, opened, closed, materialised, durationMs });
 
-    return { tickId, opened, closed, materialised, durationMs };
+    return { tickId, opened, closed, materialised, durationMs, reasons };
   }
 
   /**

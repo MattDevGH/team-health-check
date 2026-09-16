@@ -13,20 +13,61 @@ captures. No service, no account, no network call.
 
 ## What to look at first
 
-**The scheduler's response.** cron-job.org shows the body of every call it
-makes, so the fastest answer to "did it run, and what did it do?" is already on
-a screen you have:
+**The scheduler's response.** cron-job.org can show the body of every call it
+makes — but only once the job has **save responses** enabled, which it is not by
+default, and then only for the last 50 executions over two days. See
+`docs/deployment.md`. With it on, the fastest answer to "did it run, and what
+did it do?" is on a screen you already have:
 
 ```json
-{ "ok": true, "tickId": "p852iwt2", "opened": 1, "closed": 0,
-  "materialised": 2, "prompts": 3, "durationMs": 412 }
+{ "ok": true,
+  "summary": "Ran and opened 1 check, prompting 3 members, computed results for 2 checks.",
+  "tickId": "p852iwt2", "opened": 1, "closed": 0,
+  "materialised": 2, "prompts": 3, "durationMs": 412,
+  "reasons": {} }
 ```
 
 It used to return `{ "ok": true }` whatever happened, which made a broken Monday
-look exactly like an ordinary Wednesday.
+look exactly like an ordinary Wednesday. Then it returned the counts, which was
+better and still not enough: `"opened": 0` is the correct outcome on a Wednesday
+and a failure on Monday at 15:30, and no number tells the two apart.
+
+`summary` is the field to read. When nothing opened it says why, and counts the
+teams each reason applied to:
+
+```json
+{ "summary": "Ran, nothing was due: 2 teams outside the collection window, 1 team with no schedule configured.",
+  "opened": 0, "closed": 0, "materialised": 0, "prompts": 0,
+  "reasons": { "outside the collection window": 2, "no schedule configured": 1 } }
+```
+
+The commonest reason comes first, because it is the state of the system. Two
+sentences are worth telling apart: *"nothing was due"* means teams were
+considered and passed over, and *"no teams to check"* means there were none to
+consider — which on a live installation is itself the problem.
+
+`reasons` carries the same breakdown for anything that parses the body. It is
+the same set the `tick.skipped` lines carry, by construction: the tick counts a
+reason at the moment it records one, and a test compares the two. The reasons
+are a shared list, and one added to the scheduler without a phrase to read it
+out by is a compile error.
 
 **Then the logs**, filtered by `tickId` from that response. Every line one run
 produced carries the same one.
+
+**Both forget quickly.** Vercel's Hobby plan keeps runtime logs for **one hour**,
+and cron-job.org keeps the last **50 executions** — which is between fifty
+minutes and four hours depending on the tick interval, and never reaches the
+two-day body cap at any interval under about an hour. What survives is the most
+recent fifty rather than the most interesting: on a weekly cadence the ticks that
+actually opened or closed a check are evicted within hours by the quiet ones.
+
+So the answer to "what did it just do?" is above, and the answer to "what
+happened on Monday" does not currently exist.
+`.kiro/specs/remembering-what-happened/` specifies the fix — a heartbeat every
+tick and a ledger of only the ticks that did something, both kept in the
+application's own database and pruned by the tick itself. Until that is built,
+look within the hour or not at all.
 
 ## The events
 
@@ -120,12 +161,20 @@ They join on the audit entry's id, which appears in both: on the page as
 manager never has to read a token, and nobody debugging has to guess which
 change a line refers to.
 
+**The join only exists for things a person did.** All ten change types —
+`schedule_change`, `member_added`, `privacy_mode_changed` and the rest — are
+human actions; the scheduler writes no audit entries at all. So there is no
+audit entry to find for a check the scheduler opened, and looking for one is a
+dead end. The two records are complementary rather than overlapping, which is
+also the answer to whether they want a shared identifier: there is no join to
+make.
+
 ## Retention is the platform's, not ours
 
-Vercel keeps runtime logs for a window that **depends on the plan**. Check what
-the current plan actually retains before treating any of this as a historical
-record — "we have logs" and "we can look at last month" are different claims,
-and only one of them is free.
+**Checked 2026-09-16: Vercel's Hobby plan keeps runtime logs for one hour.**
+Pro is one day by default, 30 with Observability Plus. So on the current plan
+every event above is gone within the hour, and "we have logs" and "we can look
+at last month" are different claims — only one of them is free.
 
 Nothing here is shipped anywhere, aggregated, or alerted on. If a stopped
 scheduler needs to notify somebody rather than wait to be noticed, that is a
