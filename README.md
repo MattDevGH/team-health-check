@@ -298,6 +298,17 @@ span midnight, and an unconfigured window imposes no restriction). The per-membe
 Reminders toggle governs closing reminders and nudges, not opening prompts, so
 opting out of reminders never removes a member from the health check.
 
+The profile page says all of this beside the controls themselves, tied to each
+with `aria-describedby` — what weekly and micro-pulse actually ask for, which
+notifications the Reminders toggle governs and which it does not, and that being
+away stops prompts without closing anything: a check already open stays
+answerable, because availability gates notifications and nothing else.
+
+An away period can be seen with its dates and cancelled, which it could not be
+before — the page took two dates, said "saved" and forgot them. Cancelling is
+scoped to the member: a period belonging to somebody else returns exactly what
+an invented id returns, so nothing says whether the id named anything.
+
 ### 8. Schedule Health Checks (Optional)
 
 The app supports automatic session scheduling via a cron job that hits the scheduler endpoint:
