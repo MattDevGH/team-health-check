@@ -11,6 +11,7 @@
 import { withErrorHandling } from '@/lib/api-utils';
 import { recorder } from '@/lib/observability';
 import { recordingSink } from '@/lib/observability/recorded-sink';
+import { summariseTick } from '@/lib/services/tick-summary';
 import { ForbiddenError } from '@/lib/errors';
 import { repos } from '@/lib/container-production';
 import { createSchedulerService } from '@/lib/services/scheduler.service';
@@ -195,7 +196,18 @@ export const POST = withErrorHandling(async (request: Request) => {
    * create. `{ ok: true }` told it nothing, so a check that failed to open
    * looked exactly like a Wednesday.
    *
-   * Counts and ids only — never anything a member answered.
+   * The counts did not fix that on their own — `opened: 0` is right on a
+   * Wednesday and wrong on Monday at 15:30, and reading it needed a reminder
+   * of what the fields meant. So the sentence leads, and the counts follow it
+   * for anything that wants to parse them.
+   *
+   * Requirements: Knowing What Happened 1.4, 1.6. Counts, reasons and ids
+   * only — never anything a member answered.
    */
-  return Response.json({ ok: true, ...summary, prompts });
+  return Response.json({
+    ok: true,
+    summary: summariseTick({ ...summary, prompts }),
+    ...summary,
+    prompts,
+  });
 });

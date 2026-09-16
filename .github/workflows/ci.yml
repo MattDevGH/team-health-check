@@ -168,12 +168,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # Read live, not from the event payload. The payload's body is frozen at
+      # the moment the event fired, so a description edited to satisfy this gate
+      # changed nothing until the next push — and re-running the job replayed
+      # the same stale body. Fetching it means a re-run actually re-checks.
       - name: Check requirement references in PR description
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           chmod +x scripts/check-requirement-coverage.sh
-          ./scripts/check-requirement-coverage.sh
+          PR_DESCRIPTION="$(gh pr view "$PR_NUMBER" --json body --jq .body)" \
+            ./scripts/check-requirement-coverage.sh
 
       # The step above checks a requirement is *mentioned*. This one checks the
       # ones cited in the code are real: a reference to "Manager Experience 5.x"

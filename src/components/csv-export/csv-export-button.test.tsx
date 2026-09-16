@@ -108,6 +108,19 @@ describe('CSVExportButton', () => {
 
       // Button should show loading state
       expect(screen.getByRole('button', { name: /exporting/i })).toBeDisabled();
+
+      /*
+       * And leaves it. Asserting only the loading state ended the test with a
+       * 100ms request still in flight: it resolved after jsdom had torn down,
+       * `setIsExporting(false)` ran without a `window`, and vitest failed the
+       * whole file on an unhandled rejection. It passed locally and failed on
+       * a slower CI runner on 2026-09-16.
+       *
+       * Waiting for the state to come back is both the fix and the better
+       * assertion — a loading state that never ends is the defect worth
+       * catching.
+       */
+      expect(await screen.findByRole('button', { name: /export csv/i })).toBeEnabled();
     });
   });
 

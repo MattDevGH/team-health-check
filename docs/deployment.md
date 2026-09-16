@@ -294,8 +294,53 @@ Vercel Pro (per-minute crons, everything inside Vercel) remains the upgrade path
 if the external trigger starts costing more attention than the subscription
 would.
 
+### Turn on "save responses", or the tick talks to nobody
+
+The tick answers with a sentence saying what it did and, when it did nothing,
+why — see `docs/operations.md`. **cron-job.org does not show you that by
+default.** The execution list shows `200 OK` and nothing more.
+
+In the job's settings, enable **save responses** (`saveResponses` over the REST
+API). The job history then shows the response headers and body for each run.
+
+Two limits worth knowing before you rely on it:
+
+- the **last 50 executions** only
+- headers and bodies are kept for **two days**
+
+The first is the one that binds. Fifty executions is counted in ticks, not in
+time, so the window is whatever fifty of your ticks span:
+
+| Tick interval | 50 executions span |
+|---|---|
+| 1 minute | 50 minutes |
+| 5 minutes | 4 hours 10 minutes |
+| 15 minutes | 12 hours 30 minutes |
+| 30 minutes | 25 hours |
+
+At any interval under about an hour, the two days never arrive. And what
+survives is the most *recent* fifty, not the most interesting: on a weekly
+cadence the handful of ticks that opened or closed a check are pushed out within
+hours by the quiet ones that follow them.
+
+Treat it as a window, not a record. It answers "what did it just do?" and cannot
+answer "what happened on Monday".
+
+**The logs are not a fallback.** Every event the recorder writes goes to Vercel's
+runtime logs, and the Hobby plan keeps those for **one hour**.
+
+**Where the summary should live instead is open work.** Two days of third-party
+retention, behind a setting that is off by default, is a thin place to keep the
+only account of what the scheduler does. The obvious alternative is the
+application itself: the dashboard already says "Results are overdue — the
+scheduler may not be running", which is the interface guessing at something the
+tick now knows for certain.
+
 **Watch that it is still firing.** A stopped trigger is silent: sessions simply
-never open, and the first report comes from a confused team.
+never open, and the first report comes from a confused team. Note that the
+response body does not help here — a trigger that has stopped sends no
+response at all, so whatever watches for that has to live somewhere the tick
+is not.
 
 ---
 
