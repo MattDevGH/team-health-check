@@ -951,6 +951,28 @@ minutes fifty executions is about two hours — enough for "what did it just do?
 useless for "what happened on Monday", which is the question this milestone is
 named after.
 
+**Phase 3 is built: the dashboard reports instead of inferring.**
+`resultState` decided *overdue* from fifteen minutes of silence; it now reads
+the heartbeat and tells four cases apart. The one that changes behaviour: when
+the scheduler **has** run since the close, the message stops naming it — sending
+somebody to restart a trigger that is demonstrably running is the wrong half of
+the system. "Never run" is its own message, not a delay, because that is what a
+misconfigured `CRON_SECRET` looks like.
+
+- **Both surfaces.** `question-detail-view` renders the same decision and was
+  left on the old wording at first — the two would have disagreed about the
+  same data, which is precisely what one shared selector exists to prevent. The
+  ISO-to-Date conversion is shared now too.
+- **The query budget went 8 → 9**, ratcheted at the measured value with the
+  reason recorded. The heartbeat joins the existing `Promise.all`, so it costs
+  a query and no waiting, and the page makes no second request — which is what
+  the requirement was actually about.
+- **Three E2E false positives came from the fixture's own name.** A team called
+  "Scheduler Visibility Team" matched `getByText(/scheduler/i)` in the header
+  and `path.includes('scheduler')` in the team id. Assertions over a page or a
+  URL that carry user-chosen text have to be scoped — by region, and by path
+  prefix.
+
 **Phase 2 is built: the ledger keeps the ticks that did something.**
 `SchedulerTickRecord` is appended rather than replaced — the opposite policy to
 the heartbeat, and the reason they are two tables. A quiet tick writes no row:

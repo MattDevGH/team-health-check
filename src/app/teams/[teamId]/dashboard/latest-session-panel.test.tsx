@@ -330,6 +330,31 @@ describe('LatestSessionPanel accessibility in every state', () => {
       now: new Date('2026-09-14T19:00:00.000Z'),
       anonymousMode: false,
     },
+    /*
+     * Overdue is four states now, not one, and each renders different text.
+     * Auditing only the one the old code produced would leave the three added
+     * for Remembering What Happened 5 unchecked — the same gap that let the
+     * skip link and the sign-out failure go unaudited until somebody reached
+     * them deliberately.
+     */
+    'overdue with the scheduler running': {
+      sessions: [{ sessionId: 's1', closedAt: CLOSED, averages: [] }],
+      now: new Date('2026-09-14T19:00:00.000Z'),
+      anonymousMode: false,
+      schedulerLastRanAt: '2026-09-14T18:00:00.000Z',
+    },
+    'overdue with the scheduler stalled': {
+      sessions: [{ sessionId: 's1', closedAt: CLOSED, averages: [] }],
+      now: new Date('2026-09-14T19:00:00.000Z'),
+      anonymousMode: false,
+      schedulerLastRanAt: '2026-09-13T09:00:00.000Z',
+    },
+    'overdue with the scheduler never run': {
+      sessions: [{ sessionId: 's1', closedAt: CLOSED, averages: [] }],
+      now: new Date('2026-09-14T19:00:00.000Z'),
+      anonymousMode: false,
+      schedulerLastRanAt: null,
+    },
     unanswered: {
       sessions: [
         {
@@ -374,4 +399,83 @@ describe('LatestSessionPanel accessibility in every state', () => {
       }
     });
   }
+});
+
+describe('what the panel says when results are overdue', () => {
+  /*
+   * Requirements: Remembering What Happened 5.1, 5.2, 5.3, 5.4
+   *
+   * "The scheduler may not be running" was a guess from fifteen minutes of
+   * silence. With a heartbeat the panel can report instead — and the three
+   * cases want different things from the reader: wait, restart the trigger, or
+   * go and configure one.
+   */
+  /*
+   * Its own fixtures, because `session` and `questions` above belong to a
+   * sibling describe and are not in scope here. Sibling describes share
+   * nothing — the same trap that deleted a database out from under an
+   * integration test earlier today.
+   */
+  const closedAt = new Date('2026-09-14T19:00:00.000Z');
+  const overdueNow = new Date('2026-09-14T21:00:00.000Z');
+  const themes = [
+    { id: 'q-delivering-value', title: 'Delivering Value', description: 'How well…' },
+  ];
+  const closedSession = () => [
+    {
+      sessionId: 's1',
+      closedAt: closedAt.toISOString(),
+      materialisedAt: null,
+      averages: [],
+    },
+  ];
+
+  function panel(schedulerLastRanAt?: string | null, now = overdueNow) {
+    return render(
+      <LatestSessionPanel
+        sessions={closedSession() as never}
+        anonymousMode
+        questions={themes}
+        now={now}
+        schedulerLastRanAt={schedulerLastRanAt}
+      />,
+    );
+  }
+
+  it('stops naming the scheduler when it has run since the check closed', () => {
+    // Sending somebody to restart a trigger that is demonstrably running is
+    // worse than saying nothing: it is the wrong half of the system
+    panel(new Date(closedAt.getTime() + 60_000).toISOString());
+
+    expect(screen.getByText(/taking longer than expected/i)).toBeInTheDocument();
+    expect(screen.queryByText(/scheduler/i)).not.toBeInTheDocument();
+  });
+
+  it('says when the scheduler last ran, if that was before the close', () => {
+    panel(new Date(closedAt.getTime() - 60_000).toISOString());
+
+    expect(screen.getByText(/scheduler has not run since 14 September 2026/i)).toBeInTheDocument();
+  });
+
+  it('says it has never run, rather than calling that a delay', () => {
+    // A fresh deployment with a misconfigured CRON_SECRET, where "overdue"
+    // points at a wait that is never going to end
+    panel(null);
+
+    expect(screen.getByText(/scheduler has never run/i)).toBeInTheDocument();
+  });
+
+  it('keeps the old wording when the response could not say', () => {
+    panel(undefined);
+
+    expect(screen.getByText(/scheduler may not be running/i)).toBeInTheDocument();
+  });
+
+  it('says none of it when the results are simply not due yet', () => {
+    // A heartbeat must not turn a pending result into an alarm
+    panel(null, new Date(closedAt.getTime() + 60_000));
+
+    expect(screen.getByText(/being prepared/i)).toBeInTheDocument();
+    expect(screen.queryByText(/never run/i)).not.toBeInTheDocument();
+  });
 });

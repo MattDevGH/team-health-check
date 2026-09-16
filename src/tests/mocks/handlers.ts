@@ -127,9 +127,15 @@ export const handlers = [
    *
    * Per Requirement 12.4: uses `closedAt` (not `closeDate`), `averages` (not `questions`),
    * and `trendDistribution` is an array (not an object).
+   *
+   * `schedulerLastRanAt` is an ISO string or null — never absent. The route
+   * always sends it, and a mock that omitted it would have every dashboard
+   * test exercising the "nothing could say" fallback while production took a
+   * different path (Remembering What Happened 5.1, 5.2, 5.3).
    */
   http.get('/api/teams/:teamId/trends', () => {
     return HttpResponse.json({
+      schedulerLastRanAt: '2025-01-08T17:05:00Z',
       sessions: [
         {
           sessionId: 'session-1',

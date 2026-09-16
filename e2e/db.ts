@@ -410,3 +410,27 @@ export function backdateClose(sessionId: string, secondsAgo = 120): void {
   const when = new Date(Date.now() - secondsAgo * 1000).toISOString();
   write(db => db.prepare('UPDATE HealthCheckSession SET actualCloseAt = ? WHERE id = ?').run(when, sessionId));
 }
+
+/**
+ * Removes the scheduler's heartbeat, so a page renders as it would on a
+ * deployment whose trigger has never called the endpoint.
+ *
+ * Requirements: Remembering What Happened 5.3
+ *
+ * A delete rather than a flag: "never run" is the absence of the row, and a
+ * test that faked it any other way would prove something the application never
+ * does.
+ */
+export function clearSchedulerHeartbeat(): void {
+  write(db => db.prepare('DELETE FROM SchedulerHeartbeat').run());
+}
+
+/** Sets when the scheduler last ran, for a page that has to report it. */
+export function setSchedulerHeartbeat(ranAt: Date): void {
+  write(db => {
+    db.prepare('DELETE FROM SchedulerHeartbeat').run();
+    db.prepare(
+      'INSERT INTO SchedulerHeartbeat (id, tickId, ranAt, summary, opened, closed, materialised, prompts, durationMs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run('scheduler', 'e2e-tick', ranAt.toISOString(), 'Ran with no teams to check.', 0, 0, 0, 0, 5);
+  });
+}

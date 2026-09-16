@@ -28,6 +28,7 @@ function deps(overrides: Partial<TrendInputsDeps> = {}): TrendInputsDeps {
     ],
     findSessions: async () => [],
     getSessionAverages: async () => [],
+    getSchedulerLastRanAt: async () => null,
     ...overrides,
   };
 }
@@ -144,6 +145,7 @@ describe('loadTrendInputs', () => {
         findQuestions: () => record('questions') as Promise<never>,
         findSessions: () => record('sessions') as Promise<never>,
         getSessionAverages: () => record('averages') as Promise<never>,
+        getSchedulerLastRanAt: () => record('heartbeat') as Promise<never>,
       },
       TEAM,
     );
@@ -151,6 +153,14 @@ describe('loadTrendInputs', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect([...started].sort()).toEqual(['averages', 'privacy', 'questions', 'sessions']);
+    // The heartbeat among them: it needs no team id and waits for nothing, so
+    // it has no business being a fifth round of waiting
+    expect([...started].sort()).toEqual([
+      'averages',
+      'heartbeat',
+      'privacy',
+      'questions',
+      'sessions',
+    ]);
   });
 });

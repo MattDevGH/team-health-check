@@ -18,6 +18,7 @@ import {
   describeResultState,
   materialisationEvidence,
   resultState,
+  schedulerLastRanFrom,
   type ResultState,
 } from './result-state';
 
@@ -53,6 +54,17 @@ interface QuestionDetailViewProps {
    */
   questions?: QuestionCatalogueEntry[];
   anonymousMode: boolean;
+  /**
+   * When the scheduler last ran, ISO, or null if it never has.
+   *
+   * Requirements: Remembering What Happened 5.1, 5.2, 5.3
+   *
+   * Here as well as on the latest-session panel, because both surfaces render
+   * the same decision about the same data. One selector already decides all
+   * the outcomes so that they cannot disagree; passing the heartbeat to only
+   * one of them would have reintroduced the disagreement through the input.
+   */
+  schedulerLastRanAt?: string | null;
   /** Minimum responses required to display data in anonymous mode */
   anonymityThreshold?: number;
   /** Injectable for tests; the pending and overdue wordings turn on it. */
@@ -69,9 +81,11 @@ export function QuestionDetailView({
   sessions,
   questions,
   anonymousMode,
+  schedulerLastRanAt,
   anonymityThreshold = DEFAULT_ANONYMITY_THRESHOLD,
   now = new Date(),
 }: QuestionDetailViewProps) {
+  const schedulerRanAt = schedulerLastRanFrom(schedulerLastRanAt);
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
 
   /**
@@ -184,6 +198,7 @@ export function QuestionDetailView({
                     now,
                     anonymousMode,
                     anonymityThreshold,
+                    schedulerLastRanAt: schedulerRanAt,
                   });
 
                   return (

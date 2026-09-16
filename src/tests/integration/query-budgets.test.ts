@@ -166,23 +166,34 @@ describe('GET /api/teams/[teamId]/trends', () => {
     expect(body.sessions, 'two closed sessions were seeded').toHaveLength(2);
   });
 
-  it('issues at most 8 queries', async () => {
+  it('issues at most 9 queries', async () => {
     /*
      * Nine when this budget was first measured, against an estimate of seven:
      * two of the queries live inside the services the route calls rather than
      * in the route, which is the argument for measuring rather than reading.
      *
-     * Eight now, and the one that went is worth recording. The privacy mode
+     * Eight then, and the one that went is worth recording. The privacy mode
      * and the session averages each read the same team row. Awaited in turn
      * they were two round trips; started together they land in the same tick,
      * and Prisma coalesces identical findUnique calls into one
      * `WHERE id IN (?,?)`. Overlapping the waits also removed one of them.
+     *
+     * **Nine now, deliberately: the scheduler's heartbeat.** The dashboard
+     * used to guess that "the scheduler may not be running" from fifteen
+     * minutes of silence, and this is what lets it report instead. One row by
+     * primary key, started alongside the other four rather than after them, so
+     * it costs a query and no waiting — and the page makes no second request
+     * for it, which is what Requirement 5.5 is actually about.
+     *
+     * Ratcheted at the measured value, as every budget here is. A budget set
+     * above what was measured is a budget that permits a regression nobody
+     * chose.
      */
     const queries = await db.countQueries(async () => {
       await getTrends(signedIn(`http://localhost/api/teams/${teamId}/trends`), context());
     });
 
-    expect(queries, 'GET /api/teams/[teamId]/trends query budget').toBeLessThanOrEqual(8);
+    expect(queries, 'GET /api/teams/[teamId]/trends query budget').toBeLessThanOrEqual(9);
   });
 });
 

@@ -140,8 +140,22 @@ something. Its `reason` is one of:
 - `a check is already collecting` — one is open right now
 
 Five different silences. They all looked identical from outside, which is why
-the dashboard has a *"Results are overdue — the scheduler may not be running"*
+the dashboard had a *"Results are overdue — the scheduler may not be running"*
 state: it was the only way a reader could tell.
+
+**That message is no longer a guess.** The dashboard reads the heartbeat and
+says which of four things is true:
+
+| What the heartbeat says | What the dashboard says |
+|---|---|
+| Ran since the check closed | Results are taking longer than expected — and it does **not** name the scheduler, because sending somebody to restart a trigger that is running is the wrong half of the system |
+| Has not run since the close | Results are overdue — the scheduler has not run since *(date)* |
+| No heartbeat at all | The scheduler has never run — results cannot be prepared until it does |
+| The response could not say | The old wording, unchanged |
+
+The third is what a fresh deployment with a misconfigured `CRON_SECRET` looks
+like, and "overdue" is an actively misleading thing to say about it: it
+describes a delay when nothing is calling the endpoint at all.
 
 ### Deliveries
 

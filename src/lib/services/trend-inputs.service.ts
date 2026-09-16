@@ -32,6 +32,15 @@ export interface TrendInputsDeps {
   findQuestions(): Promise<Question[]>;
   findSessions(teamId: string): Promise<HealthCheckSession[]>;
   getSessionAverages(teamId: string): Promise<SessionAverageRow[]>;
+  /**
+   * When the scheduler last ran, or null if it never has.
+   *
+   * Requirements: Remembering What Happened 5.5. In here rather than in a
+   * request of its own: the dashboard already makes this one, and a page that
+   * got slower in order to report on punctuality would be its own joke. It
+   * needs no team id, and waits for nothing, so it joins the others.
+   */
+  getSchedulerLastRanAt(): Promise<Date | null>;
 }
 
 export interface TrendInputs {
@@ -39,18 +48,20 @@ export interface TrendInputs {
   questions: Question[];
   sessions: HealthCheckSession[];
   averages: SessionAverageRow[];
+  schedulerLastRanAt: Date | null;
 }
 
 export async function loadTrendInputs(
   deps: TrendInputsDeps,
   teamId: string,
 ): Promise<TrendInputs> {
-  const [privacyMode, questions, sessions, averages] = await Promise.all([
+  const [privacyMode, questions, sessions, averages, schedulerLastRanAt] = await Promise.all([
     deps.getPrivacyMode(teamId),
     deps.findQuestions(),
     deps.findSessions(teamId),
     deps.getSessionAverages(teamId),
+    deps.getSchedulerLastRanAt(),
   ]);
 
-  return { privacyMode, questions, sessions, averages };
+  return { privacyMode, questions, sessions, averages, schedulerLastRanAt };
 }
