@@ -165,11 +165,25 @@ phase exists to stop.
 
 ### 4.3 And cancelled
 
-- [ ] Failing test: cancelling removes it
-- [ ] Failing test: cancelling takes effect immediately for prompt eligibility
-- [ ] Failing test: a member cannot cancel another member's away period
-- [ ] Failing test: cancelling something already gone is harmless
-- [ ] axe and keyboard operation on the new control
+- [x] Failing test: cancelling removes it, and sends the id of the period the
+      member is looking at rather than letting the server pick
+- [x] Failing test: cancelling takes effect immediately for prompt eligibility
+- [x] **Defect found here.** `removeAway` took an id and deleted whatever it
+      named, and the route passed one straight from the request body — any
+      signed-in member could cancel any other member's away period given its
+      id, and the member who lost it would be prompted through a holiday with
+      nothing to explain why. The service now takes the member id and refuses
+      anything that is not theirs. Property test, route test, and a mutation
+      check that removes the guard and watches five tests fail
+- [x] Failing test: a period belonging to somebody else is indistinguishable
+      from one that never existed — same status, same body. A distinct error
+      would confirm that the id names a real period
+- [x] Failing test: cancelling something already gone is harmless
+- [x] Failing test: a failed cancel says so rather than appearing to have
+      worked, which would leave a member expecting silence they will not get
+- [x] axe and keyboard operation on the new control, end to end through the
+      real routes: set it, see it, cancel it with Enter, reload and see it stay
+      gone
 - _Requirements: 5.2, 5.4, 5.5_
 - _Property: 5_
 

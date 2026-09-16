@@ -99,6 +99,18 @@ export const DELETE = withErrorHandling(async (request: Request) => {
     ]);
   }
 
-  await container.availability.removeAway(body.availabilityId);
+  /*
+   * Requirements: Explaining Itself 5.2, 5.5
+   *
+   * The member id comes from the session, and the service refuses anything
+   * that is not theirs. This route used to pass the body's id straight to a
+   * service that deleted whatever it named, so any signed-in member could
+   * cancel any other member's away period given its id — and the member who
+   * lost it would be prompted through a holiday with nothing to explain why.
+   *
+   * Success either way: a period that is not yours is treated as one that does
+   * not exist, so nothing here says whether the id named anything.
+   */
+  await container.availability.removeAway(auth.memberId, body.availabilityId);
   return Response.json({ success: true });
 });

@@ -16,6 +16,119 @@ import { createAvailabilityService } from '@/lib/services/availability.service';
  * for a date range covering a session date, then verify that isAway returns true
  * for exactly the marked-away set and false for the rest.
  */
+/**
+ * **Validates: Explaining Itself 5.2, 5.4, 5.5**
+ *
+ * Property 5 (Explaining Itself): away periods are member-scoped. A member
+ * sees and cancels only their own.
+ *
+ * `removeAway` took an id and deleted whatever it named. The route passed one
+ * straight from the request body, so any signed-in member could cancel any
+ * other member's away period given its id — and the member who lost it would
+ * be prompted through a holiday with nothing on the page to explain why.
+ *
+ * Generated rather than exampled because the property is about every pairing
+ * of member and period, and an example test picks the pairing that occurred to
+ * whoever wrote it.
+ */
+describe('Property 5: away periods are member-scoped', () => {
+  const twoMembersArb = fc
+    .tuple(fc.uuid(), fc.uuid())
+    .filter(([a, b]) => a !== b)
+    .map(([a, b]) => [`member-${a}`, `member-${b}`] as const);
+
+  it("refuses to cancel a period belonging to somebody else", async () => {
+    await fc.assert(
+      fc.asyncProperty(twoMembersArb, async ([mine, theirs]) => {
+        const repos = createInMemoryRepositories();
+        const service = createAvailabilityService({ availabilityRepo: repos.availability });
+        const period = await service.markAway(
+          theirs,
+          new Date('2026-01-01T00:00:00Z'),
+          new Date('2026-01-08T00:00:00Z'),
+        );
+
+        /*
+         * It does not throw. A period belonging to somebody else is treated
+         * exactly as one that never existed — which is the honest answer to
+         * both questions at once, since a distinct error would confirm that
+         * the id names a real period belonging to someone.
+         *
+         * The outcome asserted is therefore the period surviving, never the
+         * shape of the response. A service that deleted and then threw would
+         * satisfy a `rejects` assertion while doing the damage.
+         */
+        await service.removeAway(mine, period.id);
+
+        expect(await service.getAvailability(theirs)).toHaveLength(1);
+      }),
+      { numRuns: 25 },
+    );
+  });
+
+  it('cancels a period belonging to the member who asks', async () => {
+    await fc.assert(
+      fc.asyncProperty(twoMembersArb, async ([mine, theirs]) => {
+        const repos = createInMemoryRepositories();
+        const service = createAvailabilityService({ availabilityRepo: repos.availability });
+        const period = await service.markAway(
+          mine,
+          new Date('2026-01-01T00:00:00Z'),
+          new Date('2026-01-08T00:00:00Z'),
+        );
+        await service.markAway(
+          theirs,
+          new Date('2026-01-01T00:00:00Z'),
+          new Date('2026-01-08T00:00:00Z'),
+        );
+
+        await service.removeAway(mine, period.id);
+
+        expect(await service.getAvailability(mine)).toEqual([]);
+        // and nobody else's went with it
+        expect(await service.getAvailability(theirs)).toHaveLength(1);
+      }),
+      { numRuns: 25 },
+    );
+  });
+
+  it('takes effect immediately for prompt eligibility', async () => {
+    /*
+     * Requirement 5.4. Cancelling that left `isAway` true would be the same
+     * silence from the other side: a member who cancelled and then heard
+     * nothing would have no way to tell whether it had worked.
+     */
+    const repos = createInMemoryRepositories();
+    const service = createAvailabilityService({ availabilityRepo: repos.availability });
+    const during = new Date('2026-01-04T12:00:00Z');
+    const period = await service.markAway(
+      'member-1',
+      new Date('2026-01-01T00:00:00Z'),
+      new Date('2026-01-08T00:00:00Z'),
+    );
+    expect(await service.isAway('member-1', during)).toBe(true);
+
+    await service.removeAway('member-1', period.id);
+
+    expect(await service.isAway('member-1', during)).toBe(false);
+  });
+
+  it('is harmless to cancel something already gone', async () => {
+    // A member who clicks twice, or comes back to a stale page, should get the
+    // state they wanted rather than an error about it already being true
+    const repos = createInMemoryRepositories();
+    const service = createAvailabilityService({ availabilityRepo: repos.availability });
+    const period = await service.markAway(
+      'member-1',
+      new Date('2026-01-01T00:00:00Z'),
+      new Date('2026-01-08T00:00:00Z'),
+    );
+    await service.removeAway('member-1', period.id);
+
+    await expect(service.removeAway('member-1', period.id)).resolves.toBeUndefined();
+  });
+});
+
 describe('Availability Exclusion Properties', () => {
   /**
    * Generates a list of unique member IDs (3-10 members).
