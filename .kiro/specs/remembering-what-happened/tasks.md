@@ -14,40 +14,65 @@ first, one PR per phase.
 
 ### 1.1 A place to put it
 
-- [ ] Take a production snapshot first. Turso has export and **no**
-      point-in-time restore, so this is the only way back
-- [ ] `SchedulerHeartbeat` in the schema: a fixed single-row key, `ranAt`,
+- [ ] **Take a production snapshot before `migrate-production.ts` runs.** Turso
+      has export and **no** point-in-time restore, so this is the only way
+      back. Not a blocker on writing the migration — it is the step before
+      applying one, and applying is a separate deliberate command
+- [x] `SchedulerHeartbeat` in the schema: a fixed single-row key, `ranAt`,
       `tickId`, `summary`, and the counts
-- [ ] Additive migration, checked against the ledger-gap test that already
-      guards migration order
-- [ ] Repository interface and an in-memory fake, per the standing pattern
-- [ ] Integration test over a real SQLite file: the second write **replaces**
-      rather than appends. An in-memory fake would pass either way, which is
-      why this one is not a unit test
-- [ ] Integration test: two ticks writing at once leave one row, and it is one
-      of theirs
+- [x] Additive migration, applied locally; the ledger-gap test still passes
+- [x] Repository interface, in-memory fake and Prisma implementation, per the
+      standing pattern
+- [x] Integration test over a real SQLite file through the libSQL adapter: the
+      second write **replaces** rather than appends, asserted by counting rows
+      rather than by reading the newest one back. An in-memory fake passes
+      either way, which is why this is not a unit test
+- [x] Integration test: two ticks writing at once leave one row, and it is one
+      of theirs — which of them is deliberately not asserted
+- [x] Integration test: `latest()` is null before the scheduler has ever run,
+      since "never" is a state with its own message rather than a zero
+- [x] Mutation check: an implementation that appends fails five of the seven
 - _Requirements: Remembering What Happened 1.2, 1.5, NFR 4.1, NFR 4.2_
 - _Property: 1_
 
 ### 1.2 Every tick writes one
 
-- [ ] Failing test: a quiet tick writes a heartbeat — the case the whole
+- [x] Failing test: a quiet tick writes a heartbeat — the case the whole
       requirement rests on, since a quiet week must not look like a stopped one
-- [ ] Failing test: an eventful tick writes one too, carrying its summary
-      sentence and counts
-- [ ] Failing test: the heartbeat's time is the tick's, not the read's
-- [ ] Wire it in the route, which is the only place that knows `prompts`
+- [x] Failing test: it carries the **same** sentence and tick id the response
+      carried. Two accounts of one tick would leave anybody comparing the cron
+      dashboard against the application with no way to choose between them
+- [x] Failing test: the heartbeat's time is the tick's, not the read's
+- [x] Failing test: it carries `prompts`, which only the route knows — a
+      heartbeat written inside the scheduler could not report it
+- [x] Failing test: it carries no answer content, since it outlives everything
+      else that might
+- [x] Wire it in the route, through a service, so phase 2's eventfulness
+      predicate and pruning have somewhere to live that is not a route handler
+- [x] Mutation check: skipping quiet ticks fails five tests.
+      **The first version of the flagship test did not catch it** — the
+      container is module-level and shared across the file, so an earlier
+      test's heartbeat was still there and `not.toBeNull()` passed against an
+      implementation that skipped quiet ticks entirely. It asserts on the
+      heartbeat *this* tick wrote now
 - _Requirements: Remembering What Happened 1.1, 1.3_
 - _Property: 1_
 
 ### 1.3 It cannot break the tick
 
-- [ ] Failing test: when the heartbeat write throws, the tick still returns its
-      summary, and the sessions it opened stayed open
-- [ ] Failing test: the failure is recorded as `tick.record.failed` through the
+- [x] Failing test: when the heartbeat write throws, the tick still returns its
+      summary, and the sessions it opened stayed open — asserted at the route,
+      reading the session back from the repository rather than inferring it
+      from the response the same code path produced
+- [x] Failing test: the failure is recorded as `tick.record.failed` through the
       existing recorder — this has somewhere to complain to, unlike the
       recorder itself, so it does not swallow silently
-- [ ] Mutation check: remove the try/catch and watch the tick fail
+- [x] Failing test: it says which tick and why, since a failure that cannot be
+      attributed is a line nobody can act on
+- [x] Failing test: a heartbeat that **was** written says nothing. A line per
+      tick is three hundred a day reporting the expected thing, which is how a
+      log stops being read
+- [x] Mutation check: removing the try/catch fails six tests across both levels
 - _Requirements: Remembering What Happened 1.4, NFR 2.1, NFR 2.2_
 - _Property: 4_
 

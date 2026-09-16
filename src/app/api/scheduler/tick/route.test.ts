@@ -398,3 +398,185 @@ describe('the tick response', () => {
     expect(body).not.toMatch(/score|trend|improving|declining/i);
   });
 });
+
+describe('the proof a tick leaves behind', () => {
+  /*
+   * Requirements: Remembering What Happened 1.1, 1.3
+   * Property: 1
+   *
+   * The response is read by whoever is looking at the cron dashboard at the
+   * time, and cron-job.org keeps the last fifty executions — between fifty
+   * minutes and four hours, depending on the interval. The heartbeat is what
+   * is still there tomorrow.
+   *
+   * The quiet case is the one the requirement rests on. A tick that did
+   * nothing must still write, or a genuinely quiet week is indistinguishable
+   * from a week of not running at all — the exact confusion this whole line of
+   * work exists to remove.
+   */
+
+  beforeEach(() => {
+    vi.stubEnv('CRON_SECRET', CRON_SECRET);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    _resetTickTestDeps();
+  });
+
+  it('writes one even when the tick did nothing', async () => {
+    /*
+     * The criterion the whole requirement rests on, so it is asserted on a
+     * heartbeat *this* tick wrote rather than on one being present.
+     *
+     * The container is module-level and shared across this file, so an earlier
+     * test's heartbeat is still there: `not.toBeNull()` passed against an
+     * implementation that skipped quiet ticks entirely. Found by mutating that
+     * implementation and watching the one test that should have caught it stay
+     * green.
+     */
+    const ranAt = new Date('2026-08-26T03:17:00.000Z');
+    _setTickTestDeps({ now: () => ranAt });
+
+    const body = (await (
+      await POST(tickRequest(), { params: Promise.resolve({}) })
+    ).json()) as { opened: number; closed: number; materialised: number };
+
+    expect(body, 'this tick should have been a quiet one').toMatchObject({
+      opened: 0,
+      closed: 0,
+      materialised: 0,
+    });
+    expect((await repos.schedulerHeartbeat.latest())?.ranAt.toISOString()).toBe(
+      ranAt.toISOString(),
+    );
+  });
+
+  it('records the time the tick ran, which is what answers "has it stopped?"', async () => {
+    const ranAt = new Date('2026-08-24T09:00:00.000Z');
+    _setTickTestDeps({ now: () => ranAt });
+
+    await POST(tickRequest(), { params: Promise.resolve({}) });
+
+    expect((await repos.schedulerHeartbeat.latest())?.ranAt.toISOString()).toBe(
+      ranAt.toISOString(),
+    );
+  });
+
+  it('carries the same sentence the response carried', async () => {
+    /*
+     * One sentence, composed once. If the heartbeat said something different
+     * from the response, somebody comparing a cron dashboard against the
+     * application would have two accounts of one tick and no way to choose.
+     */
+    const response = await POST(tickRequest(), { params: Promise.resolve({}) });
+    const body = (await response.json()) as { summary?: string };
+
+    expect((await repos.schedulerHeartbeat.latest())?.summary).toBe(body.summary);
+  });
+
+  it('carries the same tick id the response carried', async () => {
+    const body = (await (
+      await POST(tickRequest(), { params: Promise.resolve({}) })
+    ).json()) as { tickId?: string };
+
+    expect((await repos.schedulerHeartbeat.latest())?.tickId).toBe(body.tickId);
+  });
+
+  it('counts the prompts, which only the route knows', async () => {
+    /*
+     * The scheduler decides what to open; the route sends the prompts. A
+     * heartbeat written inside the service could not report this, which is why
+     * it is written here.
+     */
+    const sink = createRecordingSink();
+    _setTickTestDeps({ notificationSink: sink, now: () => OPEN_TICK });
+    const team = await repos.team.create({ name: `Heartbeat Prompts ${Date.now()}`, timezone: 'UTC' });
+    await repos.teamSchedule.create({
+      teamId: team.id,
+      cadence: 'weekly',
+      openDay: 1,
+      openTime: '09:00',
+      closeDay: 5,
+      closeTime: '17:00',
+      timezone: 'UTC',
+    });
+
+    const body = (await (
+      await POST(tickRequest(), { params: Promise.resolve({}) })
+    ).json()) as { prompts?: number };
+
+    expect((await repos.schedulerHeartbeat.latest())?.prompts).toBe(body.prompts);
+  });
+
+  it('is replaced by the next tick rather than accumulating', async () => {
+    // Asserted here too, at the level the route works at: the point of a
+    // heartbeat is that reading it stays one lookup for ever
+    const first = new Date('2026-08-24T09:00:00.000Z');
+    const second = new Date('2026-08-24T09:05:00.000Z');
+
+    _setTickTestDeps({ now: () => first });
+    await POST(tickRequest(), { params: Promise.resolve({}) });
+    _setTickTestDeps({ now: () => second });
+    await POST(tickRequest(), { params: Promise.resolve({}) });
+
+    expect((await repos.schedulerHeartbeat.latest())?.ranAt.toISOString()).toBe(
+      second.toISOString(),
+    );
+  });
+
+  it('carries no answer content, since it outlives everything else', async () => {
+    await POST(tickRequest(), { params: Promise.resolve({}) });
+
+    const written = JSON.stringify(await repos.schedulerHeartbeat.latest());
+    expect(written).not.toMatch(/score|trend|improving|declining/i);
+  });
+});
+
+describe('when the proof cannot be written', () => {
+  /*
+   * Requirements: Remembering What Happened 1.4, NFR 2.1
+   * Property: 4
+   *
+   * The service swallows its own failure, and this asserts what that is for at
+   * the level it matters: the tick still does its work. A rejection would turn
+   * a tick that opened a check into a 500, and the cron service would report a
+   * failure for work that succeeded.
+   */
+
+  beforeEach(() => {
+    vi.stubEnv('CRON_SECRET', CRON_SECRET);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    _resetTickTestDeps();
+  });
+
+  it('opens the check anyway', async () => {
+    const sink = createRecordingSink();
+    _setTickTestDeps({ notificationSink: sink, now: () => OPEN_TICK });
+    const team = await repos.team.create({
+      name: `Broken Heartbeat ${Date.now()}`,
+      timezone: 'UTC',
+    });
+    await repos.teamSchedule.create({
+      teamId: team.id,
+      cadence: 'weekly',
+      openDay: 1,
+      openTime: '09:00',
+      closeDay: 5,
+      closeTime: '17:00',
+      timezone: 'UTC',
+    });
+    vi.spyOn(repos.schedulerHeartbeat, 'record').mockRejectedValue(new Error('disk full'));
+
+    const response = await POST(tickRequest(), { params: Promise.resolve({}) });
+
+    expect(response.status).toBe(200);
+    // The outcome that matters, read back from the repository rather than
+    // inferred from the response the same code path produced
+    expect(await repos.session.findOpenByTeamId(team.id)).not.toBeNull();
+  });
+});

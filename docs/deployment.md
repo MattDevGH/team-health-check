@@ -337,10 +337,20 @@ scheduler may not be running", which is the interface guessing at something the
 tick now knows for certain.
 
 **Watch that it is still firing.** A stopped trigger is silent: sessions simply
-never open, and the first report comes from a confused team. Note that the
-response body does not help here — a trigger that has stopped sends no
-response at all, so whatever watches for that has to live somewhere the tick
-is not.
+never open, and the first report comes from a confused team. The response body
+does not help here — a trigger that has stopped sends no response at all, so
+whatever watches for that has to live somewhere the tick is not.
+
+Which is what `SchedulerHeartbeat` is for. Every tick writes one row saying
+when it ran and what it did, replaced each time, and it survives both the
+dashboard's fifty executions and Vercel's hour. **No row at all means the
+scheduler has never run** — the shape a misconfigured `CRON_SECRET` takes.
+
+**This needs a migration.** `20260916140000_add_scheduler_heartbeat` is
+additive — it creates a table and alters nothing — so the currently deployed
+application keeps working until it is replaced. Take an export first anyway;
+the rule is about the database holding a team's answers, not about how risky
+this particular statement looks.
 
 ---
 

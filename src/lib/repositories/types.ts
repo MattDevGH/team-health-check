@@ -23,6 +23,7 @@ import type {
   PendingGenesis,
   TeamSchedule,
   SlackIdentityLink,
+  SchedulerHeartbeat,
 } from './entities';
 
 /** Complete team-creation aggregate persisted atomically by repository implementations. */
@@ -203,4 +204,17 @@ export interface SlackIdentityLinkRepository {
   findBySlackUserId(slackUserId: string): Promise<SlackIdentityLink | null>;
   upsertByMemberId(memberId: string, slackUserId: string): Promise<SlackIdentityLink>;
   delete(memberId: string): Promise<void>;
+}
+
+/**
+ * Requirements: Remembering What Happened 1.1, 1.2, 1.5
+ *
+ * `record` replaces rather than appends: one row, rewritten by every tick. Two
+ * ticks at once must leave one row rather than two or an error, which is what
+ * makes the interface an upsert rather than a create.
+ */
+export interface SchedulerHeartbeatRepository {
+  record(beat: SchedulerHeartbeat): Promise<void>;
+  /** Null when the scheduler has never run — a real state with its own message. */
+  latest(): Promise<SchedulerHeartbeat | null>;
 }

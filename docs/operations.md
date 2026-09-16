@@ -62,12 +62,30 @@ two-day body cap at any interval under about an hour. What survives is the most
 recent fifty rather than the most interesting: on a weekly cadence the ticks that
 actually opened or closed a check are evicted within hours by the quiet ones.
 
-So the answer to "what did it just do?" is above, and the answer to "what
-happened on Monday" does not currently exist.
-`.kiro/specs/remembering-what-happened/` specifies the fix — a heartbeat every
-tick and a ledger of only the ticks that did something, both kept in the
-application's own database and pruned by the tick itself. Until that is built,
-look within the hour or not at all.
+**The heartbeat outlives both.** Every tick — including one that did nothing —
+writes a single row to `SchedulerHeartbeat` in the application's own database,
+carrying the same tick id and the same sentence the response carried. It is
+replaced rather than appended, so reading it stays one lookup for ever:
+
+| Column | Says |
+|---|---|
+| `ranAt` | when the scheduler last ran — the answer to "has it stopped?" |
+| `summary` | what it did, in the sentence above |
+| `tickId` | ties it to whatever log lines survive |
+| counts | `opened`, `closed`, `materialised`, `prompts`, `durationMs` |
+
+**No row at all means the scheduler has never run**, which is a different fault
+from a stopped one and looks like a misconfigured `CRON_SECRET`.
+
+A failed heartbeat never fails the tick; it appears as `tick.record.failed`
+with the tick id and the reason. A successful one says nothing, because three
+hundred lines a day reporting the expected thing is how a log stops being read.
+
+What is still missing is **history**: the heartbeat says what the *last* tick
+did, not what happened on Monday. Phases 2 to 4 of
+`.kiro/specs/remembering-what-happened/` add a ledger of the ticks that did
+something. Until then, for anything older than the last tick, look within the
+hour or not at all.
 
 ## The events
 
