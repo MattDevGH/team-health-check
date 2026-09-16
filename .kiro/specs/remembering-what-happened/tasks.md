@@ -14,18 +14,24 @@ first, one PR per phase.
 
 ### 1.1 A place to put it
 
-- [ ] Take a production snapshot first. Turso has export and **no**
-      point-in-time restore, so this is the only way back
-- [ ] `SchedulerHeartbeat` in the schema: a fixed single-row key, `ranAt`,
+- [ ] **Take a production snapshot before `migrate-production.ts` runs.** Turso
+      has export and **no** point-in-time restore, so this is the only way
+      back. Not a blocker on writing the migration — it is the step before
+      applying one, and applying is a separate deliberate command
+- [x] `SchedulerHeartbeat` in the schema: a fixed single-row key, `ranAt`,
       `tickId`, `summary`, and the counts
-- [ ] Additive migration, checked against the ledger-gap test that already
-      guards migration order
-- [ ] Repository interface and an in-memory fake, per the standing pattern
-- [ ] Integration test over a real SQLite file: the second write **replaces**
-      rather than appends. An in-memory fake would pass either way, which is
-      why this one is not a unit test
-- [ ] Integration test: two ticks writing at once leave one row, and it is one
-      of theirs
+- [x] Additive migration, applied locally; the ledger-gap test still passes
+- [x] Repository interface, in-memory fake and Prisma implementation, per the
+      standing pattern
+- [x] Integration test over a real SQLite file through the libSQL adapter: the
+      second write **replaces** rather than appends, asserted by counting rows
+      rather than by reading the newest one back. An in-memory fake passes
+      either way, which is why this is not a unit test
+- [x] Integration test: two ticks writing at once leave one row, and it is one
+      of theirs — which of them is deliberately not asserted
+- [x] Integration test: `latest()` is null before the scheduler has ever run,
+      since "never" is a state with its own message rather than a zero
+- [x] Mutation check: an implementation that appends fails five of the seven
 - _Requirements: Remembering What Happened 1.2, 1.5, NFR 4.1, NFR 4.2_
 - _Property: 1_
 

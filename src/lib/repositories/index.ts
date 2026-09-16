@@ -21,6 +21,7 @@ import type {
   TeamScheduleRepository,
   SlackIdentityLinkRepository,
   NotificationDeliveryRepository,
+  SchedulerHeartbeatRepository,
 } from './types';
 import type { InteractionQueueRepository } from '../slack/interaction-queue';
 
@@ -41,6 +42,7 @@ import { InMemoryPendingGenesisRepository } from './in-memory/pending-genesis.re
 import { InMemoryTeamScheduleRepository } from './in-memory/team-schedule.repository';
 import { InMemorySlackIdentityLinkRepository } from './in-memory/slack-identity-link.repository';
 import { InMemoryNotificationDeliveryRepository } from './in-memory/notification-delivery.repository';
+import { InMemorySchedulerHeartbeatRepository } from './in-memory/scheduler-heartbeat.repository';
 import { InMemoryInteractionQueueRepository } from './in-memory/interaction-queue.repository';
 
 export interface Repositories {
@@ -61,6 +63,7 @@ export interface Repositories {
   teamSchedule: TeamScheduleRepository;
   slackIdentityLink: SlackIdentityLinkRepository;
   notificationDelivery: NotificationDeliveryRepository;
+  schedulerHeartbeat: SchedulerHeartbeatRepository;
   interactionQueue: InteractionQueueRepository;
 }
 
@@ -99,6 +102,7 @@ export function createInMemoryRepositories(): Repositories {
   });
   const slackIdentityLink = new InMemorySlackIdentityLinkRepository();
   const notificationDelivery = new InMemoryNotificationDeliveryRepository();
+  const schedulerHeartbeat = new InMemorySchedulerHeartbeatRepository();
   const interactionQueue = new InMemoryInteractionQueueRepository();
 
   return {
@@ -119,6 +123,7 @@ export function createInMemoryRepositories(): Repositories {
     teamSchedule,
     slackIdentityLink,
     notificationDelivery,
+    schedulerHeartbeat,
     interactionQueue,
   };
 }

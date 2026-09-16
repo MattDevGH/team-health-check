@@ -186,3 +186,22 @@ export interface SlackInteractionQueue {
   createdAt: Date;
   nextRetryAt: Date | null;
 }
+
+/**
+ * Proof that the scheduler ran, whether or not it did anything.
+ *
+ * Requirements: Remembering What Happened 1.1, 1.3
+ *
+ * No member id, deliberately, and no answer content — this is counts, a tick
+ * id, and the sentence the tick already composed for its own response.
+ */
+export interface SchedulerHeartbeat {
+  tickId: string;
+  ranAt: Date;
+  summary: string;
+  opened: number;
+  closed: number;
+  materialised: number;
+  prompts: number;
+  durationMs: number;
+}
