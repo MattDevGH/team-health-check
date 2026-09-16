@@ -46,13 +46,35 @@ export function destinationsFor(context: ShellContext | null): Destination[] {
   const destinations: Destination[] = [{ href: '/me/health-check', label: 'Health check' }];
 
   if (context?.team) {
-    destinations.push(
-      { href: `/teams/${context.team.id}/dashboard`, label: 'Dashboard' },
-      { href: `/teams/${context.team.id}/settings`, label: 'Settings' },
-    );
+    /*
+     * The dashboard, for everybody.
+     *
+     * Revised during the discussion and rightly: its data is aggregate and
+     * anonymised, and a team should be able to read its own results. Hiding it
+     * would make transparency depend on a role, which is the opposite of what
+     * the tool is for. It already gates its Delivery-Manager controls by role,
+     * with a browser test proving a contributor sees no open or close control.
+     */
+    destinations.push({ href: `/teams/${context.team.id}/dashboard`, label: 'Dashboard' });
 
     if (context.roles.includes(DELIVERY_MANAGER)) {
-      destinations.push({ href: `/teams/${context.team.id}/audit-log`, label: 'Audit log' });
+      /*
+       * Settings and the audit log, for a Delivery Manager only.
+       *
+       * Settings was offered to everybody while every write behind it is
+       * manager-only, so a contributor opened a page of controls that would
+       * refuse them — the navigation advertising something it could not
+       * deliver. The audit log is the only Delivery-Manager-only *read* in the
+       * API.
+       *
+       * Removing the links is honest, not a boundary. Navigation is not
+       * authorisation: a contributor who types either URL sees exactly what
+       * they saw before, and the routes are unchanged.
+       */
+      destinations.push(
+        { href: `/teams/${context.team.id}/settings`, label: 'Settings' },
+        { href: `/teams/${context.team.id}/audit-log`, label: 'Audit log' },
+      );
     }
   }
 

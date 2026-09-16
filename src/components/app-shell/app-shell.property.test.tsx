@@ -56,14 +56,47 @@ describe('Property 1: Delivery-Manager-only destinations', () => {
     );
   });
 
-  it('offers every member the same destinations regardless of role', () => {
+  it('offers Settings if and only if the roles contain delivery_manager', () => {
+    /*
+     * Requirement 3.1. The nav offered Settings to everybody while every write
+     * behind it is manager-only, so a contributor opened a page of controls
+     * that would refuse them — the navigation advertising something it could
+     * not deliver.
+     *
+     * The same shape of gate as the audit log, and the same property: a
+     * substring match or a truthiness check on the array passes every example
+     * test in the suite and fails here.
+     */
     fc.assert(
       fc.property(rolesArb, roles => {
-        const offered = labels(roles);
+        expect(labels(roles).includes('Settings')).toBe(roles.includes(DELIVERY_MANAGER));
+      }),
+    );
+  });
 
-        // Whatever else changes, a member never loses their own dashboard,
-        // their team's settings, or their profile
-        expect(offered).toEqual(expect.arrayContaining(['Dashboard', 'Settings', 'Profile']));
+  it('offers the dashboard whatever the roles are', () => {
+    /*
+     * Requirement 3.2, and the decision that was revised during the discussion.
+     * The dashboard's data is aggregate and anonymised, and a team should be
+     * able to read its own results — hiding it would make transparency depend
+     * on a role, which is the opposite of what the tool is for.
+     *
+     * It already gates its Delivery-Manager controls by role, with a browser
+     * test proving a contributor sees no open or close controls.
+     */
+    fc.assert(
+      fc.property(rolesArb, roles => {
+        expect(labels(roles)).toEqual(expect.arrayContaining(['Dashboard', 'Profile']));
+      }),
+    );
+  });
+
+  it('never leaves a member with nothing they can act on', () => {
+    // Two destinations need no role at all: their own health check, which is
+    // what the tool is for, and their own profile
+    fc.assert(
+      fc.property(rolesArb, roles => {
+        expect(labels(roles)).toEqual(expect.arrayContaining(['Health check', 'Profile']));
       }),
     );
   });

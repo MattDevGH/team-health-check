@@ -543,7 +543,7 @@ prisma.config.ts           # Prisma 7 datasource config
 | UI/A11y | Vitest + RTL + jest-axe | ~100ms/test | Components, WCAG |
 | E2E | Playwright | ~2-5s/flow | Browser user flows |
 
-The Vitest suite now contains **1786 tests across 187 files**, including
+The Vitest suite now contains **1789 tests across 187 files**, including
 queued-delivery descriptor encode/decode, Prisma retry-queue persistence against
 a stubbed client, per-transport replay dispatch, and route-level drain coverage
 (replay, backoff, and exhausted-retry termination),
@@ -782,6 +782,21 @@ submitting twice. Decided: confirm and keep the form, because the tool allows
 revision until close and a member who thinks answers are final answers more
 cautiously. A redirect was rejected: someone on a session link alone may have
 nowhere to be sent.
+
+**Phase 3 is done: Settings left a contributor’s navigation.** Every write
+behind that page is manager-only, so offering the link to everybody
+advertised a page that would refuse them. It is gated on `delivery_manager`
+now, the same way the audit log always was.
+
+The dashboard is not gated, deliberately — see below. And the removal is not
+a boundary: a browser test signs in as a contributor, types the settings URL,
+and asserts they see exactly what they saw before. Navigation is not
+authorisation, and conflating the two would leave somebody believing a
+missing link was protecting something.
+
+The existing tab-order test did not move, which is worth knowing: every
+member the browser suite seeds is a Delivery Manager, so it still tabs
+through seven destinations. A contributor’s order is a new test.
 
 **The dashboard stays open to every member** — revised during the discussion,
 and rightly. Its data is aggregate and anonymised, and hiding it would make
