@@ -21,6 +21,17 @@ import { createInMemoryRepositories } from '@/lib/repositories';
 import { createTickRecordService } from '@/lib/services/tick-record.service';
 
 /** Anything a tick could plausibly report, including nonsense. */
+/*
+ * `ranAt` is left free to be an invalid Date, deliberately.
+ *
+ * `fc.date()` produces one roughly once in a hundred, and that is how this
+ * found a real fault: an invalid time gives a NaN cutoff, every comparison
+ * against NaN is false, and the prune deleted the row the test had just
+ * written. Constraining the generator would have hidden it.
+ *
+ * Fifty runs passed locally and CI's seed found it, which is the argument for
+ * the higher run count below rather than for a tamer arbitrary.
+ */
 const tickArb = fc.record({
   tickId: fc.string({ minLength: 1, maxLength: 12 }),
   ranAt: fc.date({ min: new Date('2026-01-01'), max: new Date('2027-01-01') }),
@@ -70,7 +81,7 @@ describe('Property 6: nothing personal reaches the ledger', () => {
         const [kept] = await repos.schedulerTickRecord.recent(1);
         expect(Object.keys(kept).sort()).toEqual([...FIELDS].sort());
       }),
-      { numRuns: 50 },
+      { numRuns: 200 },
     );
   });
 
@@ -101,7 +112,7 @@ describe('Property 6: nothing personal reaches the ledger', () => {
         const [kept] = await repos.schedulerTickRecord.recent(1);
         expect(JSON.stringify(kept)).not.toContain(memberId);
       }),
-      { numRuns: 50 },
+      { numRuns: 200 },
     );
   });
 });

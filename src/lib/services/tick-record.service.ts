@@ -172,6 +172,27 @@ export function createTickRecordService(deps: TickRecordServiceDeps): TickRecord
      * job of its own unnecessary. On a weekly cadence it deletes nothing
      * almost every time and costs one indexed lookup.
      */
+    /*
+     * A cutoff that is not a real time deletes everything.
+     *
+     * Every comparison against NaN is false, so `ranAt < NaN` matches nothing
+     * and `ranAt >= NaN` excludes everything — depending on which way the
+     * repository phrases it, the prune either does nothing or wipes the ledger
+     * in the name of housekeeping. The second is unacceptable for an input
+     * nobody can produce.
+     *
+     * Production cannot produce one: the route's clock is a real Date. A
+     * property test can, because `fc.date()` generates invalid dates, and it
+     * found this by deleting the row it had just written.
+     */
+    if (!Number.isFinite(tick.ranAt.getTime())) {
+      record_.error('tick.prune.skipped', {
+        tickId: tick.tickId,
+        reason: 'the tick has no usable time',
+      });
+      return;
+    }
+
     try {
       await schedulerTickRecordRepo.pruneBefore(
         new Date(tick.ranAt.getTime() - LEDGER_RETENTION_DAYS * DAY_MS),

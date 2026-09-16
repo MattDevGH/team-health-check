@@ -323,6 +323,37 @@ describe('the ledger stops growing on its own', () => {
     expect(kept).toHaveLength(1);
   });
 
+  it('prunes nothing when it cannot tell what the cutoff is', async () => {
+    /*
+     * A tick whose `ranAt` is an invalid Date gives a cutoff of NaN, and every
+     * comparison against NaN is false — so the prune would match **everything**
+     * and delete the entire ledger, silently, in the name of housekeeping.
+     *
+     * Production cannot produce one: the route's clock is a real Date. The
+     * property test in `scheduler-ledger.property.test.ts` can, because
+     * `fc.date()` generates invalid dates, and it found this by wiping the row
+     * it had just written. An unreachable input with a catastrophic outcome is
+     * worth a guard.
+     */
+    const { cutoffs, repo } = pruningLedger();
+    const { service } = harness(working, repo);
+
+    await service.record({ ...TICK, ranAt: new Date(Number.NaN) });
+
+    expect(cutoffs).toEqual([]);
+  });
+
+  it('says so when it skipped pruning for that reason', async () => {
+    // Silently not pruning is how a table grows unnoticed, which is the same
+    // fault as silently failing to prune
+    const { repo } = pruningLedger();
+    const { service, events } = harness(working, repo);
+
+    await service.record({ ...TICK, ranAt: new Date(Number.NaN) });
+
+    expect(events[0]).toMatchObject({ event: 'tick.prune.skipped', level: 'error' });
+  });
+
   it('says so when pruning fails, rather than quietly stopping', async () => {
     // A prune that has silently failed for months is a table nobody knows is
     // growing, which is the shape of problem this milestone exists to remove
