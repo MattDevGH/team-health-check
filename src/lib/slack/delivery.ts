@@ -1,3 +1,5 @@
+import { recorder as defaultRecorder, type Recorder } from '@/lib/observability';
+
 /**
  * Slack message delivery with retry logic.
  * Requirements 5.12: Retry delivery up to 3 times with minimum 5s interval.
@@ -59,8 +61,11 @@ export async function deliverSlackMessage(params: {
   slackUserId: string;
   blocks: unknown[];
   retryDelayMs?: number;
+  /** Injectable so a test can read what was recorded rather than spy on a call. */
+  recorder?: Recorder;
 }): Promise<DeliveryResult> {
   const { slackClient, slackUserId, blocks } = params;
+  const recorder = params.recorder ?? defaultRecorder;
   const retryDelay = params.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
 
   let lastError: string | undefined;
@@ -87,7 +92,21 @@ export async function deliverSlackMessage(params: {
     }
   }
 
-  // All retries exhausted
-  console.error(`Slack delivery failed after ${MAX_RETRIES} attempts: ${lastError}`);
+  /*
+   * All retries exhausted.
+   *
+   * This said `Slack delivery failed after 3 attempts: Error` and nothing else
+   * — not which member, team or check. A line that cannot be attributed cannot
+   * be acted on, and one failing member looked exactly like a broken
+   * integration.
+   *
+   * The Slack user id is the member as Slack knows them, which is what makes
+   * this findable next to the workspace it failed in.
+   */
+  recorder.error('slack.delivery.exhausted', {
+    channel: slackUserId,
+    attempts: MAX_RETRIES,
+    message: lastError ?? 'no reason reported',
+  });
   return { success: false, attempts: MAX_RETRIES, error: lastError };
 }

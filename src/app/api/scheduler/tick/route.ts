@@ -10,6 +10,7 @@
 
 import { withErrorHandling } from '@/lib/api-utils';
 import { recorder } from '@/lib/observability';
+import { recordingSink } from '@/lib/observability/recorded-sink';
 import { ForbiddenError } from '@/lib/errors';
 import { repos } from '@/lib/container-production';
 import { createSchedulerService } from '@/lib/services/scheduler.service';
@@ -131,6 +132,13 @@ export const POST = withErrorHandling(async (request: Request) => {
       })
       : { send: async () => {} }); // No-op sink if no Slack token configured
 
+  /*
+   * Wrapped once, here, because every notification the tick sends goes through
+   * this one object — prompts, closing reminders, nudges. "I never got a
+   * message" had no answer before it.
+   */
+  const recordedSink = recordingSink(notificationSink, recorder);
+
   const notificationService = createNotificationService({
     teamRepo: repos.team,
     teamMemberRepo: repos.teamMember,
@@ -139,7 +147,7 @@ export const POST = withErrorHandling(async (request: Request) => {
     availabilityRepo: repos.availability,
     sessionRepo: repos.session,
     notificationDeliveryRepo: repos.notificationDelivery,
-    notificationSink,
+    notificationSink: recordedSink,
     slackLinkChecker,
     now: tickClock,
   });

@@ -4,6 +4,7 @@
  */
 
 import crypto from 'crypto';
+import { recorder } from '@/lib/observability';
 
 import { AppError, NotFoundError, RateLimitError } from '@/lib/errors';
 import { checkRateLimit, isRateLimited, recordRateLimitHit } from '@/lib/rate-limit';
@@ -170,11 +171,26 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
      * anti-enumeration guarantee of Requirement 7.8 costs nothing to keep here.
      */
     if (members.length > 1) {
-      console.error(
-        `Ambiguous sign-in: ${email} belongs to ${members.length} members across teams ` +
-          `${members.map((m) => m.teamId).join(', ')}. No magic link issued. ` +
-          `A person can belong to only one team; remove the duplicate member or change one email.`,
-      );
+      /*
+       * One event per duplicate, rather than one line naming the address.
+       *
+       * The old line carried the email, which is the person; these carry the
+       * member and team ids, which are already in the database and are what
+       * somebody would act on anyway — a person belongs to one team, so remove
+       * the duplicate member or change one address.
+       */
+      recorder.error('signin.ambiguous', {
+        count: members.length,
+        message: 'one address matches members on several teams; no magic link issued',
+      });
+
+      for (const duplicate of members) {
+        recorder.error('signin.ambiguous.member', {
+          memberId: duplicate.id,
+          teamId: duplicate.teamId,
+        });
+      }
+
       return;
     }
 
@@ -202,7 +218,22 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
       try {
         await emailService.sendMagicLink(email, token, baseUrl);
       } catch (err) {
-        console.error('Email delivery failed:', err);
+        /*
+         * Recorded without the address, which leaves this weaker than it looks:
+         * for somebody signing in to create a team there is no member id yet,
+         * so the record says a magic link failed to send and cannot say to
+         * whom.
+         *
+         * That is the cost of two promises kept elsewhere — anti-enumeration,
+         * and ids rather than addresses in logs — and it is the right trade. A
+         * member who reports never receiving a link can be found by their team;
+         * an address in a log file cannot be taken back.
+         */
+        recorder.error('magic-link.delivery.failed', {
+          memberId: member?.id,
+          errorName: err instanceof Error ? err.name : typeof err,
+          message: err instanceof Error ? err.message : String(err),
+        });
       }
     }
   }

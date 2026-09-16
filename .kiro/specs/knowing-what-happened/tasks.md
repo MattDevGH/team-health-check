@@ -84,21 +84,21 @@ Phases 2 and 3 are independent of each other and either can ship alone.
 
 ### 3.1 A prompt's outcome is recorded
 
-- [ ] Failing test: a delivered Slack prompt records the member it reached
-- [ ] Failing test: a failed one records the member, the channel and the reason
-- [ ] Failing test: a reminder is distinguishable from an opening prompt —
+- [x] Failing test: a delivered Slack prompt records the member it reached
+- [x] Failing test: a failed one records the member, the channel and the reason
+- [x] Failing test: a reminder is distinguishable from an opening prompt —
       assert the event name, because a reminder that rendered identically to a
       prompt passed its test for an entire milestone
-- [ ] Failing test: a logging failure does not stop a delivery, and a delivery
+- [x] Failing test: a logging failure does not stop a delivery, and a delivery
       failure does not stop the record
 - _Requirements: Knowing What Happened 3.1, 3.2, 3.3, 3.4_
 
 ### 3.2 The existing lines get their context
 
-- [ ] The five `console.error` calls that exist say things like `Slack delivery
+- [x] The five `console.error` calls that exist say things like `Slack delivery
       failed after 3 attempts: Error` — no team, no member, no session. Give
       them the recorder and the ids they were always missing
-- [ ] Failing test: the central unexpected-error handler records the route it
+- [x] Failing test: the central unexpected-error handler records the route it
       came from
 - _Requirements: Knowing What Happened 2.1, 2.2_
 
@@ -110,22 +110,30 @@ Phases 2 and 3 are independent of each other and either can ship alone.
 
 ### 4.1 Document it
 
-- [ ] `docs/operations.md`: the event names, what each means, and what to filter
+- [x] `docs/operations.md`: the event names, what each means, and what to filter
       on when a specific question is being asked
-- [ ] State plainly that retention is the platform's decision and that the
+- [x] State plainly that retention is the platform's decision and that the
       window on the current plan should be checked before treating these as a
       historical record
-- [ ] Record the join between the two records a person might read: an audit
+- [x] Record the join between the two records a person might read: an audit
       entry's id appears in both the audit log a manager sees and the events an
       engineer reads
 - _Requirements: Knowing What Happened 2.4, NFR 2.1_
 
 ### 4.2 Close the milestone
 
-- [ ] Reconcile the deployment spec's open task, "establish how a stopped
+- [x] Reconcile the deployment spec's open task, "establish how a stopped
       trigger would be noticed" — the same gap from the other side
-- [ ] Update `AI_CONTEXT.md` and `README.md`
-- [ ] Full gate set
+- [x] Update `AI_CONTEXT.md` and `README.md`
+- [x] Full gate set
+
+**What building it found:** the redactor ate the ids. A team id is thirty-six
+characters of letters, digits and hyphens, which is exactly what a
+session-token pattern matches, so every event came out carrying
+`teamId: "[redacted]"` — the record destroying the one thing it exists to
+carry, while passing its own tests, which all used ids like `team-1`. Found by
+running the scheduler rather than by testing the recorder. Redaction now
+applies to prose fields only.
 
 **Checkpoint:** the record exists, is findable, and is documented. One PR.
 
