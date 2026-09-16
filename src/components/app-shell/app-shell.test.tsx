@@ -170,7 +170,15 @@ describe('AppShell', () => {
     );
   });
 
-  it('omits the audit log from a member who would be refused it', async () => {
+  it('omits what a contributor would be refused, and keeps what they can use', async () => {
+    /*
+     * Explaining Itself 3.1 and 3.2. Settings joined the audit log behind the
+     * role: every write behind it is manager-only, so offering it to a
+     * contributor advertised a page that would refuse them.
+     *
+     * The dashboard stays, deliberately. Its data is aggregate and anonymised,
+     * and a team should be able to read its own results.
+     */
     renderShell('/teams/team-1/dashboard', CONTRIBUTOR);
 
     // Still asserts a present destination before an absent one, so this cannot
@@ -178,8 +186,19 @@ describe('AppShell', () => {
     await screen.findByRole('link', { name: /dashboard/i });
 
     expect(screen.queryByRole('link', { name: /audit log/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /settings/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /settings/i })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /profile/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /health check/i })).toBeInTheDocument();
+  });
+
+  it('offers a Delivery Manager both', async () => {
+    renderShell('/teams/team-1/dashboard', MANAGER);
+
+    expect(await screen.findByRole('link', { name: /settings/i })).toHaveAttribute(
+      'href',
+      '/teams/team-1/settings',
+    );
+    expect(screen.getByRole('link', { name: /audit log/i })).toBeInTheDocument();
   });
 
   // Requirement 1.7, and Feeling Responsive 2.1

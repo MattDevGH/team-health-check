@@ -454,3 +454,97 @@ test.describe('reaching your own health check', () => {
     await expect(page).toHaveURL(/\/me\/health-check$/);
     await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
   });});
+
+/**
+ * What a contributor is offered, and what they can still reach.
+ *
+ * Requirements: Explaining Itself 3.1, 3.2, 3.3, 3.4
+ *
+ * The nav offered Settings to everybody while every write behind it is
+ * manager-only, so a contributor opened a page of controls that would refuse
+ * them. Removing the link is honest.
+ *
+ * It is not a boundary, and the second test is the one that says so. Navigation
+ * is not authorisation: a contributor who types the URL sees exactly what they
+ * saw before, and conflating the two would leave somebody believing the nav was
+ * protecting something.
+ */
+test.describe('a contributor’s navigation', () => {
+  const CONTRIBUTOR = 'nav-contributor@e2e.invalid';
+  let contributorTeamId = '';
+
+  test.beforeAll(() => {
+    const team = seedTeam({ teamName: 'Contributor Nav Team', memberEmail: 'nav-manager@e2e.invalid' });
+    contributorTeamId = team.teamId;
+    seedMember({ teamId: team.teamId, email: CONTRIBUTOR, role: 'contributor' });
+  });
+
+  test('offers no Settings or audit log', async ({ page }) => {
+    await signIn(page, CONTRIBUTOR);
+    await page.goto(`/teams/${contributorTeamId}/dashboard`);
+
+    const nav = page.getByRole('navigation', { name: 'Main' });
+
+    // A present destination first, so an absence is asserted against a rendered
+    // nav rather than an empty one
+    await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Settings' })).toHaveCount(0);
+    await expect(nav.getByRole('link', { name: 'Audit log' })).toHaveCount(0);
+  });
+
+  test('keeps the dashboard, the health check and the profile', async ({ page }) => {
+    // The dashboard's data is aggregate and anonymised, and a team should be
+    // able to read its own results
+    await signIn(page, CONTRIBUTOR);
+    await page.goto(`/teams/${contributorTeamId}/dashboard`);
+
+    const nav = page.getByRole('navigation', { name: 'Main' });
+
+    await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Health check' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Profile' })).toBeVisible();
+  });
+
+  test('still reaches Settings by typing the URL, because the nav is not a lock', async ({
+    page,
+  }) => {
+    /*
+     * Requirement 3.4, frozen deliberately. What navigation advertises and what
+     * a route permits are separate concerns, and pretending otherwise would
+     * leave somebody believing a removed link was a boundary.
+     *
+     * The writes behind this page were manager-only before and still are.
+     */
+    await signIn(page, CONTRIBUTOR);
+    await page.goto(`/teams/${contributorTeamId}/settings`);
+
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByText(/access denied|forbidden/i)).toHaveCount(0);
+  });
+
+  test('tabs through a shorter nav, in the same order', async ({ page }) => {
+    await signIn(page, CONTRIBUTOR);
+    await page.goto(`/teams/${contributorTeamId}/dashboard`);
+    await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+
+    const order: string[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      await page.keyboard.press('Tab');
+      order.push(
+        await page.evaluate(() => {
+          const el = document.activeElement;
+          if (!el || el === document.body) return '(none)';
+          return (el.textContent ?? '').trim() || el.tagName.toLowerCase();
+        }),
+      );
+    }
+
+    expect(order).toEqual([
+      'Skip to main content',
+      'Health check',
+      'Dashboard',
+      'Profile',
+      'Sign out',
+    ]);
+  });
+});

@@ -101,14 +101,19 @@ phase exists to stop.
 
 ### 3.1 Settings leaves a contributor's navigation
 
-- [ ] Failing test: `destinationsFor` omits Settings without the manager role
-- [ ] Failing test: a Delivery Manager still sees it
-- [ ] Failing test: the dashboard is still offered to both, because the data
+- [x] Failing test: `destinationsFor` omits Settings without the manager role
+- [x] Failing test: a Delivery Manager still sees it
+- [x] Failing test: the dashboard is still offered to both, because the data
       there is aggregate and a team should read its own results
-- [ ] Failing test: route behaviour is unchanged — navigation is not
+- [x] Failing test: route behaviour is unchanged — navigation is not
       authorisation, and a contributor reaching the URL sees what they saw
       before
-- [ ] Update the end-to-end tab-order expectation
+- [x] Update the end-to-end tab-order expectation. The existing one did not
+      move: every member the browser suite seeds is a Delivery Manager, so it
+      still tabs through seven. A contributor’s order is a new test, and it is
+      the one that would have caught this.
+- [x] Browser test: a contributor reaching `/settings` by URL sees what they
+      saw before — the assertion that says this is honesty rather than a lock
 - _Requirements: 3.1, 3.2, 3.3, 3.4_
 - _Property: 4_
 
