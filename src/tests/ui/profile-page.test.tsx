@@ -101,10 +101,18 @@ describe('Profile Page', () => {
     beforeEach(() => mockProfileApi());
 
     it('displays current cadence preference', async () => {
+      /*
+       * By role, not by text. "Weekly" now appears twice on the page — as the
+       * button and inside the sentence explaining what it means — and a bare
+       * text match stopped being able to say which one it found.
+       */
       render(<ProfilePage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/weekly/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^weekly$/i })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
       });
     });
 
@@ -120,7 +128,7 @@ describe('Profile Page', () => {
       render(<ProfilePage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/weekly/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^weekly$/i })).toBeInTheDocument();
       });
 
       const microPulseButton = screen.getByRole('button', { name: /micro.pulse/i });

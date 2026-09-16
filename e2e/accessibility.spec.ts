@@ -189,7 +189,15 @@ test.describe('authenticated pages', () => {
    * member shared by three tests can exhaust the limit during a bad run and
    * hang on the verification page instead of failing where the fault is.
    */
-  const RICH_KEYS = ['settings', 'dashboard', 'profile', 'skip-link', 'sign-out', 'reflow'] as const;
+  const RICH_KEYS = [
+    'settings',
+    'dashboard',
+    'profile',
+    'away',
+    'skip-link',
+    'sign-out',
+    'reflow',
+  ] as const;
   const SPARSE_EMAIL = 'a11y-sparse@e2e.invalid';
   const richEmail = (key: (typeof RICH_KEYS)[number]) => `a11y-rich-${key}@e2e.invalid`;
   let sparseTeamId = '';
@@ -269,6 +277,47 @@ test.describe('authenticated pages', () => {
     await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
 
     await expectNoViolations(page, 'profile page');
+  });
+
+  test('an away period, set and cancelled by keyboard alone', async ({ page }) => {
+    /*
+     * Requirements: Explaining Itself 5.1, 5.2, 5.4; NFR 2.1
+     *
+     * The whole loop through the real routes, because the away period is a
+     * state the page can only be in after a round trip: set it, see it, cancel
+     * it, see it gone. Seeding the row directly would prove the rendering and
+     * leave the two new routes unexercised in a browser.
+     *
+     * Driven by keyboard because the cancel control is new, and a control that
+     * works only under a mouse is a control half the standing bar does not
+     * cover.
+     */
+    await signIn(page, richEmail('away'));
+    await page.goto('/me');
+
+    const availability = page.getByRole('region', { name: /availability/i });
+    await expect(availability.getByText(/not marked yourself away/i)).toBeVisible();
+    await expectNoViolations(page, 'profile with no away period');
+
+    await page.getByLabel('Away from').fill('2026-10-05');
+    await page.getByLabel('Away until').fill('2026-10-12');
+    await page.getByRole('button', { name: 'Mark Away' }).click();
+
+    await expect(availability.getByText(/5 October 2026/)).toBeVisible();
+    await expect(availability.getByText(/12 October 2026/)).toBeVisible();
+    await expectNoViolations(page, 'profile showing an away period');
+
+    const cancel = page.getByRole('button', { name: /cancel away period/i });
+    await cancel.focus();
+    await expect(cancel).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    await expect(availability.getByText(/not marked yourself away/i)).toBeVisible();
+
+    // And it survives a reload, which is the difference between cancelling it
+    // and hiding it
+    await page.reload();
+    await expect(availability.getByText(/not marked yourself away/i)).toBeVisible();
   });
 });
 

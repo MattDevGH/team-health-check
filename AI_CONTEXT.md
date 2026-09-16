@@ -783,6 +783,54 @@ revision until close and a member who thinks answers are final answers more
 cautiously. A redirect was rejected: someone on a session link alone may have
 nowhere to be sent.
 
+**Phase 4 is done, and it found a real authorisation defect.**
+
+`removeAway(availabilityId)` deleted whatever the id named, and
+`DELETE /api/me/availability` passed one straight from the request body. Any
+signed-in member could cancel any other member's away period given its id, and
+the member who lost it would be prompted through a holiday with nothing on the
+page to say why. The service now takes the member id and refuses anything that
+is not theirs; the route passes `auth.memberId`. A property test, three route
+tests, and a mutation check that removes the guard and watches five fail.
+
+A period belonging to somebody else returns exactly what an invented id
+returns — same status, same body, nothing thrown. A distinct error would
+confirm that the id names a real period belonging to someone, and idempotent
+cancelling was wanted anyway.
+
+**Availability could be set and then never seen again.** `getAvailability` has
+been on the service since availability was built and no route ever called it,
+so the page took two dates, said "Away period saved" and forgot them.
+`GET /api/me/availability` exists now; the page shows the dates, says plainly
+when none is set, and shows a period it just created rather than announcing
+that something was saved.
+
+Note the MSW default handler that came with it. Without one the new fetch hit
+`onUnhandledRequest: "error"` and the component's catch swallowed it — every
+other profile test would have passed against a request that never worked.
+
+**Phase 4.1 is done: the profile says what its settings do.** Four controls —
+cadence, reminders, availability, Slack — and not one of them said what it
+affected. "Weekly" and "Micro-Pulse" were two words to choose between with
+nothing to choose on.
+
+The reminders toggle was the expensive one, because the code agrees with the
+member's wrong assumption: `sendSlackPrompt` never reads `remindersEnabled`,
+only `sendClosingReminder` and `sendMidSessionNudge` do. Turn reminders off and
+you are still prompted when a check opens. Saying so beat the alternatives —
+changing what the toggle governs would let a member silence the one prompt that
+starts a check.
+
+Availability was the other surprise: being away gates notifications and nothing
+else. No response path consults it, so a member who marks themselves away can
+still answer a check that is open, and now the page says that.
+
+Every explanation is tied to its control with `aria-describedby`, and a test
+follows every reference on the page to real text — an `aria-describedby`
+pointing at a missing id is silent, so asserting the attribute alone would pass
+while a screen reader heard nothing. The "ten minutes" in the Slack copy is
+pinned to `PAIRING_CODE_EXPIRY_MS`, which is exported for that reason.
+
 **Phase 3 is done: Settings left a contributor’s navigation.** Every write
 behind that page is manager-only, so offering the link to everybody
 advertised a page that would refuse them. It is gated on `delivery_manager`

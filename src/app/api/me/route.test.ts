@@ -12,6 +12,7 @@ import { NextRequest } from 'next/server';
 import { GET, _repos as meRepos } from './route';
 import { PATCH, _repos as prefsRepos } from './preferences/route';
 import {
+  GET as GetAvailability,
   POST as PostAvailability,
   DELETE as DeleteAvailability,
   _repos as availRepos,
@@ -405,6 +406,110 @@ describe('POST /api/me/availability', () => {
   });
 });
 
+// ─── GET /api/me/availability ───────────────────────────────────────────────────
+
+describe('GET /api/me/availability', () => {
+  /*
+   * Requirements: Explaining Itself 5.1, 5.5
+   *
+   * Availability could be set and then neither seen nor undone: the service
+   * has had `getAvailability` all along and no route ever called it, so the
+   * one place a member could look told them nothing.
+   */
+
+  it('returns 401 when no session cookie is present', async () => {
+    const res = await GetAvailability(makeAuthRequest('GET'));
+
+    expect(res.status).toBe(401);
+  });
+
+  it('returns the away periods the member has set', async () => {
+    const member = await availRepos.teamMember.create({
+      teamId: 'team-1',
+      name: 'Judy',
+      email: 'judy@example.com',
+    });
+    const token = await createSession(availRepos, member.id);
+    await availRepos.availability.create({
+      memberId: member.id,
+      awayFrom: new Date('2026-10-01T00:00:00Z'),
+      awayUntil: new Date('2026-10-08T00:00:00Z'),
+    });
+
+    const res = await GetAvailability(makeAuthRequest('GET', { cookie: token }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toHaveLength(1);
+    expect(body[0]).toMatchObject({ memberId: member.id });
+  });
+
+  it('carries the dates, which are the whole point of showing it', async () => {
+    // Dates cross JSON as strings, and a period without them is a fact the
+    // member cannot act on
+    const member = await availRepos.teamMember.create({
+      teamId: 'team-1',
+      name: 'Away Dates',
+      email: 'away-dates@example.com',
+    });
+    const token = await createSession(availRepos, member.id);
+    await availRepos.availability.create({
+      memberId: member.id,
+      awayFrom: new Date('2026-10-01T00:00:00Z'),
+      awayUntil: new Date('2026-10-08T00:00:00Z'),
+    });
+
+    const body = await (await GetAvailability(makeAuthRequest('GET', { cookie: token }))).json();
+
+    expect(new Date(body[0].awayFrom).toISOString()).toBe('2026-10-01T00:00:00.000Z');
+    expect(new Date(body[0].awayUntil).toISOString()).toBe('2026-10-08T00:00:00.000Z');
+  });
+
+  it('returns an empty list rather than an error when none is set', async () => {
+    // Requirement 5.3 depends on this: the page can only say "none set" if
+    // "none set" is a state the API can express
+    const member = await availRepos.teamMember.create({
+      teamId: 'team-1',
+      name: 'Liam',
+      email: 'liam@example.com',
+    });
+    const token = await createSession(availRepos, member.id);
+
+    const res = await GetAvailability(makeAuthRequest('GET', { cookie: token }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+
+  it("never returns another member's away period", async () => {
+    /*
+     * Requirement 5.5. The member id comes from the session and nowhere else —
+     * there is no query parameter to pass somebody else's, and this asserts
+     * that rather than the absence of one.
+     */
+    const mine = await availRepos.teamMember.create({
+      teamId: 'team-1',
+      name: 'Mine',
+      email: 'mine@example.com',
+    });
+    const theirs = await availRepos.teamMember.create({
+      teamId: 'team-1',
+      name: 'Theirs',
+      email: 'theirs@example.com',
+    });
+    await availRepos.availability.create({
+      memberId: theirs.id,
+      awayFrom: new Date('2026-10-01T00:00:00Z'),
+      awayUntil: new Date('2026-10-08T00:00:00Z'),
+    });
+    const token = await createSession(availRepos, mine.id);
+
+    const body = await (await GetAvailability(makeAuthRequest('GET', { cookie: token }))).json();
+
+    expect(body).toEqual([]);
+  });
+});
+
 // ─── DELETE /api/me/availability ────────────────────────────────────────────────
 
 describe('DELETE /api/me/availability', () => {
@@ -445,6 +550,95 @@ describe('DELETE /api/me/availability', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
+  });
+
+  it("leaves another member's away period alone", async () => {
+    /*
+     * Requirements: Explaining Itself 5.5
+     *
+     * This route passed the body's id to a service that deleted whatever it
+     * named, so any signed-in member could cancel any other member's away
+     * period given its id. The member who lost it would then be prompted
+     * through a holiday with nothing on their profile to explain why.
+     *
+     * Asserted at the route because that is where the request arrives and
+     * where the id was trusted.
+     */
+    const mine = await availRepos.teamMember.create({
+      teamId: 'team-1',
+      name: 'Cancel Mine',
+      email: 'cancel-mine@example.com',
+    });
+    const theirs = await availRepos.teamMember.create({
+      teamId: 'team-1',
+      name: 'Cancel Theirs',
+      email: 'cancel-theirs@example.com',
+    });
+    const theirPeriod = await availRepos.availability.create({
+      memberId: theirs.id,
+      awayFrom: new Date('2026-01-01'),
+      awayUntil: new Date('2026-01-10'),
+    });
+    const token = await createSession(availRepos, mine.id);
+
+    await DeleteAvailability(
+      makeAuthRequest('DELETE', { cookie: token, body: { availabilityId: theirPeriod.id } }),
+    );
+
+    expect(await availRepos.availability.findByMemberId(theirs.id)).toHaveLength(1);
+  });
+
+  it('says nothing about whether the id named anything', async () => {
+    // A distinct error for "exists but is not yours" would confirm that
+    // somebody else's away period exists, which is the thing being protected
+    const mine = await availRepos.teamMember.create({
+      teamId: 'team-1',
+      name: 'Opaque',
+      email: 'opaque@example.com',
+    });
+    const theirs = await availRepos.teamMember.create({
+      teamId: 'team-1',
+      name: 'Opaque Other',
+      email: 'opaque-other@example.com',
+    });
+    const theirPeriod = await availRepos.availability.create({
+      memberId: theirs.id,
+      awayFrom: new Date('2026-01-01'),
+      awayUntil: new Date('2026-01-10'),
+    });
+    const token = await createSession(availRepos, mine.id);
+
+    const real = await DeleteAvailability(
+      makeAuthRequest('DELETE', { cookie: token, body: { availabilityId: theirPeriod.id } }),
+    );
+    const invented = await DeleteAvailability(
+      makeAuthRequest('DELETE', { cookie: token, body: { availabilityId: 'no-such-period' } }),
+    );
+
+    expect(real.status).toBe(invented.status);
+    expect(await real.json()).toEqual(await invented.json());
+  });
+
+  it('is harmless to cancel the same period twice', async () => {
+    // A member who clicks twice, or returns to a stale page, wants the state
+    const member = await availRepos.teamMember.create({
+      teamId: 'team-1',
+      name: 'Twice',
+      email: 'twice@example.com',
+    });
+    const token = await createSession(availRepos, member.id);
+    const period = await availRepos.availability.create({
+      memberId: member.id,
+      awayFrom: new Date('2026-01-01'),
+      awayUntil: new Date('2026-01-10'),
+    });
+
+    const body = { availabilityId: period.id };
+    await DeleteAvailability(makeAuthRequest('DELETE', { cookie: token, body }));
+    const second = await DeleteAvailability(makeAuthRequest('DELETE', { cookie: token, body }));
+
+    expect(second.status).toBe(200);
+    expect(await availRepos.availability.findByMemberId(member.id)).toEqual([]);
   });
 });
 

@@ -123,35 +123,67 @@ phase exists to stop.
 
 ### 4.1 Say what each setting does
 
-- [ ] Failing test: cadence preference explains weekly versus micro-pulse in
+- [x] Failing test: cadence preference explains weekly versus micro-pulse in
       terms of what the member will be asked
-- [ ] Failing test: the reminders toggle names what it governs **and** says it
+- [x] Failing test: the reminders toggle names what it governs **and** says it
       does not affect sign-in or opening prompts — a member who turns it off
       expecting silence will still be prompted when a check opens
-- [ ] Failing test: availability explains what it stops and for how long
-- [ ] Failing test: Slack linking explains what linking does and how to get a
+- [x] Failing test: availability explains what it stops and for how long, and
+      that a check already open stays answerable — being away gates
+      notifications and nothing else
+- [x] Failing test: Slack linking explains what linking does and how to get a
       code, beyond naming the command
-- [ ] Failing test: each explanation is associated with its control by
+- [x] Failing test: the code's stated lifetime is pinned to
+      `PAIRING_CODE_EXPIRY_MS`, so copy cannot quietly stop being true
+- [x] Failing test: each explanation is associated with its control by
       `aria-describedby`, not merely placed beside it
-- [ ] axe on the profile page
+- [x] Failing test: every `aria-describedby` on the page resolves to real text
+      — a reference to a missing id is silent, and asserting the attribute
+      alone would pass
+- [x] axe on the profile page, both Slack branches; mutation-checked by
+      removing a label and watching it fail. The browser audit covers it too,
+      with the contrast jsdom cannot see
 - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, NFR 1.1, NFR 1.2_
 
 ### 4.2 An away period can be seen
 
-- [ ] Failing test: a set away period is shown with its dates
-- [ ] Failing test: no away period says so rather than rendering an empty
+- [x] Route: `GET /api/me/availability`. The service has had
+      `getAvailability` since availability was built and no route ever called
+      it, so there was nothing for the page to read
+- [x] Failing test: a set away period is shown with its dates
+- [x] Failing test: no away period says so rather than rendering an empty
       control
-- [ ] Failing test: the page reads it from the API rather than assuming — the
+- [x] Failing test: the page reads it from the API rather than assuming — the
       profile once rendered a `privacyMode` the API never sent
+- [x] Failing test: the route never returns another member's period — the id
+      comes from the session and there is no parameter to pass somebody else's
+- [x] Failing test: marking away shows the period it just created, rather than
+      announcing "saved" and showing nothing
+- [x] MSW default handler for the new route, so every profile test runs against
+      the real contract instead of a swallowed fetch failure
 - _Requirements: 5.1, 5.3_
 
 ### 4.3 And cancelled
 
-- [ ] Failing test: cancelling removes it
-- [ ] Failing test: cancelling takes effect immediately for prompt eligibility
-- [ ] Failing test: a member cannot cancel another member's away period
-- [ ] Failing test: cancelling something already gone is harmless
-- [ ] axe and keyboard operation on the new control
+- [x] Failing test: cancelling removes it, and sends the id of the period the
+      member is looking at rather than letting the server pick
+- [x] Failing test: cancelling takes effect immediately for prompt eligibility
+- [x] **Defect found here.** `removeAway` took an id and deleted whatever it
+      named, and the route passed one straight from the request body — any
+      signed-in member could cancel any other member's away period given its
+      id, and the member who lost it would be prompted through a holiday with
+      nothing to explain why. The service now takes the member id and refuses
+      anything that is not theirs. Property test, route test, and a mutation
+      check that removes the guard and watches five tests fail
+- [x] Failing test: a period belonging to somebody else is indistinguishable
+      from one that never existed — same status, same body. A distinct error
+      would confirm that the id names a real period
+- [x] Failing test: cancelling something already gone is harmless
+- [x] Failing test: a failed cancel says so rather than appearing to have
+      worked, which would leave a member expecting silence they will not get
+- [x] axe and keyboard operation on the new control, end to end through the
+      real routes: set it, see it, cancel it with Enter, reload and see it stay
+      gone
 - _Requirements: 5.2, 5.4, 5.5_
 - _Property: 5_
 

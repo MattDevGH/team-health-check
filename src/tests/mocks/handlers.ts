@@ -50,6 +50,18 @@ export const handlers = [
   }),
 
   /**
+   * GET /api/me/availability
+   *
+   * Mirrors the real route: a **bare array** of away periods, dates serialised
+   * as ISO strings, and empty when none is set — which is a 200, not a 404.
+   * "No away period" is a state the page has to be able to render, so it has
+   * to be a state the API can express.
+   *
+   * Requirements: Explaining Itself 5.1, 5.3
+   */
+  http.get('/api/me/availability', () => HttpResponse.json([])),
+
+  /**
    * GET /api/teams/[teamId]/sessions
    *
    * Mirrors the real route, which returns a **bare array** of sessions with

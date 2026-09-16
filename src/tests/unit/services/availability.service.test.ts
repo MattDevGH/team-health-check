@@ -76,7 +76,7 @@ describe('AvailabilityService', () => {
       const awayUntil = new Date('2024-07-07T23:59:59Z');
       const availability = await availabilityService.markAway(memberId, awayFrom, awayUntil);
 
-      await availabilityService.removeAway(availability.id);
+      await availabilityService.removeAway(memberId, availability.id);
 
       const records = await availabilityService.getAvailability(memberId);
       expect(records).toHaveLength(0);
@@ -92,7 +92,7 @@ describe('AvailabilityService', () => {
       expect(await availabilityService.isAway(memberId, duringAway)).toBe(true);
 
       // Remove away and confirm re-inclusion
-      await availabilityService.removeAway(availability.id);
+      await availabilityService.removeAway(memberId, availability.id);
       expect(await availabilityService.isAway(memberId, duringAway)).toBe(false);
     });
   });
