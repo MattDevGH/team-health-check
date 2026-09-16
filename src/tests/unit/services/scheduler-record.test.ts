@@ -357,6 +357,105 @@ describe('the reasons a tick passed a team over', () => {
   });
 });
 
+describe('what a tick failed to do', () => {
+  /*
+   * Requirements: Remembering What Happened 2.2
+   *
+   * A materialisation that throws is recorded and retried on the next tick —
+   * for ever, if the cause is permanent. The summary said nothing about it, so
+   * a tick that opened nothing, closed nothing and failed to compute a result
+   * reported the same counts as a quiet Wednesday.
+   *
+   * That tick is the most interesting one the scheduler can have, and the
+   * ledger has to be able to tell it apart from a tick where nothing was due.
+   */
+
+  /** A session closed long enough ago to be due for materialisation. */
+  async function closedSessionDueForResults() {
+    const team = await teamWithSchedule('Failing Materialise');
+    const session = await repos.session.create({
+      teamId: team.id,
+      status: 'open',
+      scheduledOpenAt: MONDAY_0900,
+    });
+    await repos.session.update(session.id, {
+      status: 'closed',
+      actualCloseAt: new Date(FRIDAY_AFTER_CLOSE.getTime() - 60_000),
+    });
+    return session;
+  }
+
+  it('reports nothing failed when nothing did', async () => {
+    await teamWithSchedule();
+
+    expect((await scheduler.tick(MONDAY_0900)).failures).toBe(0);
+  });
+
+  it('counts a materialisation that threw', async () => {
+    await closedSessionDueForResults();
+    const failing = createSchedulerService({
+      teamRepo: repos.team,
+      teamScheduleRepo: repos.teamSchedule,
+      sessionRepo: repos.session,
+      sessionService: {
+        ...sessionService,
+        materializeAggregates: async () => {
+          throw new Error('aggregate write refused');
+        },
+      },
+    });
+
+    expect((await failing.tick(FRIDAY_AFTER_CLOSE)).failures).toBe(1);
+  });
+
+  it('counts it even though every other count stays zero', async () => {
+    /*
+     * The case a count-based rule gets wrong. Nothing opened, nothing closed,
+     * nothing materialised — and that is exactly why this tick matters.
+     */
+    await closedSessionDueForResults();
+    const failing = createSchedulerService({
+      teamRepo: repos.team,
+      teamScheduleRepo: repos.teamSchedule,
+      sessionRepo: repos.session,
+      sessionService: {
+        ...sessionService,
+        materializeAggregates: async () => {
+          throw new Error('aggregate write refused');
+        },
+      },
+    });
+
+    const summary = await failing.tick(FRIDAY_AFTER_CLOSE);
+
+    expect(summary).toMatchObject({ opened: 0, closed: 0, materialised: 0, failures: 1 });
+  });
+
+  it('agrees with the failures it recorded', async () => {
+    // The same guard the skip reasons have: a failure that is recorded without
+    // being counted would never reach the ledger, and nothing would go red
+    await closedSessionDueForResults();
+    const failing = createSchedulerService({
+      teamRepo: repos.team,
+      teamScheduleRepo: repos.teamSchedule,
+      sessionRepo: repos.session,
+      sessionService: {
+        ...sessionService,
+        materializeAggregates: async () => {
+          throw new Error('aggregate write refused');
+        },
+      },
+      recorder: createRecorder({
+        sink: { write: line => events.push(JSON.parse(line) as Record<string, unknown>) },
+      }),
+    });
+
+    const summary = await failing.tick(FRIDAY_AFTER_CLOSE);
+
+    expect(summary.failures).toBe(named('session.materialise.failed').length);
+  });
+});
+
 describe('a scheduler given no recorder', () => {
   it('still works, so nothing is forced to wire one up', async () => {
     /*

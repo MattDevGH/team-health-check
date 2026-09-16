@@ -49,6 +49,16 @@ export interface TickSummary {
    * and this is meant to be read at a glance.
    */
   reasons: Partial<Record<SkipReason, number>>;
+  /**
+   * Things attempted that did not work — at present, materialisations.
+   *
+   * Requirements: Remembering What Happened 2.2. A failure was recorded and
+   * then dropped from the summary, so a tick that opened nothing, closed
+   * nothing and failed to compute a result reported exactly the counts of a
+   * quiet Wednesday. It is the most interesting tick the scheduler can have,
+   * and the one a purely count-based rule throws away.
+   */
+  failures: number;
 }
 
 /** Quiet period in milliseconds before materialising aggregates after session close. */
@@ -220,20 +230,24 @@ export function createSchedulerService(deps: SchedulerServiceDeps) {
     }
 
     // Materialise aggregates for sessions closed beyond the quiet period
-    const materialised = await materialisePendingAggregates(now, tickId);
+    const { materialised, failures } = await materialisePendingAggregates(now, tickId);
 
     const durationMs = Date.now() - startedAt;
     record.info('tick.finished', { tickId, opened, closed, materialised, durationMs });
 
-    return { tickId, opened, closed, materialised, durationMs, reasons };
+    return { tickId, opened, closed, materialised, durationMs, reasons, failures };
   }
 
   /**
    * Finds closed sessions that haven't been materialised yet and whose
    * quiet period (30s) has elapsed, then triggers materialisation.
    */
-  async function materialisePendingAggregates(now: Date, tickId: string): Promise<number> {
+  async function materialisePendingAggregates(
+    now: Date,
+    tickId: string,
+  ): Promise<{ materialised: number; failures: number }> {
     let materialised = 0;
+    let failures = 0;
     const teams = await teamRepo.list();
 
     for (const team of teams) {
@@ -272,6 +286,12 @@ export function createSchedulerService(deps: SchedulerServiceDeps) {
            * silent. A permanent cause was retried for ever with nobody able
            * to see it happening.
            */
+          /*
+           * Counted where it is recorded, so the two cannot drift. The skip
+           * reasons are kept honest the same way, and a test compares each
+           * count against the lines it produced.
+           */
+          failures += 1;
           record.error('session.materialise.failed', {
             tickId,
             teamId: team.id,
@@ -283,7 +303,7 @@ export function createSchedulerService(deps: SchedulerServiceDeps) {
       }
     }
 
-    return materialised;
+    return { materialised, failures };
   }
 
   return { tick };

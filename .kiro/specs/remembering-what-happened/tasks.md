@@ -86,14 +86,31 @@ first, one PR per phase.
 
 ### 2.1 Which ticks are eventful
 
-- [ ] Failing test: a tick that opened, closed, materialised or prompted
+- [x] **Defect found first.** `prompts` counted members considered, not
+      prompts sent: it incremented regardless of what `sendSlackPrompt`
+      returned, and that returns false for a member with no Slack link, one
+      marked away, or a team outside its delivery window. The response said
+      "prompting 2 members" while sending one. The count decides eventfulness,
+      so it had to be right before anything read it
+- [x] Failing test: a tick that opened, closed, materialised or prompted
       anything is eventful
-- [ ] Failing test: a tick that did none of those is not
-- [ ] Failing test: a tick that failed to materialise is eventful **even though
+- [x] Failing test: a tick that did none of those is not, however many teams it
+      passed over — a Wednesday is not an event
+- [x] The scheduler counts its failures. They were recorded and dropped from
+      the summary, so a tick that failed to compute a result reported exactly
+      the counts of a quiet Wednesday. Counted where it is recorded, and a test
+      compares the count against the lines it produced
+- [x] Failing test: a tick that failed to materialise is eventful **even though
       every count is zero** — it is eventful precisely because nothing happened,
       and this is the single most valuable row the ledger will hold
-- [ ] Property test: eventfulness is a function of the summary alone, so it can
+- [x] Property test: eventfulness is a function of the summary alone, so it can
       never disagree with what the tick reported
+- [x] Mutation check on every term of the predicate.
+      **The property test failed to catch the first mutation** — generating
+      counts up to 50 made "four zeros and one non-zero" vanishingly rare, so
+      the example test caught what the property test missed, which is the wrong
+      way round. Ranges of 0..2, 500 runs, and the five single-field cases
+      enumerated rather than left to chance
 - _Requirements: Remembering What Happened 2.1, 2.2, 2.3_
 - _Property: 2, 3_
 
