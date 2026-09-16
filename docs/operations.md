@@ -38,6 +38,11 @@ The body is sent indented and in that order deliberately: the sentence first,
 then what happened, then what it cost, then the breakdown. On one line it is
 something you pick apart rather than read.
 
+**cron-job.org renders the indentation** — confirmed on 2026-09-16 against tick
+`polp7zlm`, so the job history shows it laid out as above rather than as one
+string. Two things had to be true for that: *save responses* enabled on the job,
+and the body sent with newlines in it.
+
 It used to return `{ "ok": true }` whatever happened, which made a broken Monday
 look exactly like an ordinary Wednesday. Then it returned the counts, which was
 better and still not enough: `"opened": 0` is the correct outcome on a Wednesday

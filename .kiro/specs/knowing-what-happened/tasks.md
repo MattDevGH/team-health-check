@@ -97,11 +97,16 @@ nobody reads on a schedule while the response carried only the totals.
       third party's dashboard
 - [x] End-to-end: read the sentence out of the real response body, which is
       the only place the route composes one
-- [ ] **Enable "save responses" on the cron-job.org job first.** Reported
+- [x] **Enable "save responses" on the cron-job.org job first.** Reported
       2026-09-16: the dashboard shows `200 OK` and no body at all until that
-      setting is on. Criterion 1.4 assumed otherwise and has been corrected
-- [ ] Verify against production: read the next scheduled run's response and
-      confirm the sentence reads as intended — needs a deploy and the next run
+      setting is on. Criterion 1.4 assumed otherwise and has been corrected.
+      Enabled on 2026-09-16 and the body appears
+- [x] Verify against production: done 2026-09-16, tick `polp7zlm` at 15:55
+      UTC, the first run on the deployed build. The dashboard renders the
+      indented body across lines exactly as written — so the sentence leads,
+      and the counts sit under it where a reader meets them in order.
+      **The whole milestone's premise is now measured rather than assumed**:
+      the job shows the body once asked to, and it shows it formatted
 - _Requirements: Knowing What Happened 1.4, 1.6_
 
 **Checkpoint:** "why did no check open on Monday?" is answerable. One PR.

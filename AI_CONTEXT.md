@@ -951,6 +951,23 @@ minutes fifty executions is about two hours — enough for "what did it just do?
 useless for "what happened on Monday", which is the question this milestone is
 named after.
 
+**The cron dashboard question is closed, 2026-09-16.** `knowing-what-happened`
+has no open boxes left. The chain took three corrections, each one from looking
+rather than reasoning:
+
+1. The tick returned counts. They satisfied every criterion and could not be
+   acted on — `opened: 0` is right on a Wednesday and wrong on Monday at 15:30.
+2. The sentence fixed that, and the body was invisible: cron-job.org shows
+   `200 OK` until *save responses* is enabled, which criterion 1.4 had assumed
+   away.
+3. Enabled, the body appeared as one dense string. Indented, it renders across
+   lines — confirmed against tick `polp7zlm`, the first run on the deployed
+   build.
+
+The indentation was argued for on the grounds that it could not be worse
+whichever way their viewer behaved. That turned out to be the right bet and the
+wrong reason to need: it renders properly, so the fallback was never used.
+
 **The two tables are live in production, applied 2026-09-16** — and the delay
 mattered. `#63` and `#64` merged and deployed before the migration ran, so the
 live code spent that window writing to tables that did not exist: caught by
