@@ -67,11 +67,14 @@ out by is a compile error.
 produced carries the same one.
 
 **Both forget quickly.** Vercel's Hobby plan keeps runtime logs for **one hour**,
-and cron-job.org keeps the last **50 executions** — which is between fifty
-minutes and four hours depending on the tick interval, and never reaches the
-two-day body cap at any interval under about an hour. What survives is the most
-recent fifty rather than the most interesting: on a weekly cadence the ticks that
-actually opened or closed a check are evicted within hours by the quiet ones.
+and cron-job.org keeps the last **50 executions**.
+
+**Measured against production on 2026-09-16: the tick runs every 5 minutes**
+(two consecutive heartbeats 305 seconds apart). Fifty executions is therefore
+**4 hours 10 minutes**, and the two-day body cap never arrives. What survives is
+the most recent fifty rather than the most interesting: on a weekly cadence the
+ticks that actually opened or closed a check are evicted before lunchtime by the
+quiet ones behind them.
 
 **The heartbeat outlives both.** Every tick — including one that did nothing —
 writes a single row to `SchedulerHeartbeat` in the application's own database,

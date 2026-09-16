@@ -951,6 +951,32 @@ minutes fifty executions is about two hours — enough for "what did it just do?
 useless for "what happened on Monday", which is the question this milestone is
 named after.
 
+**The two tables are live in production, applied 2026-09-16** — and the delay
+mattered. `#63` and `#64` merged and deployed before the migration ran, so the
+live code spent that window writing to tables that did not exist: caught by
+design, recorded as `tick.record.failed`, and invisible because Hobby keeps logs
+for an hour. The tick kept working throughout, which is the swallow-and-continue
+trade behaving exactly as intended, and nothing was recorded. **Merge and
+migrate want to be closer together than that.**
+
+Verified by reading the database back rather than trusting the exit code: both
+tables present with the columns the code writes, the `ranAt` index there, the
+question catalogue at five, and the existing rows untouched at 1 team / 1 member
+/ 5 responses / 5 aggregates.
+
+Then by watching two real ticks:
+
+- The first wrote a heartbeat for a quiet tick, with its sentence, and the
+  ledger correctly stayed empty — the eviction fix, confirmed in production.
+- The second **replaced** it rather than appending: one row after two ticks, so
+  the fixed primary key does its job against Turso and not only against a
+  temporary SQLite file.
+
+**The tick interval is 5 minutes** (305 seconds between those two heartbeats),
+which had been guessed at as "every few minutes". Fifty cron-job.org executions
+is therefore 4 hours 10 minutes, and `docs/deployment.md` now says so as a
+measured fact rather than as a table of possibilities.
+
 **Phase 3 is built: the dashboard reports instead of inferring.**
 `resultState` decided *overdue* from fifteen minutes of silence; it now reads
 the heartbeat and tells four cases apart. The one that changes behaviour: when
