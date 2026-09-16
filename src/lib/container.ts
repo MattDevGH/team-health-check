@@ -22,6 +22,7 @@ import { createStreakService } from './services/streak.service';
 import { createQuestionSelectionService } from './services/question-selection.service';
 import { createParticipationService } from './services/participation.service';
 import { createHealthCheckPromptService } from './services/health-check-prompt.service';
+import { createSlackUserDirectory } from './slack/user-directory';
 import type { Repositories } from './repositories';
 import type { TeamService } from './services/team.service';
 import type { SessionService } from './services/session.service';
@@ -117,7 +118,19 @@ export function createContainer(repos: Repositories, options?: ContainerOptions)
     sessionLinkRepo: repos.sessionLink,
     sessionRepo: repos.session,
     slackIdentityLinkRepo: repos.slackIdentityLink,
+    auditLogRepo: repos.auditLog,
     emailService: options?.emailService,
+    /*
+     * Requirements: Slack Sign In 3.1, 3.5
+     *
+     * Present only when a bot token is. Without it the manager-asserted path
+     * still works, which is what keeps `users:read.email` a decision rather
+     * than a prerequisite — and what makes a workspace that has not granted it
+     * degrade rather than break.
+     */
+    slackUserDirectory: process.env.SLACK_BOT_TOKEN
+      ? createSlackUserDirectory(process.env.SLACK_BOT_TOKEN)
+      : undefined,
   });
 
   const genesis = createGenesisService({

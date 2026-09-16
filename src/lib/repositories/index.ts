@@ -90,7 +90,23 @@ export function createInMemoryRepositories(): Repositories {
   const question = new InMemoryQuestionRepository();
   const availability = new InMemoryAvailabilityRepository();
   const teamMemberRole = new InMemoryTeamMemberRoleRepository({
-    removeMember: (memberId) => teamMember.remove(memberId),
+    /*
+     * Requirements: Slack Sign In 4.4; Property 6
+     *
+     * Mirrors what the Prisma removal does inside its transaction. It did not,
+     * and the gap was not harmless: a member removed from a team kept a
+     * working Slack identity link, so "removal revokes" could not be proved
+     * against fakes and a route test would have passed against a fake that was
+     * less safe than production.
+     */
+    removeMember: async (memberId) => {
+      slackIdentityLink.removeByMemberId(memberId);
+      availability.removeByMemberId(memberId);
+      sessionLink.removeByMemberId(memberId);
+      magicLink.removeByMemberId(memberId);
+      userSession.removeByMemberId(memberId);
+      await teamMember.remove(memberId);
+    },
   });
   const team = new InMemoryTeamRepository({ teamMember, teamMemberRole, auditLog });
   const pairingCode = new InMemoryPairingCodeRepository();
