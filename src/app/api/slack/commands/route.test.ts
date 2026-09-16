@@ -13,6 +13,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createInMemoryRepositories } from '@/lib/repositories';
 import type { Repositories } from '@/lib/repositories';
 import { createContainer } from '@/lib/container';
+import { ForbiddenError } from '@/lib/errors';
+import { resetRateLimitStore } from '@/lib/rate-limit';
 import type { Container } from '@/lib/container';
 
 // Mock the verify-signature module to bypass HMAC checks in tests
@@ -279,5 +281,211 @@ describe('POST /api/slack/commands', () => {
 
       expect(res.status).toBe(403);
     });
+  });
+});
+
+describe('/healthcheck signin', () => {
+  /*
+   * Requirements: Slack Sign In 1.1, 1.3, 1.5, 1.6, NFR 1.1, NFR 1.2
+   *
+   * Today there is one way into this application, and it is an email that a
+   * colleague may never receive: without a verified sending domain Resend
+   * delivers only to the account owner and drops the rest silently, while
+   * `requestMagicLink` returns void for every input so nobody can probe which
+   * addresses exist. The two together mean a teammate sees "check your email"
+   * and waits for ever.
+   *
+   * A slash command arrives with a verified Slack signature, which is proof of
+   * identity at least as good as possession of an inbox. Slack cannot set a
+   * cookie, so it hands back the same thing email does: a single-use link.
+   */
+
+  let repos: Repositories;
+  let container: Container;
+
+  beforeEach(async () => {
+    /*
+     * The rate-limit store is module-level and survives between tests. Six
+     * tests each making one request on the same Slack id would reach the
+     * limit of five and start refusing each other — shared state failing a
+     * test that had nothing to do with it.
+     */
+    resetRateLimitStore();
+    repos = createInMemoryRepositories();
+    container = createContainer(repos);
+    const routeModule = await import('./route');
+    routeModule._setContainer(container);
+  });
+
+  /** A member whose Slack account is already linked. */
+  async function linkedMember(slackUserId = 'U_SIGNIN') {
+    const team = await repos.team.create({ name: 'Signin Team' });
+    const member = await repos.teamMember.create({
+      teamId: team.id,
+      name: 'Linked',
+      email: 'linked@signin.test',
+    });
+    await repos.slackIdentityLink.create({ memberId: member.id, slackUserId });
+    return member;
+  }
+
+  function signinRequest(slackUserId: string) {
+    return makeSlackCommandRequest({
+      command: '/healthcheck',
+      text: 'signin',
+      user_id: slackUserId,
+    });
+  }
+
+  it('hands a linked member a sign-in link', async () => {
+    await linkedMember();
+    const { POST } = await import('./route');
+
+    const body = await (await POST(signinRequest('U_SIGNIN'))).json();
+
+    expect(body.text).toMatch(/\/auth\/magic\/[A-Za-z0-9_-]+/);
+  });
+
+  it('keeps the reply to the person who asked', async () => {
+    // A sign-in link posted to a channel is a credential in a channel. The
+    // link is asserted alongside, so this cannot pass on some other handler's
+    // ephemeral reply
+    await linkedMember();
+    const { POST } = await import('./route');
+
+    const body = await (await POST(signinRequest('U_SIGNIN'))).json();
+
+    expect(body.response_type).toBe('ephemeral');
+    expect(body.text).toMatch(/\/auth\/magic\//);
+  });
+
+  it('issues a link that actually signs that member in', async () => {
+    /*
+     * The outcome, not the shape of the string. A reply containing a
+     * plausible URL proves nothing if the token behind it was never
+     * persisted, or was bound to the wrong member.
+     */
+    const member = await linkedMember();
+    const { POST } = await import('./route');
+
+    const body = await (await POST(signinRequest('U_SIGNIN'))).json();
+    const token = /\/auth\/magic\/([A-Za-z0-9_-]+)/.exec(body.text)?.[1] ?? '';
+
+    await expect(container.auth.verifyMagicLink(token)).resolves.toMatchObject({
+      status: 'authenticated',
+      memberId: member.id,
+    });
+  });
+
+  it('reuses the magic-link lifecycle rather than minting a parallel one', async () => {
+    // A second token type would be a second expiry, a second claim, and a
+    // second place for single-use to be got wrong
+    await linkedMember();
+    const { POST } = await import('./route');
+
+    const body = await (await POST(signinRequest('U_SIGNIN'))).json();
+    const token = /\/auth\/magic\/([A-Za-z0-9_-]+)/.exec(body.text)?.[1] ?? '';
+
+    expect(await repos.magicLink.findByToken(token)).not.toBeNull();
+  });
+
+  it('tells an unlinked Slack user what to do', async () => {
+    /*
+     * Asserted on wording only the sign-in branch produces. `signin` used to
+     * fall through to the default prompt handler, whose unlinked message also
+     * mentions `connect` — so a looser assertion passed before any of this was
+     * built.
+     */
+    const { POST } = await import('./route');
+
+    const body = await (await POST(signinRequest('U_STRANGER'))).json();
+
+    expect(body.response_type).toBe('ephemeral');
+    expect(body.text).toMatch(/sign(ing)? (you )?in|sign-in/i);
+    expect(body.text).toMatch(/connect/i);
+  });
+
+  it('says nothing about whether that person is on any team', async () => {
+    /*
+     * Requirement 1.5, and the same anti-enumeration promise the magic-link
+     * route makes. A workspace member is not a team member, and the reply must
+     * not let somebody use this command to find out who is.
+     */
+    const member = await linkedMember('U_LINKED');
+    const { POST } = await import('./route');
+
+    const stranger = await (await POST(signinRequest('U_STRANGER'))).json();
+
+    expect(stranger.text).not.toContain(member.email);
+    expect(stranger.text).not.toContain('Signin Team');
+    expect(stranger.text).not.toMatch(/exists|not a member of|no account/i);
+  });
+
+  it('issues nothing to an unlinked Slack user', async () => {
+    /*
+     * The reply is guidance; the absence of a credential is the guarantee.
+     *
+     * This asserted `findByToken('anything')` was null, which is true whatever
+     * the code does — it passed against a version that issued a token to
+     * everybody. Both halves are observable state now: nothing minted, and
+     * nothing in the reply.
+     */
+    const minted: string[] = [];
+    const create = repos.magicLink.create.bind(repos.magicLink);
+    repos.magicLink.create = async data => {
+      minted.push(data.token);
+      return create(data);
+    };
+    const { POST } = await import('./route');
+
+    const body = await (await POST(signinRequest('U_STRANGER'))).json();
+
+    expect(minted).toEqual([]);
+    expect(body.text).not.toMatch(/\/auth\/magic\//);
+  });
+
+  it('refuses a flood, and says when to come back', async () => {
+    /*
+     * Requirements: Slack Sign In 4.3
+     *
+     * The limit lives in the service; this is the half that matters to a
+     * person — that the refusal arrives as words they can act on rather than
+     * as silence or a stack trace.
+     */
+    await linkedMember('U_FLOOD');
+    const { POST } = await import('./route');
+    for (let i = 0; i < 5; i += 1) await POST(signinRequest('U_FLOOD'));
+
+    const body = await (await POST(signinRequest('U_FLOOD'))).json();
+
+    expect(body.response_type).toBe('ephemeral');
+    expect(body.text).toMatch(/try again/i);
+    expect(body.text).not.toMatch(/\/auth\/magic\//);
+  });
+
+  it('does no identity work at all when the signature does not verify', async () => {
+    /*
+     * NFR 1.1. The signature is the entire basis of the identity claim, so it
+     * is checked before anything reads a Slack user id — asserted by the
+     * absence of a token rather than by the order of two calls.
+     */
+    await linkedMember();
+    let identityWasRead = false;
+    repos.slackIdentityLink.findBySlackUserId = async () => {
+      identityWasRead = true;
+      return null;
+    };
+    const { verifySlackSignature } = await import('@/lib/slack/verify-signature');
+    vi.mocked(verifySlackSignature).mockImplementationOnce(() => {
+      throw new ForbiddenError('Invalid Slack signature');
+    });
+    const { POST } = await import('./route');
+
+    const res = await POST(signinRequest('U_SIGNIN'));
+
+    expect(res.status).toBe(403);
+    expect(identityWasRead, 'the Slack user id was read before its signature was trusted').toBe(
+      false,
+    );
   });
 });
