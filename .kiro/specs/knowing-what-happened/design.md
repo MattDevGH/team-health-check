@@ -55,16 +55,33 @@ already in the database, the address is the person.
 
 ### 5. The tick answers in its response as well as its logs
 
-cron-job.org shows the response body of every call it makes. That is a dashboard
-Matt already has open, refreshed daily, with no account to create — so the tick
-returns what it did:
+cron-job.org can show the response body of every call it makes. That is a
+dashboard Matt already has open, with no account to create — so the tick returns
+what it did, as a sentence with the counts behind it:
 
 ```json
-{ "ok": true, "tickId": "…", "opened": 1, "closed": 0, "materialised": 2, "prompts": 3, "durationMs": 412 }
+{ "ok": true, "summary": "Ran and opened 1 check, prompting 3 members, computed results for 2 checks.",
+  "tickId": "…", "opened": 1, "closed": 0, "materialised": 2, "prompts": 3, "durationMs": 412 }
 ```
 
-Counts and ids. It is the same information as the logs, in the one place
+Counts, reasons and ids. The same information as the logs, in the one place
 somebody is already looking.
+
+**This section said "shows the response body" until 2026-09-16.** It does not,
+by default — the *save responses* setting is off until you turn it on, and once
+on it keeps the last 50 executions over two days. Two corrections followed, and
+only one of them was to the wording:
+
+- Enabling it is a deployment step now, in `docs/deployment.md`.
+- Fifty executions is between fifty minutes and four hours depending on the tick
+  interval, and Vercel's Hobby plan keeps the logs this compares itself to for
+  **one hour**. So "the same information as the logs" is true and both halves
+  forget within the afternoon. What to do about that is
+  `.kiro/specs/remembering-what-happened/`.
+
+The decision itself stands. The response is the one artefact the tick controls,
+and a server log nobody reads on a schedule is not an answer. What did not stand
+was treating a third party's default as a premise.
 
 ### 6. Testing a record is testing a behaviour
 
@@ -120,3 +137,9 @@ an observability feature causing an outage.
   separate cost.
 - **Shipping logs anywhere.** No account, no network call, no vendor.
 - **Retention.** The platform's, and stated as such.
+
+  *Revisited 2026-09-16. "The platform's" turned out to be one hour of Vercel
+  Hobby runtime logs and fifty cron-job.org executions — between fifty minutes
+  and four hours in total, for a milestone named after knowing what happened on
+  Monday. Deferring retention was the right call at the time and it is now the
+  thing that needs doing: `.kiro/specs/remembering-what-happened/`.*

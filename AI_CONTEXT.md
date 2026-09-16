@@ -903,11 +903,43 @@ minutes fifty executions is about two hours — enough for "what did it just do?
 useless for "what happened on Monday", which is the question this milestone is
 named after.
 
-Task 2.4 records the open work: the application is the obvious home, and the
-dashboard's "Results are overdue — the scheduler may not be running" is already
-the interface guessing at something the tick now knows for certain. Deliberately
-unspecified — the shape depends on whether a maintainer or a delivery manager is
-meant to read it.
+Then the second number arrived: **Vercel's Hobby plan keeps runtime logs for one
+hour.** That is where every recorder event goes. So the milestone named *Knowing
+What Happened* remembers what happened for somewhere between fifty minutes and
+four hours, and the question it is named after — "why did no check open on
+Monday?" — is asked on Tuesday.
+
+The eviction shape is the part worth carrying: cron-job.org's fifty are counted
+in **executions**, not time, so what survives is the most recent fifty, which on
+a weekly cadence is the least interesting fifty. Three eventful ticks a week are
+pushed out within hours by the hundreds of quiet ones after them.
+
+**Specified in full at `.kiro/specs/remembering-what-happened/`** — four phases,
+each shippable alone:
+
+1. A **heartbeat**: one row, replaced every tick, written even when the tick did
+   nothing. It has to be every tick, because a quiet week and a stopped
+   scheduler are otherwise identical — which is why the heartbeat cannot just be
+   "the most recent ledger row".
+2. A **ledger** of only eventful ticks, so quiet ones cannot evict them. A tick
+   that *failed* to materialise is eventful although every count is zero, and is
+   the most valuable row in there.
+3. The **dashboard stops guessing**. `resultState` infers a stalled scheduler
+   from fifteen minutes of silence; with a heartbeat it can tell "late" from
+   "not running since Friday" from "never run at all" — the third being a fresh
+   deploy with a bad `CRON_SECRET`, where "results are overdue" is actively
+   misleading.
+4. Somewhere to read the ledger — **deliberately a decision, not a design**,
+   because a page nobody opens is worse than no page.
+
+No member ids in the ledger, deliberately: it keeps the whole thing out of scope
+of deletion, export, and every future retention question. Counts say a tick
+prompted somebody; which member is the delivery record's job.
+
+**And the audit-log bridge Matt asked about on 2026-09-15 is dead, for a good
+reason.** The scheduler writes no audit entries — all ten change types are human
+actions — so the two records never describe the same event. A shared identifier
+would be an id for a join nobody can make.
 
 **A note on how the journey E2E asserts it.** The first version pinned the
 count — "computed results for 1 check" — which passed locally and failed in CI,

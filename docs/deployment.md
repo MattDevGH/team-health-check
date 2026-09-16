@@ -308,9 +308,26 @@ Two limits worth knowing before you rely on it:
 - the **last 50 executions** only
 - headers and bodies are kept for **two days**
 
-At one tick every few minutes, fifty executions is a couple of hours. This is
-enough to answer "what did it just do?" and nowhere near enough to answer "what
-happened on Monday". Treat it as a window, not a record.
+The first is the one that binds. Fifty executions is counted in ticks, not in
+time, so the window is whatever fifty of your ticks span:
+
+| Tick interval | 50 executions span |
+|---|---|
+| 1 minute | 50 minutes |
+| 5 minutes | 4 hours 10 minutes |
+| 15 minutes | 12 hours 30 minutes |
+| 30 minutes | 25 hours |
+
+At any interval under about an hour, the two days never arrive. And what
+survives is the most *recent* fifty, not the most interesting: on a weekly
+cadence the handful of ticks that opened or closed a check are pushed out within
+hours by the quiet ones that follow them.
+
+Treat it as a window, not a record. It answers "what did it just do?" and cannot
+answer "what happened on Monday".
+
+**The logs are not a fallback.** Every event the recorder writes goes to Vercel's
+runtime logs, and the Hobby plan keeps those for **one hour**.
 
 **Where the summary should live instead is open work.** Two days of third-party
 retention, behind a setting that is off by default, is a thin place to keep the

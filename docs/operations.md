@@ -55,6 +55,20 @@ out by is a compile error.
 **Then the logs**, filtered by `tickId` from that response. Every line one run
 produced carries the same one.
 
+**Both forget quickly.** Vercel's Hobby plan keeps runtime logs for **one hour**,
+and cron-job.org keeps the last **50 executions** — which is between fifty
+minutes and four hours depending on the tick interval, and never reaches the
+two-day body cap at any interval under about an hour. What survives is the most
+recent fifty rather than the most interesting: on a weekly cadence the ticks that
+actually opened or closed a check are evicted within hours by the quiet ones.
+
+So the answer to "what did it just do?" is above, and the answer to "what
+happened on Monday" does not currently exist.
+`.kiro/specs/remembering-what-happened/` specifies the fix — a heartbeat every
+tick and a ledger of only the ticks that did something, both kept in the
+application's own database and pruned by the tick itself. Until that is built,
+look within the hour or not at all.
+
 ## The events
 
 ### The scheduler
@@ -147,12 +161,20 @@ They join on the audit entry's id, which appears in both: on the page as
 manager never has to read a token, and nobody debugging has to guess which
 change a line refers to.
 
+**The join only exists for things a person did.** All ten change types —
+`schedule_change`, `member_added`, `privacy_mode_changed` and the rest — are
+human actions; the scheduler writes no audit entries at all. So there is no
+audit entry to find for a check the scheduler opened, and looking for one is a
+dead end. The two records are complementary rather than overlapping, which is
+also the answer to whether they want a shared identifier: there is no join to
+make.
+
 ## Retention is the platform's, not ours
 
-Vercel keeps runtime logs for a window that **depends on the plan**. Check what
-the current plan actually retains before treating any of this as a historical
-record — "we have logs" and "we can look at last month" are different claims,
-and only one of them is free.
+**Checked 2026-09-16: Vercel's Hobby plan keeps runtime logs for one hour.**
+Pro is one day by default, 30 with Observability Plus. So on the current plan
+every event above is gone within the hour, and "we have logs" and "we can look
+at last month" are different claims — only one of them is free.
 
 Nothing here is shipped anywhere, aggregated, or alerted on. If a stopped
 scheduler needs to notify somebody rather than wait to be noticed, that is a

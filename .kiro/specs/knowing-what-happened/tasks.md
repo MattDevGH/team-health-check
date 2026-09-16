@@ -106,24 +106,23 @@ nobody reads on a schedule while the response carried only the totals.
 
 **Checkpoint:** "why did no check open on Monday?" is answerable. One PR.
 
-### 2.4 Somewhere better than a third party's two-day window — *not started*
+### 2.4 Somewhere better than an afternoon — *moved to its own spec*
 
-cron-job.org keeps response bodies for the last 50 executions over two days,
-behind a setting that is off by default. At a tick every few minutes that is a
-couple of hours of history. It answers "what did it just do?" and cannot answer
-"what happened on Monday", which is the question the whole milestone is named
-after.
+cron-job.org keeps the last 50 executions over two days, behind a setting that
+is off by default. Vercel's Hobby plan keeps the runtime logs for **one hour**.
+Between them, the milestone named *Knowing What Happened* remembers what
+happened for an afternoon.
 
-The application is the obvious home. The dashboard already says *"Results are
-overdue — the scheduler may not be running"* — an interface guessing at
-something the tick now knows for certain, which is the gap `deployment.md`'s
-open task "establish how a stopped trigger would be noticed" describes from the
-other side.
+Worse, the fifty are counted in executions rather than time, so what survives is
+the most recent fifty — which on a weekly cadence is the least interesting
+fifty. The three ticks a week that did something are evicted within hours by the
+hundreds of quiet ones that follow.
 
-Not specified further until it is wanted: the shape depends on who is meant to
-read it, and a maintainer's view and a delivery manager's are not the same page.
+Specified in full at `.kiro/specs/remembering-what-happened/`: a heartbeat every
+tick, a ledger of only the ticks that did something, both pruned by the tick
+itself, and a dashboard that reports instead of inferring.
 
-- _Requirements: Knowing What Happened 1.4 — needs a new criterion if built_
+- _Requirements: Remembering What Happened 1, 2, 3, 5_
 
 ---
 
