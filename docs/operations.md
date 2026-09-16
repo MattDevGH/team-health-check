@@ -20,12 +20,23 @@ default, and then only for the last 50 executions over two days. See
 did it do?" is on a screen you already have:
 
 ```json
-{ "ok": true,
+{
+  "ok": true,
   "summary": "Ran and opened 1 check, prompting 3 members, computed results for 2 checks.",
-  "tickId": "p852iwt2", "opened": 1, "closed": 0,
-  "materialised": 2, "prompts": 3, "durationMs": 412,
-  "reasons": {} }
+  "tickId": "p852iwt2",
+  "opened": 1,
+  "closed": 0,
+  "materialised": 2,
+  "prompts": 3,
+  "failures": 0,
+  "durationMs": 412,
+  "reasons": {}
+}
 ```
+
+The body is sent indented and in that order deliberately: the sentence first,
+then what happened, then what it cost, then the breakdown. On one line it is
+something you pick apart rather than read.
 
 It used to return `{ "ok": true }` whatever happened, which made a broken Monday
 look exactly like an ordinary Wednesday. Then it returned the counts, which was
