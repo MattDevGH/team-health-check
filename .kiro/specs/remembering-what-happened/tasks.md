@@ -37,12 +37,24 @@ first, one PR per phase.
 
 ### 1.2 Every tick writes one
 
-- [ ] Failing test: a quiet tick writes a heartbeat — the case the whole
+- [x] Failing test: a quiet tick writes a heartbeat — the case the whole
       requirement rests on, since a quiet week must not look like a stopped one
-- [ ] Failing test: an eventful tick writes one too, carrying its summary
-      sentence and counts
-- [ ] Failing test: the heartbeat's time is the tick's, not the read's
-- [ ] Wire it in the route, which is the only place that knows `prompts`
+- [x] Failing test: it carries the **same** sentence and tick id the response
+      carried. Two accounts of one tick would leave anybody comparing the cron
+      dashboard against the application with no way to choose between them
+- [x] Failing test: the heartbeat's time is the tick's, not the read's
+- [x] Failing test: it carries `prompts`, which only the route knows — a
+      heartbeat written inside the scheduler could not report it
+- [x] Failing test: it carries no answer content, since it outlives everything
+      else that might
+- [x] Wire it in the route, through a service, so phase 2's eventfulness
+      predicate and pruning have somewhere to live that is not a route handler
+- [x] Mutation check: skipping quiet ticks fails five tests.
+      **The first version of the flagship test did not catch it** — the
+      container is module-level and shared across the file, so an earlier
+      test's heartbeat was still there and `not.toBeNull()` passed against an
+      implementation that skipped quiet ticks entirely. It asserts on the
+      heartbeat *this* tick wrote now
 - _Requirements: Remembering What Happened 1.1, 1.3_
 - _Property: 1_
 

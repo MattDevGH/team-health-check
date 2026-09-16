@@ -12,6 +12,7 @@ import { withErrorHandling } from '@/lib/api-utils';
 import { recorder } from '@/lib/observability';
 import { recordingSink } from '@/lib/observability/recorded-sink';
 import { summariseTick } from '@/lib/services/tick-summary';
+import { createTickRecordService } from '@/lib/services/tick-record.service';
 import { ForbiddenError } from '@/lib/errors';
 import { repos } from '@/lib/container-production';
 import { createSchedulerService } from '@/lib/services/scheduler.service';
@@ -204,9 +205,39 @@ export const POST = withErrorHandling(async (request: Request) => {
    * Requirements: Knowing What Happened 1.4, 1.6. Counts, reasons and ids
    * only — never anything a member answered.
    */
+  const sentence = summariseTick({ ...summary, prompts });
+
+  /*
+   * The copy that is still there tomorrow.
+   *
+   * The response above is read by whoever is looking at the cron dashboard at
+   * the time, and cron-job.org keeps the last fifty executions — between fifty
+   * minutes and four hours, depending on the tick interval. Vercel's Hobby plan
+   * keeps the logs for an hour. The question this milestone is named after is
+   * asked the following week.
+   *
+   * Written for every tick, including one that did nothing: a quiet week and a
+   * stopped scheduler are indistinguishable unless something is written when
+   * nothing happened.
+   *
+   * The same sentence and the same tick id as the response, deliberately. Two
+   * accounts of one tick would leave anybody comparing them with no way to
+   * choose between the two.
+   */
+  await createTickRecordService({ schedulerHeartbeatRepo: repos.schedulerHeartbeat }).record({
+    tickId: summary.tickId,
+    ranAt: now,
+    summary: sentence,
+    opened: summary.opened,
+    closed: summary.closed,
+    materialised: summary.materialised,
+    prompts,
+    durationMs: summary.durationMs,
+  });
+
   return Response.json({
     ok: true,
-    summary: summariseTick({ ...summary, prompts }),
+    summary: sentence,
     ...summary,
     prompts,
   });
