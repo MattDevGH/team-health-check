@@ -13,9 +13,11 @@ captures. No service, no account, no network call.
 
 ## What to look at first
 
-**The scheduler's response.** cron-job.org shows the body of every call it
-makes, so the fastest answer to "did it run, and what did it do?" is already on
-a screen you have:
+**The scheduler's response.** cron-job.org can show the body of every call it
+makes — but only once the job has **save responses** enabled, which it is not by
+default, and then only for the last 50 executions over two days. See
+`docs/deployment.md`. With it on, the fastest answer to "did it run, and what
+did it do?" is on a screen you already have:
 
 ```json
 { "ok": true,

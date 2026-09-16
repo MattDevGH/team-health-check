@@ -56,7 +56,7 @@ reading the code, and it is now a substitute for something much cheaper.
 1. THE scheduler tick SHALL record that it ran, including when, and how long it took.
 2. WHERE the tick opens, closes or materialises a session, IT SHALL record which team and which session.
 3. WHERE the tick declines to act on a team, IT SHALL record why — no schedule, archived, outside the collection window, or the cycle already served.
-4. THE tick's HTTP response SHALL carry a summary of what it did, since the cron service that calls it shows the response and nobody reads server logs on a schedule.
+4. THE tick's HTTP response SHALL carry a summary of what it did, because the response is the only place the tick can leave one where an operator will meet it, and nobody reads server logs on a schedule.
 5. THE summary SHALL be counts and ids, never the content of any answer.
 6. THE summary SHALL state in plain language what the tick did, and where it
    did nothing, why — without requiring the reader to know what the field
@@ -69,6 +69,22 @@ reading the code, and it is now a substitute for something much cheaper.
 *distinguishes them. The verdict at the time was that it needed "a reminder of*
 *what it’s telling me" — and a record that needs a reminder is not a record*
 *that can be read at a glance.*
+
+*Criterion 4 read "since the cron service that calls it **shows the response**"*
+*until 2026-09-16. It does not, by default. cron-job.org shows `200 OK` and*
+*nothing else unless the job has **save responses** switched on, and then it*
+*keeps headers and bodies for the last 50 executions over two days. The clause*
+*was an assumption about a third party's interface that nobody had checked, and*
+*the person who first opened a real dashboard found the summary sitting*
+*somewhere they could not read it.*
+
+*The criterion survives the correction because the reasoning was only ever*
+*half about cron-job.org: the response is the one artefact the tick controls,*
+*and a server log nobody reads on a schedule is not an answer. What does not*
+*survive is treating a third party's default as a premise. Making the body*
+*visible is a deployment step now, in `docs/deployment.md`, and two days of*
+*retention is thin enough that where else the summary should live is recorded*
+*as open work rather than settled here.*
 
 ### Requirement 2: A Record Says Who It Is About
 

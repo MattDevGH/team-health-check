@@ -294,8 +294,36 @@ Vercel Pro (per-minute crons, everything inside Vercel) remains the upgrade path
 if the external trigger starts costing more attention than the subscription
 would.
 
+### Turn on "save responses", or the tick talks to nobody
+
+The tick answers with a sentence saying what it did and, when it did nothing,
+why — see `docs/operations.md`. **cron-job.org does not show you that by
+default.** The execution list shows `200 OK` and nothing more.
+
+In the job's settings, enable **save responses** (`saveResponses` over the REST
+API). The job history then shows the response headers and body for each run.
+
+Two limits worth knowing before you rely on it:
+
+- the **last 50 executions** only
+- headers and bodies are kept for **two days**
+
+At one tick every few minutes, fifty executions is a couple of hours. This is
+enough to answer "what did it just do?" and nowhere near enough to answer "what
+happened on Monday". Treat it as a window, not a record.
+
+**Where the summary should live instead is open work.** Two days of third-party
+retention, behind a setting that is off by default, is a thin place to keep the
+only account of what the scheduler does. The obvious alternative is the
+application itself: the dashboard already says "Results are overdue — the
+scheduler may not be running", which is the interface guessing at something the
+tick now knows for certain.
+
 **Watch that it is still firing.** A stopped trigger is silent: sessions simply
-never open, and the first report comes from a confused team.
+never open, and the first report comes from a confused team. Note that the
+response body does not help here — a trigger that has stopped sends no
+response at all, so whatever watches for that has to live somewhere the tick
+is not.
 
 ---
 

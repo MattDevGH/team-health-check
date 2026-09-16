@@ -888,6 +888,27 @@ Three things are worth knowing about how it is put together
 "Computed results for", never "materialised": the word is ours, and the reader
 is whoever has the cron dashboard open. `docs/operations.md` shows both shapes.
 
+**And then the premise turned out to be conditional.** Criterion 1.4 said the
+summary belongs in the response "since the cron service that calls it shows the
+response". cron-job.org does not, by default — it shows `200 OK` and nothing
+else until the job has **save responses** switched on, and then keeps headers
+and bodies for the last 50 executions over two days. Reported 2026-09-16 by the
+only person who had actually looked at the dashboard.
+
+The criterion survives, reworded: the response is the one artefact the tick
+controls, and a server log nobody reads on a schedule is not an answer. What
+does not survive is treating a third party's default as a premise. Enabling the
+setting is a deployment step now (`docs/deployment.md`), and at a tick every few
+minutes fifty executions is about two hours — enough for "what did it just do?",
+useless for "what happened on Monday", which is the question this milestone is
+named after.
+
+Task 2.4 records the open work: the application is the obvious home, and the
+dashboard's "Results are overdue — the scheduler may not be running" is already
+the interface guessing at something the tick now knows for certain. Deliberately
+unspecified — the shape depends on whether a maintainer or a delivery manager is
+meant to read it.
+
 **A note on how the journey E2E asserts it.** The first version pinned the
 count — "computed results for 1 check" — which passed locally and failed in CI,
 where the shared database carries every other spec's teams and the tick had

@@ -97,11 +97,33 @@ nobody reads on a schedule while the response carried only the totals.
       third party's dashboard
 - [x] End-to-end: read the sentence out of the real response body, which is
       the only place the route composes one
+- [ ] **Enable "save responses" on the cron-job.org job first.** Reported
+      2026-09-16: the dashboard shows `200 OK` and no body at all until that
+      setting is on. Criterion 1.4 assumed otherwise and has been corrected
 - [ ] Verify against production: read the next scheduled run's response and
       confirm the sentence reads as intended — needs a deploy and the next run
 - _Requirements: Knowing What Happened 1.4, 1.6_
 
 **Checkpoint:** "why did no check open on Monday?" is answerable. One PR.
+
+### 2.4 Somewhere better than a third party's two-day window — *not started*
+
+cron-job.org keeps response bodies for the last 50 executions over two days,
+behind a setting that is off by default. At a tick every few minutes that is a
+couple of hours of history. It answers "what did it just do?" and cannot answer
+"what happened on Monday", which is the question the whole milestone is named
+after.
+
+The application is the obvious home. The dashboard already says *"Results are
+overdue — the scheduler may not be running"* — an interface guessing at
+something the tick now knows for certain, which is the gap `deployment.md`'s
+open task "establish how a stopped trigger would be noticed" describes from the
+other side.
+
+Not specified further until it is wanted: the shape depends on who is meant to
+read it, and a maintainer's view and a delivery manager's are not the same page.
+
+- _Requirements: Knowing What Happened 1.4 — needs a new criterion if built_
 
 ---
 
