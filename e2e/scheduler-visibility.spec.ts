@@ -40,6 +40,17 @@ function aggregate(questionId: string, averageScore: number): SeededAggregate {
   };
 }
 
+/*
+ * The heartbeat is one shared row, so this spec leaves it as it found it.
+ *
+ * Without this, whichever spec ran last decided what every other spec's
+ * dashboard said — and CI found exactly that when these tests left a heartbeat
+ * behind for `dashboard.spec.ts` to trip over.
+ */
+test.afterAll(() => {
+  clearSchedulerHeartbeat();
+});
+
 test.beforeAll(() => {
   /*
    * Two closed sessions so the dashboard takes its populated path, and the
