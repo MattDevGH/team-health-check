@@ -951,6 +951,39 @@ minutes fifty executions is about two hours — enough for "what did it just do?
 useless for "what happened on Monday", which is the question this milestone is
 named after.
 
+**Slack sign-in is complete through phase 4.** Email is off the critical path:
+production now starts with a Resend key **or** a Slack token, and refuses with
+neither rather than accepting an address, saying "check your email" and sending
+nothing.
+
+Matt settled the `users:read.email` question, and the record backed him: the
+README said `users:read` was removed because *"nothing calls users.info"* — it
+went as unused, not unwanted. `/healthcheck signin` is the call that uses it.
+
+- **Phase 3.** An unlinked Slack user is matched to a member by the address
+  Slack has already verified. Matching is exact and case-insensitive only
+  because an address is; prefix or domain matching would let anybody at the
+  same company sign in as a colleague. An address on two teams refuses. Every
+  way of failing to match returns the identical answer, so the command cannot
+  be used to ask who is on a team. A match never *creates* a member.
+- **Phase 4.1.** Removal revokes — and **the fakes disagreed with the
+  database**. Prisma deletes the identity link, sessions and magic links inside
+  its removal transaction; the in-memory repositories removed the member and
+  left them all. So the property could not be proved against fakes, and any
+  route test would have passed against a fake *less safe than production*. The
+  fakes mirror the transaction now.
+- **Phase 4.2.** The startup guard runs after the TEST_MODE check, so the
+  graver fault is reported first. Three existing tests had to gain a provider:
+  a production environment with only a database URL no longer starts.
+
+The scopes stay optional throughout. Without them a workspace falls back to the
+manager-asserted path, and the refusal is recorded as `slack.email.unavailable`
+carrying Slack's own error — so `missing_scope` is visible in a log rather than
+inferred from members who cannot sign in.
+
+**Phase 5 is the part tests cannot do**: a real workspace. The 2026-08-26 pass
+found three defects a 1,150-test suite could not see.
+
 **Slack sign-in phases 1 and 2 are built.** A team can now be set up and sign
 in with **no email configured at all**, which is the point the whole spec
 exists for: without a verified sending domain Resend delivers to the account

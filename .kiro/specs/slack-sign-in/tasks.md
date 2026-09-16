@@ -128,30 +128,46 @@ being speculative; it stops being speculative here, but the decision is its own.
 
 ### 3.1 Match an unlinked Slack user by verified email
 
-- [ ] Failing test: an unlinked Slack user whose email matches one member is
+- [x] Failing test: an unlinked Slack user whose email matches one member is
       linked automatically and signed in
-- [ ] Failing test: an email matching members in more than one team issues
-      nothing, matching the existing ambiguous-identity guard
-- [ ] Failing test: an email matching no member creates no team member and says
-      so without confirming who exists
-- [ ] Failing test: matching is case-insensitive and exact — no prefix or domain
-      matching
+- [x] Failing test: an email matching members in more than one team issues
+      nothing, matching the existing ambiguous-identity guard, and creates no
+      link either — the ambiguity must not be resolved by accident
+- [x] Failing test: an email matching no member creates no team member and says
+      exactly what an unlinked account is told
+- [x] Failing test: matching is case-insensitive and exact — no prefix or domain
+      matching. `alice@example.invalid.attacker.test` matches nothing
+- [x] Mutation check: dropping the ambiguity guard fails 2, creating a member
+      when none matches fails 4
 - _Requirements: 3.1, 3.2, 3.3, 3.4_
 - _Properties: 1, 4_
 
 ### 3.2 Degrade rather than fail opaquely
 
-- [ ] Failing test: a Slack user with no readable email falls back to the
+- [x] Failing test: a Slack user with no readable email falls back to the
       manager-asserted path with a legible message
-- [ ] Failing test: a missing scope produces the same fallback, not a 500
-- [ ] The scope is documented in the README table alongside the existing three,
-      with what calls it
+- [x] Failing test: a missing scope produces the same fallback, not a 500 —
+      and so do an HTTP error and a network failure. A slash command has three
+      seconds to answer; an exception escaping would turn a Slack outage into
+      an error for somebody who only wanted to sign in
+- [x] Failing test: with no directory configured at all, the manager-asserted
+      path still signs people in — the fallback must not disable what it falls
+      back to
+- [x] The refusal is recorded as `slack.email.unavailable` carrying Slack's own
+      error, so `missing_scope` is visible rather than inferred from members
+      who cannot sign in. No address appears in the record
+- [x] The scopes are documented in the README table alongside the existing
+      three, with what calls them and why `users:read` was removed once
 - _Requirements: 3.5, 5.4_
 
 ### 3.3 Audit the automatic link
 
-- [ ] Failing test: an email-matched binding is audited and distinguishable from
-      a manager-asserted one
+- [x] Failing test: an email-matched binding is audited and distinguishable from
+      a manager-asserted one — `slack_binding_matched` against
+      `slack_binding_asserted`, because who linked an account and on what basis
+      are different questions
+- [x] Failing test: the entry carries ids and not the address the match was
+      made on
 - _Requirements: 3.6_
 
 ---
@@ -160,28 +176,46 @@ being speculative; it stops being speculative here, but the decision is its own.
 
 ### 4.1 Removal revokes access
 
-- [ ] Failing test: a member removed from a team cannot sign in through a
+- [x] Failing test: a member removed from a team cannot sign in through a
       surviving identity link
-- [ ] Failing test: the identity link does not outlive the member row in a way
+- [x] Failing test: the identity link does not outlive the member row in a way
       that would resurrect access if the member were re-added
+- [x] Failing test: a sign-in link minted before they left stops working, and a
+      browser session already open is revoked
+- [x] Failing test: everybody else can still sign in — a removal that revoked
+      too broadly would be its own outage
+- [x] **The fakes disagreed with the database.** Prisma deletes the identity
+      link, sessions and magic links inside its removal transaction; the
+      in-memory repositories removed the member and left them all. The property
+      could not be proved against fakes, and a route test would have passed
+      against a fake *less safe than production*. The fakes mirror the
+      transaction now, and the guarantee is asserted in both tiers
+- [x] Mutation check: the Prisma delete fails 1 test, the fake delete fails 3
 - _Requirements: 4.4_
 - _Property: 6_
 
 ### 4.2 Either provider is sufficient, neither is fatal silence
 
-- [ ] Failing test: with no email provider configured but Slack present, the
+- [x] Failing test: with no email provider configured but Slack present, the
       application is fully usable
-- [ ] Failing test: with no Slack app configured but email present, unchanged
-- [ ] Failing test: with neither configured, startup says so rather than
-      presenting a sign-in page that cannot work
+- [x] Failing test: with no Slack app configured but email present, unchanged
+- [x] Failing test: with neither configured, startup says so rather than
+      presenting a sign-in page that cannot work — naming both variables, and
+      the consequence rather than just the variable
+- [x] Failing test: an empty string counts as absent, which is the shape a
+      misconfigured deployment actually takes
+- [x] The guard runs **after** the TEST_MODE check, so the graver fault is
+      reported first. Three existing tests had to gain a provider: a production
+      environment with only a database URL is no longer sufficient to start
 - _Requirements: 5.1, 5.2, 5.3_
 
 ### 4.3 Document the ways in
 
-- [ ] README and `docs/deployment.md`: which routes in exist, what each requires,
+- [x] README and `docs/deployment.md`: which routes in exist, what each requires,
       and what happens when only one is configured
-- [ ] State plainly that without a verified sending domain, email delivers only
-      to the Resend account owner — the defect that motivated this spec
+- [x] State plainly that without a verified sending domain, email delivers only
+      to the Resend account owner — the defect that motivated this spec, and
+      that a Slack deployment can skip that section entirely
 - _Requirements: 5.4_
 
 ---

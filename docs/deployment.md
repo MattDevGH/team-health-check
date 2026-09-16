@@ -358,6 +358,34 @@ this particular statement looks.
 
 ---
 
+## The two ways in
+
+Somebody signs in by **email** or from **Slack**. Either alone is enough, and
+production refuses to start with neither — the application would otherwise
+accept an address, say "check your email", and send nothing.
+
+| Route | Needs | Gets you |
+|---|---|---|
+| Magic link by email | `RESEND_API_KEY`, and a **verified sending domain** | Anybody with an address on a team |
+| `/healthcheck signin` | `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET` | Anybody whose Slack account is linked to a member |
+| …with no setup at all | the above plus `users:read`, `users:read.email` | Anybody whose Slack email matches a member |
+
+**With email only**, everything works as it always has.
+
+**With Slack only**, a delivery manager records each member's Slack ID in team
+settings and those members sign in with `/healthcheck signin`. This is the
+arrangement that makes a trial possible without owning a domain, which is the
+problem the whole `slack-sign-in` spec was written to solve.
+
+**With Slack and the two `users:read` scopes**, nobody needs setting up: a
+member runs the command and is matched to their team by the address Slack has
+already verified. Without the scopes the same command falls back to the manual
+path rather than failing — look for `slack.email.unavailable` in the log, which
+carries Slack's own error, so `missing_scope` is visible rather than inferred.
+
+A Slack email match never *creates* a member. Being in the workspace is not
+being on a team.
+
 ## Email
 
 `onboarding@resend.dev` delivers **only to the Resend account owner**. Every
@@ -365,7 +393,13 @@ other recipient is dropped silently — and for a magic link that is
 indistinguishable from the link never being requested, because
 `requestMagicLink` returns void for every input by design (anti-enumeration).
 
-So before giving this to a team:
+**This is the defect that motivated Slack sign-in.** A colleague who cannot
+receive mail sees "check your email" and waits for ever, with nothing in any
+log to say why — so the tool could not be trialled with a team unless its owner
+also owned a domain. If you have Slack configured you can skip this section
+entirely.
+
+Otherwise, before giving this to a team:
 
 1. Verify a sending domain with Resend.
 2. Set `EMAIL_SENDER` to an address on it.
