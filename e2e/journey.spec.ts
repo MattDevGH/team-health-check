@@ -295,7 +295,20 @@ test.describe.serial('team lifecycle journey', () => {
     await page.getByLabel('Member email').fill(MEMBER_EMAIL);
     await page.getByRole('button', { name: /add member/i }).click();
 
-    await expect(page.getByText(MEMBER_NAME)).toBeVisible();
+    /*
+     * Scoped to the row, not the page.
+     *
+     * A bare `getByText(MEMBER_NAME)` started matching twice once each row
+     * gained a Slack-ID field labelled "Slack member ID for {name}" — the
+     * name is in the label deliberately, because five rows sharing one label
+     * would leave a screen-reader user unable to tell which field is whose.
+     *
+     * The assertion was always about the member appearing in the list, so it
+     * says that now rather than counting occurrences of a word.
+     */
+    await expect(
+      page.locator('[data-testid="member-row"]').filter({ hasText: MEMBER_NAME }),
+    ).toHaveCount(1);
 
     const member = findMemberEmail(state.teamId, MEMBER_EMAIL);
     expect(member, 'the added member should be persisted').toBeTruthy();
