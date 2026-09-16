@@ -147,11 +147,20 @@ phase exists to stop.
 
 ### 4.2 An away period can be seen
 
-- [ ] Failing test: a set away period is shown with its dates
-- [ ] Failing test: no away period says so rather than rendering an empty
+- [x] Route: `GET /api/me/availability`. The service has had
+      `getAvailability` since availability was built and no route ever called
+      it, so there was nothing for the page to read
+- [x] Failing test: a set away period is shown with its dates
+- [x] Failing test: no away period says so rather than rendering an empty
       control
-- [ ] Failing test: the page reads it from the API rather than assuming — the
+- [x] Failing test: the page reads it from the API rather than assuming — the
       profile once rendered a `privacyMode` the API never sent
+- [x] Failing test: the route never returns another member's period — the id
+      comes from the session and there is no parameter to pass somebody else's
+- [x] Failing test: marking away shows the period it just created, rather than
+      announcing "saved" and showing nothing
+- [x] MSW default handler for the new route, so every profile test runs against
+      the real contract instead of a swallowed fetch failure
 - _Requirements: 5.1, 5.3_
 
 ### 4.3 And cancelled
