@@ -14,35 +14,50 @@ decision.
 
 ### 1.1 A linked Slack user can request a sign-in link
 
-- [ ] Failing test: a verified command from a Slack user with an identity link
+- [x] Failing test: a verified command from a Slack user with an identity link
       returns an ephemeral reply containing a sign-in URL
-- [ ] Failing test: the reply is `response_type: ephemeral` — a sign-in link
+- [x] Failing test: the reply is `response_type: ephemeral` — a sign-in link
       posted to a channel is a credential in a channel
-- [ ] Failing test: an unlinked Slack user gets guidance, and the reply reveals
+- [x] Failing test: an unlinked Slack user gets guidance, and the reply reveals
       nothing about whether that person exists in any team
-- [ ] Failing test: an unverified signature is rejected before any identity work
-- [ ] Implement, reusing the magic-link token lifecycle rather than minting a
+- [x] Failing test: an unverified signature is rejected before any identity work
+- [x] Implement, reusing the magic-link token lifecycle rather than minting a
       parallel one
+- [x] Two of those tests passed before any of this existed: `signin` fell
+      through to the default handler, whose unlinked reply also mentions
+      `connect` and is also ephemeral. They assert wording and a link only
+      this branch produces
 - _Requirements: 1.1, 1.3, 1.5, 1.6, NFR 1.1, NFR 1.2_
 - _Property: 5_
 
 ### 1.2 The link establishes a session, once
 
-- [ ] Failing test: opening the link establishes a `UserSession` with the same
-      expiry a magic link produces
-- [ ] Failing test: the second use of the same token fails
-- [ ] Failing test: an expired token fails
-- [ ] Integration test over a real file: the claim is a compare-and-set, so two
-      concurrent uses cannot both succeed
-- [ ] Mutation check: remove the single-use claim and watch the reuse test fail
+- [x] Failing test: opening the link establishes a `UserSession` with the same
+      expiry a magic link produces — compared against an actual email-issued
+      token rather than a constant copied out of the implementation
+- [x] Failing test: the second use of the same token fails
+- [x] Failing test: an expired token fails
+- [x] Integration test over a real file: the claim is a compare-and-set, so two
+      concurrent uses cannot both succeed. **`atomic-claims.test.ts` had said
+      in its own header that these were owed to "Task 18.x" and they had never
+      been written** — single-use had only ever been proved against a
+      JavaScript `Map`, where the single thread makes a claim atomic for free
+- [x] Mutation check: removing the `used: false` filter fails two integration
+      tests and **not** the in-memory unit test
 - _Requirements: 1.2, 1.4_
 - _Property: 2_
 
 ### 1.3 Rate limit the command
 
-- [ ] Failing test: repeated requests from one Slack user are refused after a
+- [x] Failing test: repeated requests from one Slack user are refused after a
       threshold, on the same reasoning as the magic-link limit
-- [ ] Failing test: the refusal is legible — it says when to try again
+- [x] Failing test: an unlinked Slack account is counted too, so the limit
+      cannot be used to read team membership off which ids start being refused
+- [x] Failing test: the refusal is legible — it says when to try again.
+      `retryAfterMs` reports when the oldest attempt leaves the window, with
+      its own tests under a controlled clock: a service-level assertion of
+      "some positive number under an hour" passed against an implementation
+      that always returned the full window
 - _Requirements: 4.3_
 
 **Checkpoint:** anyone already linked can sign in from Slack. Nobody can link
@@ -54,29 +69,50 @@ without email yet, which phase 2 fixes. One PR.
 
 ### 2.1 Record a Slack user id against a member
 
-- [ ] Failing test: a Delivery Manager can set a member's Slack user id
-- [ ] Failing test: a Slack user id already bound to another member is rejected
-- [ ] Failing test: an ordinary member cannot bind anyone, including themselves
-- [ ] Failing test: clearing a binding removes the link
+- [x] Failing test: a Delivery Manager can set a member's Slack user id
+- [x] Failing test: a Slack user id already bound to another member is
+      rejected, **and the existing binding survives the refusal** — the throw
+      is the symptom, the survival is the guarantee
+- [x] Failing test: an ordinary member cannot bind anyone, including
+      themselves. Self-service assertion is what phase 3 pays for with a
+      verified email, not something to get for free here
+- [x] Failing test: a manager of another team cannot bind either
+- [x] Failing test: clearing a binding removes the link, and that Slack account
+      stops resolving to anybody
+- [x] Failing test: a value that could not be a Slack id is refused at the edge
+- [x] Mutation check: injectivity 2, unchanged-value 1, team membership 1,
+      authorisation 2
 - _Requirements: 2.1, 2.2_
 - _Property: 3_
 
 ### 2.2 Audit every binding
 
-- [ ] Failing test: creating, changing and removing a binding each write an
+- [x] Failing test: creating, changing and removing a binding each write an
       audit entry naming the actor
-- [ ] Failing test: the entry distinguishes a manager-asserted binding from an
-      email-matched one, so the log answers *how* as well as *who*
-- [ ] Verify the audit log page renders the new change types legibly rather than
-      falling back to a raw string
+- [x] Failing test: nothing is written when nothing changed, or when a binding
+      was refused — a log of non-events is a log nobody reads
+- [x] The change types are `slack_binding_asserted` and
+      `slack_binding_removed`, named for *how* the binding came about so that
+      phase 3's email-matched link is distinguishable
+- [x] The audit log page labels both rather than falling back to a raw string
+- [x] One test of mine was flaky by construction — it asserted on
+      `entries()[0]`, and two entries written in the same millisecond sort
+      unpredictably. It finds the entry by change type now
 - _Requirements: 2.3, NFR 2.1, NFR 2.2_
 
 ### 2.3 Say what a binding grants
 
-- [ ] Failing test: the settings UI states that binding asserts identity and
+- [x] Failing test: the settings UI states that binding asserts identity and
       does not grant the manager the ability to sign in as that member
-- [ ] axe against the new control, including its explanatory copy
-- [ ] Keyboard operable end to end
+- [x] **The page said the opposite and had to be corrected**: "Only they can do
+      this; it is not something you can set on their behalf" was true until
+      this feature existed, and would have left the page contradicting the
+      control beneath it. A test asserts that sentence is gone
+- [x] Failing test: the row reports the link from the server's answer rather
+      than from the click — `MembersSection` is controlled, so the observable
+      outcome is what it hands its parent
+- [x] axe against the new control, including its explanatory copy
+- [x] Keyboard operable end to end
 - _Requirements: 2.4, 2.5, NFR 3.1_
 
 **Checkpoint:** a team can be set up and can sign in with no email configured at

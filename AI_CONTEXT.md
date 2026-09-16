@@ -951,6 +951,41 @@ minutes fifty executions is about two hours — enough for "what did it just do?
 useless for "what happened on Monday", which is the question this milestone is
 named after.
 
+**Slack sign-in phases 1 and 2 are built.** A team can now be set up and sign
+in with **no email configured at all**, which is the point the whole spec
+exists for: without a verified sending domain Resend delivers to the account
+owner and drops everybody else silently, so the tool could not be trialled
+unless its owner also owned a domain.
+
+- `/healthcheck signin` replies ephemerally with a sign-in link. The token is
+  an ordinary magic link — a second token type would mean a second expiry, a
+  second claim, and a second place for single-use to be got wrong.
+- A Delivery Manager records a member's Slack id from team settings. They
+  assert *who a Slack account belongs to* and gain nothing: authentication
+  stays that member's own Slack login, and an ordinary member cannot bind even
+  themselves.
+- Injectivity is checked before the write. The failure it prevents is a
+  mistyped id handing one member the ability to sign in as another.
+
+**The settings page said the opposite and had to be corrected.** "Only they can
+do this; it is not something you can set on their behalf" was true until this
+existed. A test asserts that sentence is gone — a page contradicting the control
+beneath it is worse than a page that says nothing.
+
+**`atomic-claims.test.ts` had been carrying an IOU since it was written**: its
+header said real SQLite row-locking tests were owed to "Task 18.x", and they
+never were. So single-use — the whole value of a sign-in link — had only ever
+been proved against a JavaScript `Map`, where the single thread makes a claim
+atomic for free whether or not the database agrees. There is a real-file test
+now; removing the `used: false` filter fails it and **not** the in-memory one.
+
+Two test defects worth remembering. A property-style assertion of "some
+positive number under an hour" for the retry horizon passed against an
+implementation that always returned the full window — the sliding-window
+calculation has its own tests under a controlled clock now. And an audit
+assertion on `entries()[0]` was flaky by construction, because two entries
+written in the same millisecond sort unpredictably.
+
 **The cron dashboard question is closed, 2026-09-16.** `knowing-what-happened`
 has no open boxes left. The chain took three corrections, each one from looking
 rather than reasoning:

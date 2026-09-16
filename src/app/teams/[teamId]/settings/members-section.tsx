@@ -25,6 +25,8 @@ export function MembersSection({ teamId, members, onMembersChanged }: MembersSec
   const [addError, setAddError] = useState('');
   const [actionError, setActionError] = useState('');
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  /** What the manager has typed, per member, before they save it. */
+  const [slackIds, setSlackIds] = useState<Record<string, string>>({});
   const safeMembers = normalizeMembers(members);
 
   async function handleAddMember() {
@@ -73,6 +75,40 @@ export function MembersSection({ teamId, members, onMembersChanged }: MembersSec
     }
   }
 
+  /**
+   * Record, change or clear which Slack account belongs to a member.
+   *
+   * Requirements: Slack Sign In 2.1, 2.4
+   *
+   * The state comes from the server's answer rather than from the click, the
+   * same rule the role control follows — a row that showed "Slack linked"
+   * because a button was pressed would be reporting an intention.
+   */
+  async function handleSlackBinding(memberId: string, slackUserId: string | null) {
+    setActionError('');
+    try {
+      const response = await fetch(`/api/teams/${teamId}/members/${memberId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slackUserId }),
+      });
+      const body = await readBody(response);
+      if (!response.ok) {
+        setActionError(apiErrorMessage(body, 'Failed to update the Slack account'));
+        return;
+      }
+      const updated = normalizeMember(body);
+      if (!updated) {
+        setActionError('The server returned an invalid member');
+        return;
+      }
+      onMembersChanged(safeMembers.map((member) => member.id === memberId ? updated : member));
+      setSlackIds((current) => ({ ...current, [memberId]: '' }));
+    } catch {
+      setActionError('Network error while updating the Slack account');
+    }
+  }
+
   async function handleRoleChange(memberId: string, newRole: string) {
     if (!isTeamRole(newRole)) return;
     setActionError('');
@@ -113,10 +149,25 @@ export function MembersSection({ teamId, members, onMembersChanged }: MembersSec
       <p className="mb-3 text-sm text-gray-600">
         <strong>Slack not linked</strong> means that person has not connected
         their Slack account, so prompts and reminders reach them by email link
-        only — they can still answer everything. To link it, they run
-        <code className="mx-1 rounded bg-gray-100 px-1">/healthcheck</code> in
-        Slack and enter the pairing code shown on their own profile page. Only
-        they can do this; it is not something you can set on their behalf.
+        only — they can still answer everything. They can link it themselves by
+        running <code className="mx-1 rounded bg-gray-100 px-1">/healthcheck connect</code>
+        in Slack and entering the pairing code from their profile page.
+      </p>
+      <p className="mb-3 text-sm text-gray-600">
+        {/*
+          This paragraph said "Only they can do this; it is not something you
+          can set on their behalf." That was true until a manager could record
+          a binding, and leaving it would have the page contradicting the
+          control beneath it.
+        */}
+        <strong>Or you can record it for them.</strong> Paste somebody&rsquo;s
+        Slack member ID below and they can sign in with{' '}
+        <code className="mx-1 rounded bg-gray-100 px-1">/healthcheck signin</code>,
+        which is how a team gets started before email is set up. This records
+        who a Slack account belongs to — it{' '}
+        <strong>does not let you sign in as them</strong>, and gives you no
+        access to their account. They sign in with their own Slack login, as
+        they would have anyway.
       </p>
       {actionError && <p className="mb-3 text-sm text-red-600" role="alert">{actionError}</p>}
 
@@ -130,6 +181,39 @@ export function MembersSection({ teamId, members, onMembersChanged }: MembersSec
             <span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-600 w-fit">
               {member.slackLink ? 'Slack linked' : 'Slack not linked'}
             </span>
+            {member.slackLink ? (
+              <button
+                type="button"
+                onClick={() => handleSlackBinding(member.id, null)}
+                className="px-3 py-1 text-sm text-blue-700 underline"
+              >
+                Unlink Slack
+              </button>
+            ) : (
+              <div className="flex items-center gap-1">
+                <label htmlFor={`slack-id-${member.id}`} className="sr-only">
+                  Slack member ID for {member.name}
+                </label>
+                <input
+                  id={`slack-id-${member.id}`}
+                  type="text"
+                  value={slackIds[member.id] ?? ''}
+                  onChange={(event) =>
+                    setSlackIds((current) => ({ ...current, [member.id]: event.target.value }))
+                  }
+                  placeholder="U01ABCDE"
+                  className="w-28 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900 placeholder:text-gray-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSlackBinding(member.id, (slackIds[member.id] ?? '').trim())}
+                  disabled={!(slackIds[member.id] ?? '').trim()}
+                  className="px-2 py-1 text-sm text-blue-700 underline disabled:text-gray-400 disabled:no-underline"
+                >
+                  Save Slack ID
+                </button>
+              </div>
+            )}
             <select
               aria-label={`Role for ${member.name}`}
               value={member.roles[0]?.role ?? 'team_member'}

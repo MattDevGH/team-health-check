@@ -142,12 +142,21 @@ describe('Team Settings Page', () => {
       expect(section).toHaveTextContent(/at least one delivery manager/i);
     });
 
-    it('says what "Slack not linked" means and how a member resolves it', async () => {
+    it('says what "Slack not linked" means and the two ways it gets resolved', async () => {
+      /*
+       * This asserted "pairing code shown on their own profile", which was the
+       * whole story until a delivery manager could record a binding. The copy
+       * it checked also said linking was "not something you can set on their
+       * behalf" — true then, false now.
+       *
+       * Both routes are asserted, so the page cannot quietly lose either.
+       */
       renderPage();
 
       const section = await screen.findByRole('region', { name: /members/i });
       expect(section).toHaveTextContent(/they can still answer everything/i);
-      expect(section).toHaveTextContent(/pairing code shown on their own profile/i);
+      expect(section).toHaveTextContent(/pairing code from their profile page/i);
+      expect(section).toHaveTextContent(/you can record it for them/i);
     });
   });
 

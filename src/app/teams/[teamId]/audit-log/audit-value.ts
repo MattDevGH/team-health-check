@@ -132,6 +132,14 @@ const CHANGE_TYPE_LABELS: Record<string, string> = {
   schedule_change: 'Schedule changed',
   name_change: 'Team renamed',
   data_deletion: 'Data deleted',
+  /*
+   * Named for *how* the binding came about, because the log has to answer that
+   * as well as who. Phase 3 of Slack sign-in adds one an email match creates,
+   * and "Slack account linked" alone could not tell a manager's assertion from
+   * the application's own.
+   */
+  slack_binding_asserted: 'Slack account linked by a delivery manager',
+  slack_binding_removed: 'Slack account unlinked',
 };
 
 /**
