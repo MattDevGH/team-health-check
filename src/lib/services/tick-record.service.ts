@@ -22,10 +22,15 @@
  */
 
 import type { Recorder } from '@/lib/observability/recorder';
-import type { SchedulerHeartbeatRepository } from '@/lib/repositories/types';
+import type {
+  SchedulerHeartbeatRepository,
+  SchedulerTickRecordRepository,
+} from '@/lib/repositories/types';
+import { isEventful } from '@/lib/services/tick-eventful';
 
 export interface TickRecordServiceDeps {
   schedulerHeartbeatRepo: SchedulerHeartbeatRepository;
+  schedulerTickRecordRepo: SchedulerTickRecordRepository;
   /**
    * Optional, like the scheduler's. Tests and scripts should not have to wire
    * a recorder in order to do nothing with it.
@@ -42,7 +47,11 @@ export interface TickRecord {
   closed: number;
   materialised: number;
   prompts: number;
+  /** Attempts that did not work — chiefly materialisation. */
+  failures: number;
   durationMs: number;
+  /** Skip reasons and their counts. */
+  reasons: Record<string, number>;
 }
 
 export interface TickRecordService {
@@ -52,7 +61,7 @@ export interface TickRecordService {
 const NO_RECORDER: Pick<Recorder, 'error'> = { error: () => {} };
 
 export function createTickRecordService(deps: TickRecordServiceDeps): TickRecordService {
-  const { schedulerHeartbeatRepo } = deps;
+  const { schedulerHeartbeatRepo, schedulerTickRecordRepo } = deps;
   const record_ = deps.recorder ?? NO_RECORDER;
 
   async function record(tick: TickRecord): Promise<void> {
@@ -66,7 +75,53 @@ export function createTickRecordService(deps: TickRecordServiceDeps): TickRecord
        * newest row of the ledger" once the ledger exists, since the ledger will
        * deliberately hold no quiet ticks at all.
        */
-      await schedulerHeartbeatRepo.record(tick);
+      /*
+       * Mapped field by field, never spread.
+       *
+       * `TickRecord` is wider than `SchedulerHeartbeat` — it carries
+       * `failures` and `reasons`, which the heartbeat table has no columns
+       * for. TypeScript allows the wider object through, because excess
+       * property checking only fires on literals, so `record(tick)` compiled
+       * and would have had Prisma reject every heartbeat in production with an
+       * unknown argument.
+       *
+       * Caught by a property test that handed the service a field nobody had
+       * defined and found it in the row. Construction is not execution, and a
+       * type that fits is not a row that writes.
+       */
+      await schedulerHeartbeatRepo.record({
+        tickId: tick.tickId,
+        ranAt: tick.ranAt,
+        summary: tick.summary,
+        opened: tick.opened,
+        closed: tick.closed,
+        materialised: tick.materialised,
+        prompts: tick.prompts,
+        durationMs: tick.durationMs,
+      });
+
+      /*
+       * And the ledger, but only when the tick did something.
+       *
+       * The heartbeat has already said the scheduler ran, so a quiet tick has
+       * nothing left to add — and writing it is exactly what leaves a record
+       * holding fifty "nothing was due" entries and no trace of the morning a
+       * check opened. What is kept is chosen by what happened, not by when.
+       */
+      if (isEventful(tick)) {
+        await schedulerTickRecordRepo.append({
+          tickId: tick.tickId,
+          ranAt: tick.ranAt,
+          summary: tick.summary,
+          opened: tick.opened,
+          closed: tick.closed,
+          materialised: tick.materialised,
+          prompts: tick.prompts,
+          failures: tick.failures,
+          durationMs: tick.durationMs,
+          reasons: tick.reasons,
+        });
+      }
     } catch (error: unknown) {
       /*
        * Swallowed, because the caller is the tick.

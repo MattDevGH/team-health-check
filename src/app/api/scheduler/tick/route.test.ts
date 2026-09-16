@@ -613,3 +613,146 @@ describe('when the proof cannot be written', () => {
     expect(await repos.session.findOpenByTeamId(team.id)).not.toBeNull();
   });
 });
+
+describe('the ticks the ledger keeps', () => {
+  /*
+   * Requirements: Remembering What Happened 2.1, 2.3, 4.2, 4.3
+   * Properties: 2, 3, 6
+   *
+   * The heartbeat says the scheduler ran. The ledger says what happened on
+   * Monday — and only by keeping the ticks that did something, because keeping
+   * the recent ones is what leaves fifty "nothing was due" entries and no
+   * record of the morning a check opened.
+   */
+
+  beforeEach(() => {
+    vi.stubEnv('CRON_SECRET', CRON_SECRET);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    _resetTickTestDeps();
+  });
+
+  async function ledgerTickIds(): Promise<string[]> {
+    return (await repos.schedulerTickRecord.recent(50)).map(row => row.tickId);
+  }
+
+  it('keeps a tick that opened a check', async () => {
+    const sink = createRecordingSink();
+    _setTickTestDeps({ notificationSink: sink, now: () => OPEN_TICK });
+    const team = await repos.team.create({ name: `Ledger Open ${Date.now()}`, timezone: 'UTC' });
+    await repos.teamSchedule.create({
+      teamId: team.id,
+      cadence: 'weekly',
+      openDay: 1,
+      openTime: '09:00',
+      closeDay: 5,
+      closeTime: '17:00',
+      timezone: 'UTC',
+    });
+
+    const body = (await (await POST(tickRequest())).json()) as { tickId: string; opened: number };
+
+    expect(body.opened, 'this tick should have opened something').toBeGreaterThan(0);
+    expect(await ledgerTickIds()).toContain(body.tickId);
+  });
+
+  it('keeps nothing from a tick that did nothing', async () => {
+    /*
+     * The eviction problem, asserted. A quiet tick has nothing to add that the
+     * heartbeat has not already said, and writing it is what pushes the
+     * interesting ones out.
+     *
+     * Asserted on this tick's own id rather than on the ledger being empty:
+     * the container is module-level and shared across this file, so an earlier
+     * test's rows are still there.
+     */
+    _setTickTestDeps({ now: () => new Date('2026-08-26T04:11:00.000Z') });
+
+    const body = (await (await POST(tickRequest())).json()) as {
+      tickId: string;
+      opened: number;
+      closed: number;
+      materialised: number;
+      prompts: number;
+    };
+
+    expect(body, 'this tick should have been a quiet one').toMatchObject({
+      opened: 0,
+      closed: 0,
+      materialised: 0,
+      prompts: 0,
+    });
+    expect(await ledgerTickIds()).not.toContain(body.tickId);
+  });
+
+  it('keeps one row, not one per thing that happened', async () => {
+    const sink = createRecordingSink();
+    _setTickTestDeps({ notificationSink: sink, now: () => OPEN_TICK });
+    const team = await repos.team.create({ name: `Ledger Once ${Date.now()}`, timezone: 'UTC' });
+    await repos.teamSchedule.create({
+      teamId: team.id,
+      cadence: 'weekly',
+      openDay: 1,
+      openTime: '09:00',
+      closeDay: 5,
+      closeTime: '17:00',
+      timezone: 'UTC',
+    });
+
+    const body = (await (await POST(tickRequest())).json()) as { tickId: string };
+
+    expect((await ledgerTickIds()).filter(id => id === body.tickId)).toHaveLength(1);
+  });
+
+  it('carries the same sentence and reasons the response carried', async () => {
+    const sink = createRecordingSink();
+    _setTickTestDeps({ notificationSink: sink, now: () => OPEN_TICK });
+    const team = await repos.team.create({ name: `Ledger Says ${Date.now()}`, timezone: 'UTC' });
+    await repos.teamSchedule.create({
+      teamId: team.id,
+      cadence: 'weekly',
+      openDay: 1,
+      openTime: '09:00',
+      closeDay: 5,
+      closeTime: '17:00',
+      timezone: 'UTC',
+    });
+
+    const body = (await (await POST(tickRequest())).json()) as {
+      tickId: string;
+      summary: string;
+      reasons: Record<string, number>;
+    };
+
+    const kept = (await repos.schedulerTickRecord.recent(50)).find(
+      row => row.tickId === body.tickId,
+    );
+    expect(kept?.summary).toBe(body.summary);
+    expect(kept?.reasons).toEqual(body.reasons);
+  });
+
+  it('never fails the tick when the ledger cannot be written', async () => {
+    // Same trade as the heartbeat: forgetting is better than not working
+    const sink = createRecordingSink();
+    _setTickTestDeps({ notificationSink: sink, now: () => OPEN_TICK });
+    const team = await repos.team.create({ name: `Ledger Broken ${Date.now()}`, timezone: 'UTC' });
+    await repos.teamSchedule.create({
+      teamId: team.id,
+      cadence: 'weekly',
+      openDay: 1,
+      openTime: '09:00',
+      closeDay: 5,
+      closeTime: '17:00',
+      timezone: 'UTC',
+    });
+    vi.spyOn(repos.schedulerTickRecord, 'append').mockRejectedValue(new Error('disk full'));
+
+    const response = await POST(tickRequest());
+
+    expect(response.status).toBe(200);
+    expect(await repos.session.findOpenByTeamId(team.id)).not.toBeNull();
+  });
+});

@@ -116,15 +116,33 @@ first, one PR per phase.
 
 ### 2.2 The ledger
 
-- [ ] `SchedulerTickRecord`: `tickId`, `ranAt`, counts, reasons, summary. Index
+- [x] `SchedulerTickRecord`: `tickId`, `ranAt`, counts, reasons, summary. Index
       on `ranAt`, which both the reverse-chronological read and the prune need
-- [ ] Additive migration; production snapshot again if 1.1's has gone stale
-- [ ] Failing test: an eventful tick adds exactly one row
-- [ ] Failing test: a quiet tick adds none — the eviction problem, asserted
-- [ ] Failing test: entries read back newest first
-- [ ] Failing test: no row contains a member id, an email, a token, a score or
-      a trend. Generated, not exampled: the assertion is about every row the
-      system can produce, and an example test checks the row somebody thought of
+- [x] Additive migration, applied locally
+- [x] Failing test: an eventful tick adds exactly one row
+- [x] Failing test: a quiet tick adds none — the eviction problem, asserted.
+      On this tick's own id, since the container is shared across the file
+- [x] Failing test: entries read back newest first, a page at a time
+- [x] Failing test: reasons survive a round trip through a text column, and a
+      row holding text that is not JSON reads as `{}` rather than taking a page
+      down
+- [x] Failing test: no row contains a member id, an email, a token, a score or
+      a trend. Generated, and as an **allowlist over the row's keys** rather
+      than a search for forbidden words — a search passes for every input
+      nobody thought to generate, while this fails the moment a field is added
+- [x] **The property test found a real leak**, and following it up found a
+      worse one: the service spread the whole `TickRecord` into the heartbeat,
+      which has no `failures` or `reasons` columns. TypeScript accepted it
+      (excess property checking only fires on literals), the fakes accepted it,
+      and Prisma would have rejected every heartbeat in production — silently,
+      since the service catches its own write failures. Both writes map field
+      by field now
+- [x] Integration test of the **service over the real repositories**, which is
+      the gap that hid it: route tests use fakes, repository tests build their
+      own rows, and neither exercised the production path. Restoring the spread
+      fails all three
+- [x] Fixed a unit test that was **asserting the defect** — it expected the
+      heartbeat repository to receive the whole tick
 - _Requirements: Remembering What Happened 2.1, 2.3, 2.4, 2.5, 4.1, 4.2, 4.3_
 - _Property: 2, 3, 6_
 

@@ -267,3 +267,36 @@ model SchedulerHeartbeat {
   prompts      Int
   durationMs   Int
 }
+
+/// A tick that did something, kept for longer than the platform keeps anything.
+///
+/// Requirements: Remembering What Happened 2.1, 2.3, 2.4, 3.1, 4.3
+///
+/// Appended, unlike SchedulerHeartbeat, and written only when the tick was
+/// eventful: quiet ticks are the overwhelming majority, and keeping them is
+/// exactly what leaves a cron dashboard holding fifty "nothing was due" entries
+/// and no record of the morning a check opened.
+///
+/// No member id, deliberately. That keeps the table out of scope of a member's
+/// right to have their data deleted, of export, and of every future retention
+/// question. Counts say a tick prompted somebody; which member is the delivery
+/// record's job.
+model SchedulerTickRecord {
+  id           String   @id @default(cuid())
+  tickId       String
+  ranAt        DateTime
+  /// The sentence the tick's response carried.
+  summary      String
+  opened       Int
+  closed       Int
+  materialised Int
+  prompts      Int
+  /// Attempts that did not work — chiefly materialisation.
+  failures     Int
+  durationMs   Int
+  /// Skip reasons and their counts, as JSON: SQLite has no map type.
+  reasons      String
+
+  /// Serves both the newest-first read and the ranged delete that prunes.
+  @@index([ranAt])
+}

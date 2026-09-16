@@ -205,3 +205,26 @@ export interface SchedulerHeartbeat {
   prompts: number;
   durationMs: number;
 }
+
+/**
+ * A tick that did something, kept past the platform's retention.
+ *
+ * Requirements: Remembering What Happened 2.4, 4.1, 4.3
+ *
+ * No member id: counts say a tick prompted somebody, and which member is the
+ * delivery record's job. Keeping it out means the ledger is untouched by a
+ * member's right to have their data deleted.
+ */
+export interface SchedulerTickRecord {
+  tickId: string;
+  ranAt: Date;
+  summary: string;
+  opened: number;
+  closed: number;
+  materialised: number;
+  prompts: number;
+  failures: number;
+  durationMs: number;
+  /** Skip reasons and their counts. */
+  reasons: Record<string, number>;
+}

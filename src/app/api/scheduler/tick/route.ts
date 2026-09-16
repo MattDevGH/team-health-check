@@ -236,6 +236,7 @@ export const POST = withErrorHandling(async (request: Request) => {
    */
   await createTickRecordService({
     schedulerHeartbeatRepo: repos.schedulerHeartbeat,
+    schedulerTickRecordRepo: repos.schedulerTickRecord,
     recorder,
   }).record({
     tickId: summary.tickId,
@@ -245,7 +246,9 @@ export const POST = withErrorHandling(async (request: Request) => {
     closed: summary.closed,
     materialised: summary.materialised,
     prompts,
+    failures: summary.failures,
     durationMs: summary.durationMs,
+    reasons: summary.reasons,
   });
 
   return Response.json({

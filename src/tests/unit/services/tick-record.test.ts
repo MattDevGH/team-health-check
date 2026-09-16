@@ -18,9 +18,13 @@ import { describe, expect, it } from 'vitest';
 
 import { createRecorder } from '@/lib/observability';
 import { createTickRecordService } from '@/lib/services/tick-record.service';
-import type { SchedulerHeartbeat } from '@/lib/repositories/entities';
-import type { SchedulerHeartbeatRepository } from '@/lib/repositories/types';
+import type { SchedulerHeartbeat, SchedulerTickRecord } from '@/lib/repositories/entities';
+import type {
+  SchedulerHeartbeatRepository,
+  SchedulerTickRecordRepository,
+} from '@/lib/repositories/types';
 
+/** A quiet tick: the normal case, and the one the ledger does not keep. */
 const TICK = {
   tickId: 'tick-1',
   ranAt: new Date('2026-09-16T09:00:00.000Z'),
@@ -29,16 +33,38 @@ const TICK = {
   closed: 0,
   materialised: 0,
   prompts: 0,
+  failures: 0,
   durationMs: 12,
+  reasons: {},
 };
 
-function harness(repo: SchedulerHeartbeatRepository) {
+/** Collects what reached the ledger, so a test can assert on it. */
+function ledger() {
+  const kept: SchedulerTickRecord[] = [];
+  const repo: SchedulerTickRecordRepository = {
+    append: async record => {
+      kept.push(record);
+    },
+    recent: async () => kept,
+    pruneBefore: async () => 0,
+  };
+  return { kept, repo };
+}
+
+function harness(repo: SchedulerHeartbeatRepository, tickRecordRepo = ledger().repo) {
   const events: Record<string, unknown>[] = [];
   const recorder = createRecorder({
     sink: { write: line => events.push(JSON.parse(line) as Record<string, unknown>) },
   });
 
-  return { events, service: createTickRecordService({ schedulerHeartbeatRepo: repo, recorder }) };
+  return {
+    events,
+    service: createTickRecordService({
+      schedulerHeartbeatRepo: repo,
+      schedulerTickRecordRepo: tickRecordRepo,
+      recorder,
+    }),
+  };
 }
 
 const working: SchedulerHeartbeatRepository = {
@@ -107,18 +133,85 @@ describe('a heartbeat that was written', () => {
   });
 });
 
+describe('what reaches the ledger', () => {
+  it('nothing, when the tick was a quiet one', async () => {
+    /*
+     * The heartbeat has already said the scheduler ran, so a quiet tick has
+     * nothing left to add — and writing it is exactly what leaves a record
+     * holding fifty "nothing was due" entries and no trace of the morning a
+     * check opened.
+     */
+    const { kept, repo } = ledger();
+    const { service } = harness(working, repo);
+
+    await service.record(TICK);
+
+    expect(kept).toEqual([]);
+  });
+
+  it('the tick, when it did something', async () => {
+    const { kept, repo } = ledger();
+    const { service } = harness(working, repo);
+
+    await service.record({ ...TICK, opened: 1, summary: 'Ran and opened 1 check.' });
+
+    expect(kept).toHaveLength(1);
+    expect(kept[0]).toMatchObject({ tickId: 'tick-1', opened: 1 });
+  });
+
+  it('the tick, when it only failed', async () => {
+    // Every count zero, and the most interesting tick the scheduler can have
+    const { kept, repo } = ledger();
+    const { service } = harness(working, repo);
+
+    await service.record({ ...TICK, failures: 1 });
+
+    expect(kept).toHaveLength(1);
+  });
+
+  it('nothing, when the heartbeat write already failed', async () => {
+    /*
+     * The heartbeat is written first, so a database that refuses writes fails
+     * there and never reaches here. Asserted so that a later reordering has to
+     * decide deliberately rather than by accident.
+     */
+    const { kept, repo } = ledger();
+    const { service } = harness(broken, repo);
+
+    await service.record({ ...TICK, opened: 1 });
+
+    expect(kept).toEqual([]);
+  });
+});
+
 describe('a service given no recorder', () => {
   it('still works, and still does not fail the tick', async () => {
     // The dependency is optional for the same reason the scheduler's is: tests
     // and scripts should not have to wire a recorder to do nothing with
-    const quiet = createTickRecordService({ schedulerHeartbeatRepo: broken });
+    const quiet = createTickRecordService({
+      schedulerHeartbeatRepo: broken,
+      schedulerTickRecordRepo: ledger().repo,
+    });
 
     await expect(quiet.record(TICK)).resolves.toBeUndefined();
   });
 });
 
-describe('what the repository is handed', () => {
-  it('is the tick, unchanged', async () => {
+describe('what the heartbeat repository is handed', () => {
+  it('is the heartbeat’s own fields, not the whole tick', async () => {
+    /*
+     * This asserted `toEqual([TICK])` and was asserting a defect.
+     *
+     * `TickRecord` is wider than `SchedulerHeartbeat`: it carries `failures`
+     * and `reasons`, which that table has no columns for. Passing the whole
+     * tick compiled — excess property checking only fires on literals — and
+     * Prisma would have rejected every heartbeat in production with an unknown
+     * argument, silently, since the service catches its own write failures.
+     *
+     * So the contract is the narrow one, and it is asserted as an exact set of
+     * keys rather than a subset: `toMatchObject` would pass with the extra
+     * fields still there.
+     */
     const written: SchedulerHeartbeat[] = [];
     const { service } = harness({
       record: async beat => {
@@ -127,8 +220,18 @@ describe('what the repository is handed', () => {
       latest: async () => null,
     });
 
-    await service.record(TICK);
+    await service.record({ ...TICK, failures: 2, reasons: { 'team archived': 1 } });
 
-    expect(written).toEqual([TICK]);
+    expect(Object.keys(written[0]).sort()).toEqual([
+      'closed',
+      'durationMs',
+      'materialised',
+      'opened',
+      'prompts',
+      'ranAt',
+      'summary',
+      'tickId',
+    ]);
+    expect(written[0]).toMatchObject({ tickId: 'tick-1', durationMs: 12 });
   });
 });
