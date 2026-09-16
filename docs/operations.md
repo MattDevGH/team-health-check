@@ -20,12 +20,23 @@ default, and then only for the last 50 executions over two days. See
 did it do?" is on a screen you already have:
 
 ```json
-{ "ok": true,
+{
+  "ok": true,
   "summary": "Ran and opened 1 check, prompting 3 members, computed results for 2 checks.",
-  "tickId": "p852iwt2", "opened": 1, "closed": 0,
-  "materialised": 2, "prompts": 3, "durationMs": 412,
-  "reasons": {} }
+  "tickId": "p852iwt2",
+  "opened": 1,
+  "closed": 0,
+  "materialised": 2,
+  "prompts": 3,
+  "failures": 0,
+  "durationMs": 412,
+  "reasons": {}
+}
 ```
+
+The body is sent indented and in that order deliberately: the sentence first,
+then what happened, then what it cost, then the breakdown. On one line it is
+something you pick apart rather than read.
 
 It used to return `{ "ok": true }` whatever happened, which made a broken Monday
 look exactly like an ordinary Wednesday. Then it returned the counts, which was
@@ -56,11 +67,14 @@ out by is a compile error.
 produced carries the same one.
 
 **Both forget quickly.** Vercel's Hobby plan keeps runtime logs for **one hour**,
-and cron-job.org keeps the last **50 executions** — which is between fifty
-minutes and four hours depending on the tick interval, and never reaches the
-two-day body cap at any interval under about an hour. What survives is the most
-recent fifty rather than the most interesting: on a weekly cadence the ticks that
-actually opened or closed a check are evicted within hours by the quiet ones.
+and cron-job.org keeps the last **50 executions**.
+
+**Measured against production on 2026-09-16: the tick runs every 5 minutes**
+(two consecutive heartbeats 305 seconds apart). Fifty executions is therefore
+**4 hours 10 minutes**, and the two-day body cap never arrives. What survives is
+the most recent fifty rather than the most interesting: on a weekly cadence the
+ticks that actually opened or closed a check are evicted before lunchtime by the
+quiet ones behind them.
 
 **The heartbeat outlives both.** Every tick — including one that did nothing —
 writes a single row to `SchedulerHeartbeat` in the application's own database,
@@ -129,8 +143,22 @@ something. Its `reason` is one of:
 - `a check is already collecting` — one is open right now
 
 Five different silences. They all looked identical from outside, which is why
-the dashboard has a *"Results are overdue — the scheduler may not be running"*
+the dashboard had a *"Results are overdue — the scheduler may not be running"*
 state: it was the only way a reader could tell.
+
+**That message is no longer a guess.** The dashboard reads the heartbeat and
+says which of four things is true:
+
+| What the heartbeat says | What the dashboard says |
+|---|---|
+| Ran since the check closed | Results are taking longer than expected — and it does **not** name the scheduler, because sending somebody to restart a trigger that is running is the wrong half of the system |
+| Has not run since the close | Results are overdue — the scheduler has not run since *(date)* |
+| No heartbeat at all | The scheduler has never run — results cannot be prepared until it does |
+| The response could not say | The old wording, unchanged |
+
+The third is what a fresh deployment with a misconfigured `CRON_SECRET` looks
+like, and "overdue" is an actively misleading thing to say about it: it
+describes a delay when nothing is calling the endpoint at all.
 
 ### Deliveries
 

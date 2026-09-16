@@ -19,6 +19,7 @@ import {
   describeResultState,
   materialisationEvidence,
   resultState,
+  schedulerLastRanFrom,
   type ResultState,
 } from './result-state';
 
@@ -58,6 +59,14 @@ interface LatestSessionPanelProps {
    */
   questions?: QuestionCatalogueEntry[];
   anonymousMode: boolean;
+  /**
+   * When the scheduler last ran, ISO, or null if it never has.
+   *
+   * Requirements: Remembering What Happened 5.1, 5.2, 5.3. Undefined means the
+   * response could not say — an older trends response — which keeps the older
+   * wording rather than inventing an answer.
+   */
+  schedulerLastRanAt?: string | null;
 }
 
 /** Matches the threshold the trend service and the drill-down already apply. */
@@ -101,9 +110,12 @@ export function LatestSessionPanel({
   sessions,
   questions,
   anonymousMode,
+  schedulerLastRanAt,
   now = new Date(),
 }: LatestSessionPanelProps) {
   if (sessions.length === 0) return null;
+
+  const schedulerRanAt = schedulerLastRanFrom(schedulerLastRanAt);
 
   const latest = sessions[sessions.length - 1];
   const previous = sessions[sessions.length - 2];
@@ -171,6 +183,7 @@ export function LatestSessionPanel({
                 now,
                 anonymousMode,
                 anonymityThreshold: ANONYMITY_THRESHOLD,
+                schedulerLastRanAt: schedulerRanAt,
               });
               const previousScore = previous?.averages.find(
                 a => a.questionId === id,

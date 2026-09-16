@@ -430,6 +430,41 @@ describe('the tick response', () => {
 
     expect(body).not.toMatch(/score|trend|improving|declining/i);
   });
+
+  it('is laid out to be read, not packed onto one line', async () => {
+    /*
+     * Requirements: Knowing What Happened 1.6
+     *
+     * The body arrives in cron-job.org's job history as a string, and on one
+     * line it reads as `{"ok":true,"summary":"Ran, nothing was due: 1 team
+     * outside the collection window.","tickId":"r899tibd","opened":0,...}` —
+     * better than a variable name and a value, and still something you pick
+     * apart rather than read.
+     *
+     * Indented, it costs nothing and cannot be worse: if the history renders
+     * the body in a monospaced block the fields land on their own lines, and
+     * if it collapses whitespace they are at least spaced apart instead of
+     * run together.
+     *
+     * Still `application/json`, and still parses — the E2E reads `summary`
+     * out of it.
+     */
+    const response = await POST(tickRequest(), { params: Promise.resolve({}) });
+    const body = await response.text();
+
+    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(body).toContain('\n');
+    expect(JSON.parse(body)).toMatchObject({ ok: true });
+  });
+
+  it('leads with the sentence, since that is the line worth reading', async () => {
+    // Key order is what a reader meets first, and JSON preserves it
+    const body = await (
+      await POST(tickRequest(), { params: Promise.resolve({}) })
+    ).text();
+
+    expect(Object.keys(JSON.parse(body) as Record<string, unknown>)[1]).toBe('summary');
+  });
 });
 
 describe('the proof a tick leaves behind', () => {

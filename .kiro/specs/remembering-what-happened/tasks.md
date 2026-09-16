@@ -180,25 +180,41 @@ first, one PR per phase.
 
 ### 3.1 Three states where there was one
 
-- [ ] Failing test: overdue, and the scheduler has run since the close — say
+- [x] Failing test: overdue, and the scheduler has run since the close — say
       results are late, not that the scheduler may be down
-- [ ] Failing test: overdue, and it has not run since the close — say when it
+- [x] Failing test: overdue, and it has not run since the close — say when it
       last ran
-- [ ] Failing test: it has never run — say that. This is a fresh deployment
+- [x] Failing test: it has never run — say that. This is a fresh deployment
       with a misconfigured `CRON_SECRET`, and "results are overdue" is an
       actively misleading thing to say about it
-- [ ] Failing test: the existing `pending` and `shown` states are untouched
-- [ ] The wording is intelligible to somebody who has never heard of a tick
+- [x] Failing test: a response that cannot say keeps the old wording. Guessing
+      is what this removes, and a confident answer invented from a missing
+      field would be a worse guess than the one already there
+- [x] Failing test: the existing `pending` and `shown` states are untouched
+- [x] The wording is intelligible to somebody who has never heard of a tick —
+      asserted, not assumed: no message may contain "tick", "heartbeat" or
+      "materialis"
+- [x] Mutation check: flipping the ran-since-close comparison and dropping the
+      never-run branch each fail a test
 - _Requirements: Remembering What Happened 5.1, 5.2, 5.3, 5.4_
 
 ### 3.2 On the real page
 
-- [ ] The heartbeat is read alongside what the dashboard already fetches
-- [ ] Query-budget test: no additional round trip, ratcheted at the measured
-      value per the existing convention
-- [ ] UI test for each of the three messages
-- [ ] axe on the new states
-- [ ] End-to-end: close a check, do not tick, and read what the page says
+- [x] The heartbeat is read alongside what the dashboard already fetches, in
+      the same `Promise.all` — it needs no team id and waits for nothing
+- [x] Query-budget ratcheted 8 → 9 at the measured value, with the reason
+      recorded: one indexed row, no second request, no extra waiting
+- [x] **Both surfaces, not one.** `question-detail-view` renders the same
+      decision and was left on the old wording — the two would have disagreed
+      about the same data, which is the thing one shared selector exists to
+      prevent. The ISO-to-Date conversion is shared for the same reason
+- [x] MSW's trends handler sends `schedulerLastRanAt`, since the route always
+      does — a mock that omitted it would have every dashboard test exercising
+      the fallback while production took a different path
+- [x] UI test for each of the four messages
+- [x] axe on each new state, not just the one the old code produced
+- [x] End-to-end through the real routes: seed a heartbeat, read the page, and
+      count the requests to prove the page makes none of its own
 - _Requirements: Remembering What Happened 5.5, NFR 3.1_
 
 **Checkpoint:** the interface reports instead of inferring. One PR.

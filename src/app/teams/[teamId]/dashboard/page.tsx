@@ -62,6 +62,15 @@ interface TrendsResponse {
    * answered cannot be named.
    */
   questions?: QuestionCatalogueEntry[];
+  /**
+   * When the scheduler last ran, ISO, or null if it never has.
+   *
+   * Requirements: Remembering What Happened 5.1, 5.2, 5.3. Optional so the
+   * page still renders against a response that predates the heartbeat — and
+   * `undefined` and `null` mean different things here: nothing could say,
+   * versus it has never run.
+   */
+  schedulerLastRanAt?: string | null;
 }
 
 interface PageProps {
@@ -196,7 +205,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
 
   if (!data) return null;
 
-  const { sessions, trendDistribution, privacyMode, questions } = data;
+  const { sessions, trendDistribution, privacyMode, questions, schedulerLastRanAt } = data;
   /*
    * A chart needs two points. Everything else on this page needs one.
    *
@@ -262,6 +271,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
             sessions={sessions}
             questions={questions}
             anonymousMode={anonymousMode}
+            schedulerLastRanAt={schedulerLastRanAt}
           />
         )}
 
@@ -279,6 +289,7 @@ export default function TrendDashboardPage({ params }: PageProps) {
             sessions={sessions}
             questions={questions}
             anonymousMode={anonymousMode}
+            schedulerLastRanAt={schedulerLastRanAt}
           />
         </div>
       </div>

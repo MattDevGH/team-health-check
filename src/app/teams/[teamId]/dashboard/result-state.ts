@@ -31,12 +31,37 @@ export interface ResultStateInput {
   now: Date;
   anonymousMode: boolean;
   anonymityThreshold: number;
+  /**
+   * When the scheduler last ran, from its heartbeat.
+   *
+   * Requirements: Remembering What Happened 5.1, 5.2, 5.3
+   *
+   * `null` means it has never run — a real state with its own message, and
+   * what a fresh deployment with a misconfigured `CRON_SECRET` looks like.
+   * `undefined` means nothing could say either way, which keeps the old
+   * wording rather than inventing a confident answer from a missing field.
+   */
+  schedulerLastRanAt?: Date | null;
 }
+
+/**
+ * What the heartbeat says about why a result is late.
+ *
+ * Three cases the page used to report identically, and the reason it can stop
+ * guessing: `running` means the fault is not a stopped trigger, `stalled`
+ * means it is, and `never` means nothing has ever called the endpoint.
+ * `unknown` is the honest answer when there is no heartbeat to read.
+ */
+export type SchedulerState =
+  | { scheduler: 'running' }
+  | { scheduler: 'stalled'; lastRanAt: Date }
+  | { scheduler: 'never' }
+  | { scheduler: 'unknown' };
 
 export type ResultState =
   | { kind: 'shown'; average: SessionAverage }
   | { kind: 'pending' }
-  | { kind: 'overdue' }
+  | ({ kind: 'overdue' } & SchedulerState)
   | { kind: 'suppressed'; needed: number }
   | { kind: 'unanswered' };
 
@@ -50,6 +75,23 @@ export type ResultState =
  * cron to the person who cares.
  */
 export const RESULTS_OVERDUE_AFTER_MS = 15 * 60 * 1000;
+
+/**
+ * The heartbeat as the trends response sends it, as this selector wants it.
+ *
+ * Requirements: Remembering What Happened 5.1, 5.3
+ *
+ * Three cases, and the middle one is easy to lose: `undefined` means the
+ * response could not say and keeps the older wording, `null` means the
+ * scheduler has never run and has a message of its own. Shared, because two
+ * surfaces render this decision and writing the conversion twice is how they
+ * start disagreeing.
+ */
+export function schedulerLastRanFrom(iso: string | null | undefined): Date | null | undefined {
+  if (iso === undefined) return undefined;
+  if (iso === null) return null;
+  return new Date(iso);
+}
 
 export function resultState(input: ResultStateInput): ResultState {
   const { average, materialisedAt, closedAt, now, anonymousMode, anonymityThreshold } = input;
@@ -76,7 +118,28 @@ export function resultState(input: ResultStateInput): ResultState {
   }
 
   const sinceClose = now.getTime() - new Date(closedAt).getTime();
-  return sinceClose < RESULTS_OVERDUE_AFTER_MS ? { kind: 'pending' } : { kind: 'overdue' };
+  if (sinceClose < RESULTS_OVERDUE_AFTER_MS) return { kind: 'pending' };
+
+  return { kind: 'overdue', ...schedulerState(input.schedulerLastRanAt, closedAt) };
+}
+
+/**
+ * Which of the three the heartbeat describes.
+ *
+ * Measured against the close rather than against now: a scheduler that has run
+ * since the check closed has had its chance at this session, so whatever is
+ * wrong is not that nothing is calling the endpoint.
+ */
+function schedulerState(
+  lastRanAt: Date | null | undefined,
+  closedAt: string,
+): SchedulerState {
+  if (lastRanAt === undefined) return { scheduler: 'unknown' };
+  if (lastRanAt === null) return { scheduler: 'never' };
+
+  return lastRanAt.getTime() >= new Date(closedAt).getTime()
+    ? { scheduler: 'running' }
+    : { scheduler: 'stalled', lastRanAt };
 }
 
 interface MaterialisationInput {
@@ -125,6 +188,35 @@ export interface ResultStateMessage {
  *
  * Returns null for a value that is on screen, where the number speaks.
  */
+/**
+ * The reader is a delivery manager whose results have not appeared, not
+ * somebody who has read this repository — so no "tick", no "heartbeat", no
+ * "materialise".
+ */
+function describeOverdue(state: { kind: 'overdue' } & SchedulerState): string {
+  switch (state.scheduler) {
+    case 'running':
+      // The scheduler has had its chance at this check, so whatever is wrong
+      // is not a stopped trigger and the message should not point at one
+      return 'Results are taking longer than expected';
+    case 'stalled':
+      return `Results are overdue — the scheduler has not run since ${formatWhen(state.lastRanAt)}`;
+    case 'never':
+      // Not "overdue", which describes a delay. This is a fresh deployment
+      // whose trigger has never called the endpoint at all
+      return 'The scheduler has never run — results cannot be prepared until it does';
+    case 'unknown':
+      // No heartbeat to read. Guessing is what this replaced, and inventing a
+      // confident answer from a missing field would be a worse guess
+      return 'Results are overdue — the scheduler may not be running';
+  }
+}
+
+/** The locale is pinned, as everywhere else here. */
+function formatWhen(at: Date): string {
+  return at.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 /** Every state but `shown` has something to say, and the type says so. */
 export function describeResultState(
   state: Exclude<ResultState, { kind: 'shown' }>,
@@ -143,8 +235,13 @@ export function describeResultState(state: ResultState): ResultStateMessage | nu
        * Names the scheduler rather than the team. The alternative reading —
        * "no responses" — is a false accusation, and the one message that would
        * have surfaced a stopped cron to the person who could restart it.
+       *
+       * Which of the four depends on the heartbeat. Naming the scheduler when
+       * the scheduler has demonstrably been running sends somebody to restart
+       * a trigger that is already running, so the message only points there
+       * when the heartbeat agrees.
        */
-      return { text: 'Results are overdue — the scheduler may not be running', tone: 'attention' };
+      return { text: describeOverdue(state), tone: 'attention' };
     case 'suppressed':
       return { text: `Hidden until ${state.needed} people have answered`, tone: 'attention' };
     case 'unanswered':

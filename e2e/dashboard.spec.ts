@@ -15,7 +15,7 @@
 import type { Page } from '@playwright/test';
 
 import { test, expect } from './fixtures';
-import { seedClosedSessions, type SeededAggregate } from './db';
+import { seedClosedSessions, setSchedulerHeartbeat, type SeededAggregate } from './db';
 import { signIn } from './sign-in';
 
 const OLDER = new Date('2026-08-10T17:00:00.000Z');
@@ -254,6 +254,21 @@ test.describe('a closed check whose results were never computed', () => {
       ],
     });
     teamId = seeded.teamId;
+  });
+
+  /*
+   * The scheduler is stalled, and said so rather than left to chance.
+   *
+   * These tests used to depend on there being no heartbeat at all. That
+   * stopped meaning "nothing can say" the moment the trends route began
+   * sending the field always: no row now means *never run*, which has a
+   * different message. And the heartbeat is one shared row, so whichever spec
+   * touched it last decided what this one saw.
+   *
+   * Set here, so the state under test belongs to the test.
+   */
+  test.beforeEach(() => {
+    setSchedulerHeartbeat(new Date(OLDER.getTime() - 60 * 60 * 1000));
   });
 
   test('reports the results as overdue rather than accusing the team', async ({ page }) => {

@@ -205,7 +205,12 @@ describe('materialisationEvidence', () => {
  */
 describe('describeResultState', () => {
   const message = (kind: 'pending' | 'overdue' | 'unanswered') =>
-    describeResultState({ kind }).text;
+    describeResultState(
+      // The overdue message now depends on what the heartbeat says. These
+      // cases predate that and assert the wording used when nothing can say,
+      // which is the one they were written against.
+      kind === 'overdue' ? { kind, scheduler: 'unknown' } : { kind },
+    ).text;
 
   it('bounds the wait for a pending result rather than leaving it open', () => {
     expect(message('pending')).toMatch(/minutes/i);
@@ -238,9 +243,162 @@ describe('describeResultState', () => {
   it('marks the states a reader should act on, and not the ones they cannot', () => {
     // Drives colour on both surfaces. Overdue and suppressed have something a
     // reader can do; a pending result and an unanswered theme do not.
-    expect(describeResultState({ kind: 'overdue' })?.tone).toBe('attention');
+    expect(describeResultState({ kind: 'overdue', scheduler: 'unknown' })?.tone).toBe('attention');
     expect(describeResultState({ kind: 'suppressed', needed: 3 })?.tone).toBe('attention');
     expect(describeResultState({ kind: 'pending' })?.tone).toBe('muted');
     expect(describeResultState({ kind: 'unanswered' })?.tone).toBe('muted');
+  });
+});
+
+describe('an overdue result, once the scheduler can be asked', () => {
+  /*
+   * Requirements: Remembering What Happened 5.1, 5.2, 5.3, 5.4
+   *
+   * "Results are overdue — the scheduler may not be running" was a guess made
+   * from fifteen minutes of silence, and a reasonable one while there was
+   * nothing to ask. There is now: every tick writes a heartbeat, so the page
+   * can tell three cases apart that it used to report identically.
+   *
+   * The third is not hypothetical. A fresh deployment with a misconfigured
+   * CRON_SECRET has a scheduler that has never run, and "overdue" is an
+   * actively misleading thing to say about it — it points at a delay when the
+   * fault is that nothing is calling the endpoint at all.
+   */
+
+  const overdueInput = {
+    ...base,
+    average: undefined,
+    materialisedAt: null,
+    now: longAfter,
+  };
+
+  it('says the scheduler is running when it has ticked since the close', () => {
+    // Then the fault is not a stopped trigger, and saying it might be sends
+    // somebody to look at the wrong thing
+    const state = resultState({
+      ...overdueInput,
+      schedulerLastRanAt: new Date(new Date(CLOSED).getTime() + 60_000),
+    });
+
+    expect(state).toMatchObject({ kind: 'overdue', scheduler: 'running' });
+  });
+
+  it('says when it last ran, if that was before the close', () => {
+    const lastRan = new Date(new Date(CLOSED).getTime() - 60_000);
+
+    const state = resultState({ ...overdueInput, schedulerLastRanAt: lastRan });
+
+    expect(state).toMatchObject({ kind: 'overdue', scheduler: 'stalled', lastRanAt: lastRan });
+  });
+
+  it('says it has never run, rather than reporting an absence as a delay', () => {
+    const state = resultState({ ...overdueInput, schedulerLastRanAt: null });
+
+    expect(state).toMatchObject({ kind: 'overdue', scheduler: 'never' });
+  });
+
+  it('keeps the old wording when nothing can say either way', () => {
+    /*
+     * A trends response that predates the heartbeat, or one that could not be
+     * read. Guessing is what this milestone removes, and inventing a
+     * confident answer from a missing field would be a worse guess than the
+     * one already there.
+     */
+    const state = resultState(overdueInput);
+
+    expect(state).toMatchObject({ kind: 'overdue', scheduler: 'unknown' });
+  });
+
+  it('changes nothing about the states that were never guesses', () => {
+    // Requirement 5 is about the overdue message. A heartbeat must not make a
+    // computed value pending, or a pending one overdue
+    const shown = resultState({
+      ...base,
+      average: average(5),
+      materialisedAt: CLOSED,
+      now: longAfter,
+      schedulerLastRanAt: null,
+    });
+    const pending = resultState({
+      ...base,
+      average: undefined,
+      materialisedAt: null,
+      now: soonAfter,
+      schedulerLastRanAt: null,
+    });
+
+    expect(shown.kind).toBe('shown');
+    expect(pending.kind).toBe('pending');
+  });
+});
+
+describe('what an overdue result says once the scheduler can be asked', () => {
+  const lastRan = new Date('2026-09-14T09:05:00.000Z');
+
+  it('stops naming the scheduler when the scheduler has been running', () => {
+    // The old wording sends somebody to restart a trigger that is already
+    // running, which is the wrong half of the system to look at
+    const text = describeResultState({ kind: 'overdue', scheduler: 'running' }).text;
+
+    expect(text).not.toMatch(/scheduler/i);
+    expect(text).toMatch(/overdue|late|longer than expected/i);
+  });
+
+  it('says when the scheduler last ran, so the reader knows how long', () => {
+    const text = describeResultState({
+      kind: 'overdue',
+      scheduler: 'stalled',
+      lastRanAt: lastRan,
+    }).text;
+
+    expect(text).toMatch(/scheduler/i);
+    expect(text).toMatch(/14 September 2026/);
+  });
+
+  it('says plainly when the scheduler has never run', () => {
+    const text = describeResultState({ kind: 'overdue', scheduler: 'never' }).text;
+
+    expect(text).toMatch(/never/i);
+    expect(text).not.toMatch(/overdue/i);
+  });
+
+  it('keeps the old wording when nothing is known', () => {
+    expect(describeResultState({ kind: 'overdue', scheduler: 'unknown' }).text).toMatch(
+      /scheduler may not be running/i,
+    );
+  });
+
+  it('asks a reader to act on every one of them', () => {
+    for (const state of [
+      { kind: 'overdue', scheduler: 'running' },
+      { kind: 'overdue', scheduler: 'stalled', lastRanAt: lastRan },
+      { kind: 'overdue', scheduler: 'never' },
+      { kind: 'overdue', scheduler: 'unknown' },
+    ] as const) {
+      expect(describeResultState(state).tone).toBe('attention');
+    }
+  });
+
+  it('never makes the reader know what a tick is', () => {
+    // Requirement 5.4. The audience is a delivery manager whose results have
+    // not appeared, not somebody who has read this repository
+    for (const state of [
+      { kind: 'overdue', scheduler: 'running' },
+      { kind: 'overdue', scheduler: 'stalled', lastRanAt: lastRan },
+      { kind: 'overdue', scheduler: 'never' },
+    ] as const) {
+      expect(describeResultState(state).text).not.toMatch(/tick|heartbeat|materialis/i);
+    }
+  });
+
+  it('gives each of them a distinct wording', () => {
+    const texts = [
+      describeResultState({ kind: 'overdue', scheduler: 'running' }).text,
+      describeResultState({ kind: 'overdue', scheduler: 'stalled', lastRanAt: lastRan }).text,
+      describeResultState({ kind: 'overdue', scheduler: 'never' }).text,
+      describeResultState({ kind: 'overdue', scheduler: 'unknown' }).text,
+    ];
+
+    expect(new Set(texts).size).toBe(texts.length);
   });
 });

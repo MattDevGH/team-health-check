@@ -251,10 +251,40 @@ export const POST = withErrorHandling(async (request: Request) => {
     reasons: summary.reasons,
   });
 
-  return Response.json({
-    ok: true,
-    summary: sentence,
-    ...summary,
-    prompts,
-  });
+  /*
+   * Indented, because this body is read by a person in a job history rather
+   * than parsed by anything that cares about bytes.
+   *
+   * On one line it arrives as `{"ok":true,"summary":"Ran, nothing was due: 1
+   * team outside the collection window.","tickId":"r899tibd","opened":0,...}`,
+   * which is something you pick apart rather than read. Indenting cannot make
+   * it worse: rendered in a monospaced block the fields land on their own
+   * lines, and rendered anywhere that collapses whitespace they are at least
+   * spaced apart.
+   *
+   * `Response.json` has no way to ask for this, so the body is built directly
+   * and the header set by hand.
+   */
+  return new Response(
+    JSON.stringify(
+      {
+        // The sentence first, because it is the line worth reading. Then what
+        // happened, then what it cost, then the breakdown — spreading the
+        // summary put durationMs in the middle of the counts.
+        ok: true,
+        summary: sentence,
+        tickId: summary.tickId,
+        opened: summary.opened,
+        closed: summary.closed,
+        materialised: summary.materialised,
+        prompts,
+        failures: summary.failures,
+        durationMs: summary.durationMs,
+        reasons: summary.reasons,
+      },
+      null,
+      2,
+    ),
+    { headers: { 'content-type': 'application/json' } },
+  );
 });

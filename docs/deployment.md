@@ -314,9 +314,13 @@ time, so the window is whatever fifty of your ticks span:
 | Tick interval | 50 executions span |
 |---|---|
 | 1 minute | 50 minutes |
-| 5 minutes | 4 hours 10 minutes |
+| **5 minutes — the interval in use** | **4 hours 10 minutes** |
 | 15 minutes | 12 hours 30 minutes |
 | 30 minutes | 25 hours |
+
+**Measured, not assumed:** two consecutive production heartbeats on 2026-09-16
+were 305 seconds apart. If the cron service's schedule is ever changed, this row
+changes with it.
 
 At any interval under about an hour, the two days never arrive. And what
 survives is the most *recent* fifty, not the most interesting: on a weekly

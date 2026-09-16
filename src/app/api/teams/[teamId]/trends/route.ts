@@ -64,13 +64,29 @@ export const GET = withErrorHandling(async (request: Request, context) => {
    * needs it to name a theme that has no aggregates — previously such a
    * theme did not exist as far as the page was concerned.
    */
-  const { privacyMode, questions: catalogue, sessions: allSessions, averages } =
+  const {
+    privacyMode,
+    questions: catalogue,
+    sessions: allSessions,
+    averages,
+    schedulerLastRanAt,
+  } =
     await loadTrendInputs(
       {
         getPrivacyMode: id => container.privacy.getMode(id),
         findQuestions: () => repos.question.findAll(),
         findSessions: id => repos.session.findByTeamId(id),
         getSessionAverages: id => container.trend.getSessionAverages(id),
+        /*
+         * Requirements: Remembering What Happened 5.1, 5.2, 5.3
+         *
+         * The dashboard's "the scheduler may not be running" was a guess made
+         * from fifteen minutes of silence. The heartbeat lets it report
+         * instead — and it rides along with the reads this response already
+         * makes rather than costing the page a second request.
+         */
+        getSchedulerLastRanAt: async () =>
+          (await repos.schedulerHeartbeat.latest())?.ranAt ?? null,
       },
       teamId,
     );
@@ -151,6 +167,15 @@ export const GET = withErrorHandling(async (request: Request, context) => {
     trendDistribution,
     privacyMode,
     questions,
+    /*
+     * When the scheduler last ran, or null if it never has.
+     *
+     * Requirements: Remembering What Happened 5.1, 5.2, 5.3. `null` is a real
+     * answer here rather than a missing one — it is what a deployment whose
+     * trigger has never called the endpoint looks like, and the dashboard has
+     * a different message for it.
+     */
+    schedulerLastRanAt: schedulerLastRanAt ? schedulerLastRanAt.toISOString() : null,
     // Omitted rather than false when trends can be drawn, which is the shape
     // the dashboard and its mock have always agreed on.
     ...(requiresMoreData ? { requiresMoreData: true } : {}),
