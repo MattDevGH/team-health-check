@@ -14,6 +14,7 @@ import { createInMemoryRepositories } from '@/lib/repositories';
 import type { Repositories } from '@/lib/repositories';
 import { createContainer } from '@/lib/container';
 import { ForbiddenError } from '@/lib/errors';
+import { resetRateLimitStore } from '@/lib/rate-limit';
 import type { Container } from '@/lib/container';
 
 // Mock the verify-signature module to bypass HMAC checks in tests
@@ -303,6 +304,13 @@ describe('/healthcheck signin', () => {
   let container: Container;
 
   beforeEach(async () => {
+    /*
+     * The rate-limit store is module-level and survives between tests. Six
+     * tests each making one request on the same Slack id would reach the
+     * limit of five and start refusing each other — shared state failing a
+     * test that had nothing to do with it.
+     */
+    resetRateLimitStore();
     repos = createInMemoryRepositories();
     container = createContainer(repos);
     const routeModule = await import('./route');
@@ -433,6 +441,25 @@ describe('/healthcheck signin', () => {
     const body = await (await POST(signinRequest('U_STRANGER'))).json();
 
     expect(minted).toEqual([]);
+    expect(body.text).not.toMatch(/\/auth\/magic\//);
+  });
+
+  it('refuses a flood, and says when to come back', async () => {
+    /*
+     * Requirements: Slack Sign In 4.3
+     *
+     * The limit lives in the service; this is the half that matters to a
+     * person — that the refusal arrives as words they can act on rather than
+     * as silence or a stack trace.
+     */
+    await linkedMember('U_FLOOD');
+    const { POST } = await import('./route');
+    for (let i = 0; i < 5; i += 1) await POST(signinRequest('U_FLOOD'));
+
+    const body = await (await POST(signinRequest('U_FLOOD'))).json();
+
+    expect(body.response_type).toBe('ephemeral');
+    expect(body.text).toMatch(/try again/i);
     expect(body.text).not.toMatch(/\/auth\/magic\//);
   });
 

@@ -16,12 +16,20 @@ import { createInMemoryRepositories, type Repositories } from '@/lib/repositorie
 import { createAuthService, type AuthService } from '@/lib/services/auth.service';
 import { InMemoryEmailService } from '@/lib/services/email.service';
 import { NotFoundError } from '@/lib/errors';
+import { resetRateLimitStore } from '@/lib/rate-limit';
 
 let repos: Repositories;
 let auth: AuthService;
 let email: InMemoryEmailService;
 
 beforeEach(() => {
+  /*
+   * The rate-limit store is module-level and survives between tests. Eight
+   * tests each asking for a link on the same Slack id reach the limit of five,
+   * and the later ones fail on a limit that has nothing to do with what they
+   * are testing.
+   */
+  resetRateLimitStore();
   repos = createInMemoryRepositories();
   email = new InMemoryEmailService();
   auth = createAuthService({

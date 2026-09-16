@@ -106,6 +106,19 @@ async function handleSignIn(slackUserId: string): Promise<Response> {
     );
   }
 
+  if (result.status === 'rate_limited') {
+    /*
+     * A horizon, because a refusal without one is indistinguishable from a
+     * broken command — somebody retries, is refused again, and concludes the
+     * feature does not work.
+     */
+    return ephemeral(
+      `You have asked for a sign-in link several times just now. ${describeWait(
+        result.retryAfterMs,
+      )}`,
+    );
+  }
+
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
   return ephemeral(
@@ -153,6 +166,16 @@ async function handleHealthCheck(slackUserId: string): Promise<Response> {
       });
     }
   }
+}
+
+/** How long to wait, in words rather than milliseconds. */
+function describeWait(ms: number): string {
+  const minutes = Math.ceil(ms / 60_000);
+  if (minutes <= 1) return 'Try again in a minute.';
+  if (minutes < 60) return `Try again in about ${minutes} minutes.`;
+
+  const hours = Math.round(minutes / 60);
+  return `Try again in about ${hours === 1 ? 'an hour' : `${hours} hours`}.`;
 }
 
 /** Ephemeral text-only Slack response. */

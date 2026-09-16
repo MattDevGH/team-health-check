@@ -7,7 +7,7 @@ import crypto from 'crypto';
 import { recorder } from '@/lib/observability';
 
 import { AppError, NotFoundError, RateLimitError } from '@/lib/errors';
-import { checkRateLimit, isRateLimited, recordRateLimitHit } from '@/lib/rate-limit';
+import { checkRateLimit, isRateLimited, recordRateLimitHit, retryAfterMs } from '@/lib/rate-limit';
 import type {
   MagicLinkRepository,
   TeamMemberRepository,
@@ -31,7 +31,8 @@ import type { EmailService } from '@/lib/services/email.service';
  */
 export type SlackSignInResult =
   | { status: 'issued'; token: string }
-  | { status: 'unlinked' };
+  | { status: 'unlinked' }
+  | { status: 'rate_limited'; retryAfterMs: number };
 
 export type MagicLinkVerifyResult =
   | { status: 'authenticated'; memberId: string; sessionToken: string }
@@ -80,6 +81,15 @@ export interface AuthService {
 export const PAIRING_CODE_EXPIRY_MS = 10 * 60 * 1000;
 
 /** Requirement 7.5: Rate limit — 5 requests per email per hour */
+/**
+ * The same numbers as the magic-link limit, deliberately.
+ *
+ * Requirements: Slack Sign In 4.3. Both mint a credential and send it
+ * somewhere; a second pair of numbers would be a second thing to keep in step
+ * with the first.
+ */
+const SLACK_SIGNIN_RATE_LIMIT = 5;
+
 const MAGIC_LINK_RATE_LIMIT = 5;
 const MAGIC_LINK_RATE_WINDOW_MS = 60 * 60 * 1000;
 
@@ -282,6 +292,19 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
   async function requestSlackSignIn(slackUserId: string): Promise<SlackSignInResult> {
     if (!magicLinkRepo || !slackIdentityLinkRepo) {
       throw new Error('Slack sign-in dependencies not provided');
+    }
+
+    /*
+     * Counted before the identity lookup, so a linked account and an unlinked
+     * one are throttled identically. Counting only the linked ones would let
+     * somebody read team membership off which Slack ids start being refused.
+     */
+    const key = `slack-signin:${slackUserId}`;
+    if (!checkRateLimit(key, SLACK_SIGNIN_RATE_LIMIT, MAGIC_LINK_RATE_WINDOW_MS)) {
+      return {
+        status: 'rate_limited',
+        retryAfterMs: retryAfterMs(key, SLACK_SIGNIN_RATE_LIMIT, MAGIC_LINK_RATE_WINDOW_MS),
+      };
     }
 
     const link = await slackIdentityLinkRepo.findBySlackUserId(slackUserId);

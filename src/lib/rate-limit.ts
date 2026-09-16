@@ -127,3 +127,32 @@ export function recordRateLimitHit(key: string): void {
     entry.timestamps.push(now);
   }
 }
+
+/**
+ * How long until a refused key would be allowed again.
+ *
+ * Requirements: Slack Sign In 4.3
+ *
+ * The window slides, so the answer is when the oldest attempt still inside it
+ * falls out — not the whole window, which would overstate the wait every time
+ * but the first.
+ *
+ * Added because a refusal with no horizon is indistinguishable from a broken
+ * command, and the Slack reply had nothing truthful to say. Returns 0 when the
+ * key is not currently limited.
+ */
+export function retryAfterMs(key: string, limit: number, windowMs: number): number {
+  const now = Date.now();
+  const entry = store.get(key);
+  if (!entry) return 0;
+
+  const inWindow = entry.timestamps.filter((ts) => now - ts < windowMs).sort((a, b) => a - b);
+  if (inWindow.length < limit) return 0;
+
+  /*
+   * The attempt that has to age out is the one `limit` places from the end:
+   * once it leaves, the count inside the window drops below the limit again.
+   */
+  const blocking = inWindow[inWindow.length - limit];
+  return Math.max(0, blocking + windowMs - now);
+}
