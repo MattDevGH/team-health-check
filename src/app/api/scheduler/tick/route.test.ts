@@ -102,6 +102,39 @@ describe('POST /api/scheduler/tick', () => {
     expect(sink.calls).toEqual([{ memberId: linked.id, type: 'slack_prompt' }]);
   });
 
+  it('counts the prompts it sent, not the members it considered', async () => {
+    /*
+     * Requirements: Knowing What Happened 1.5; Remembering What Happened 2.1
+     *
+     * `prompts` incremented once per member in a team whose check had just
+     * opened, regardless of what `sendSlackPrompt` returned — and it returns
+     * false for a member with no Slack link, one marked away, or a team outside
+     * its delivery window.
+     *
+     * So the response said "prompting 2 members" while one message was sent,
+     * and on a deployment where nobody has linked Slack it claimed to have
+     * prompted a whole team while sending nothing at all. The sink assertions
+     * above were right the whole time; nothing compared them to the number the
+     * response reported.
+     *
+     * It matters more now than it did: the count decides whether a tick is
+     * eventful enough to keep, so a wrong one writes a wrong ledger.
+     */
+    const team = await seedScheduledTeam('Tick Prompt Count Team');
+    const linked = await repos.teamMember.create({
+      teamId: team.id,
+      name: 'Linked',
+      email: 'linked@count.test',
+    });
+    await repos.teamMember.create({ teamId: team.id, name: 'Unlinked', email: 'unlinked@count.test' });
+    await repos.slackIdentityLink.create({ memberId: linked.id, slackUserId: 'U_COUNT_LINKED' });
+
+    const body = (await (await POST(tickRequest())).json()) as { prompts?: number };
+
+    expect(sink.calls).toHaveLength(1);
+    expect(body.prompts, 'the count should match what was actually sent').toBe(1);
+  });
+
   it('does not prompt a member who is marked away', async () => {
     const team = await seedScheduledTeam('Tick Away Team');
     const present = await repos.teamMember.create({
