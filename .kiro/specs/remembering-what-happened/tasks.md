@@ -14,10 +14,13 @@ first, one PR per phase.
 
 ### 1.1 A place to put it
 
-- [ ] **Take a production snapshot before `migrate-production.ts` runs.** Turso
-      has export and **no** point-in-time restore, so this is the only way
-      back. Not a blocker on writing the migration — it is the step before
-      applying one, and applying is a separate deliberate command
+- [x] **Production snapshot: deliberately skipped, 2026-09-16.** Turso has
+      export and no point-in-time restore, so the rule stands in general. It
+      was waived here on two grounds checked rather than assumed: both
+      migrations are purely additive, so no statement can damage an existing
+      row; and a read-only count showed the database held one team, one
+      member and five of Matt's own test responses. Recorded because a waived
+      safety step should be a decision somebody can find, not a gap
 - [x] `SchedulerHeartbeat` in the schema: a fixed single-row key, `ranAt`,
       `tickId`, `summary`, and the counts
 - [x] Additive migration, applied locally; the ledger-gap test still passes

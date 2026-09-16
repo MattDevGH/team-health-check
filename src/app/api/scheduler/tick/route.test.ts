@@ -441,10 +441,10 @@ describe('the tick response', () => {
      * better than a variable name and a value, and still something you pick
      * apart rather than read.
      *
-     * Indented, it costs nothing and cannot be worse: if the history renders
-     * the body in a monospaced block the fields land on their own lines, and
-     * if it collapses whitespace they are at least spaced apart instead of
-     * run together.
+     * Indented, the job history renders it across lines — confirmed against
+     * the real dashboard on 2026-09-16, tick `polp7zlm`. The change was made
+     * on the weaker argument that it could not be worse whichever way their
+     * viewer behaved; it did not need the fallback.
      *
      * Still `application/json`, and still parses — the E2E reads `summary`
      * out of it.
