@@ -20,6 +20,19 @@ import type {
 } from '@/lib/repositories/types';
 import type { EmailService } from '@/lib/services/email.service';
 
+/**
+ * What a Slack sign-in request produced.
+ *
+ * Requirements: Slack Sign In 1.1, 1.5
+ *
+ * `unlinked` carries nothing about why. A workspace member is not a team
+ * member, and a reply that distinguished "you are on no team" from "your Slack
+ * account is not linked" would turn this command into a way of asking who is.
+ */
+export type SlackSignInResult =
+  | { status: 'issued'; token: string }
+  | { status: 'unlinked' };
+
 export type MagicLinkVerifyResult =
   | { status: 'authenticated'; memberId: string; sessionToken: string }
   | { status: 'requires_team_creation'; pendingToken: string; email: string };
@@ -45,6 +58,7 @@ export interface AuthService {
   generatePairingCode(slackUserId: string): Promise<string>;
   verifyPairingCode(memberId: string, code: string): Promise<{ slackUserId: string } | null>;
   requestMagicLink(email: string): Promise<void>;
+  requestSlackSignIn(slackUserId: string): Promise<SlackSignInResult>;
   verifyMagicLink(token: string): Promise<MagicLinkVerifyResult>;
   invalidateSession(token: string): Promise<void>;
   establishSessionLinkAuth(
@@ -250,6 +264,39 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
    * Existing-member links are claimed here, while pending genesis records are
    * only validated. Genesis execution owns the sole CAS claim for new users.
    */
+  /**
+   * A sign-in link for a Slack user whose account is linked to a member.
+   *
+   * Requirements: Slack Sign In 1.1, 1.4, 1.5, NFR 1.2
+   *
+   * The token is an ordinary magic link, deliberately. A second token type
+   * would mean a second expiry, a second claim, and a second place for
+   * single-use to be got wrong — and the thing being carried is identical:
+   * proof established elsewhere, handed to a browser that Slack cannot give a
+   * cookie to.
+   *
+   * `slackUserId` comes from a payload whose signature the route has already
+   * verified. It is never read from a request body, which is the same rule
+   * that governs `AuthContext.memberId`.
+   */
+  async function requestSlackSignIn(slackUserId: string): Promise<SlackSignInResult> {
+    if (!magicLinkRepo || !slackIdentityLinkRepo) {
+      throw new Error('Slack sign-in dependencies not provided');
+    }
+
+    const link = await slackIdentityLinkRepo.findBySlackUserId(slackUserId);
+    if (!link) return { status: 'unlinked' };
+
+    const token = crypto.randomBytes(32).toString('hex');
+    await magicLinkRepo.create({
+      token,
+      memberId: link.memberId,
+      expiresAt: new Date(Date.now() + MAGIC_LINK_EXPIRY_MS),
+    });
+
+    return { status: 'issued', token };
+  }
+
   async function verifyMagicLink(token: string): Promise<MagicLinkVerifyResult> {
     if (!magicLinkRepo || !userSessionRepo || !pendingGenesisRepo) {
       throw new Error('Magic link dependencies not provided');
@@ -391,6 +438,7 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
     generatePairingCode,
     verifyPairingCode,
     requestMagicLink,
+    requestSlackSignIn,
     verifyMagicLink,
     invalidateSession,
     establishSessionLinkAuth,

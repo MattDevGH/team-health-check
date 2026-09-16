@@ -2,6 +2,7 @@
  * POST /api/slack/commands — Slack slash command handler
  *
  * Handles:
+ * - `/healthcheck signin` — hands back a single-use sign-in link (Slack Sign In 1.1)
  * - `/healthcheck connect` — generates a pairing code for Slack identity linking (Req 2.2)
  * - `/healthcheck` — responds with prompts for current session based on cadence (Req 5.15, 7.4)
  * - No active session — returns informative ephemeral message (Req 5.16, 7.4)
@@ -10,7 +11,7 @@
  * Architecture: Verify signature, parse form data, route by command text.
  * Thin route handler: no business logic — delegates to services/repos.
  *
- * Requirements: 2.2, 5.14, 5.15, 5.16, 7.4
+ * Requirements: 2.2, 5.14, 5.15, 5.16, 7.4; Slack Sign In 1.1, 1.3, 1.5, 1.6
  */
 
 import { withErrorHandling } from '@/lib/api-utils';
@@ -48,6 +49,10 @@ export const POST = withErrorHandling(async (request: Request) => {
       return handleConnect(slackUserId);
     }
 
+    if (text.trim() === 'signin') {
+      return handleSignIn(slackUserId);
+    }
+
     // Default: show health check prompt
     return handleHealthCheck(slackUserId);
   }
@@ -70,6 +75,43 @@ async function handleConnect(slackUserId: string): Promise<Response> {
     response_type: 'ephemeral',
     text: `Your pairing code is: ${code}\nEnter it in the web interface to link your account. Valid for 10 minutes.`,
   });
+}
+
+/**
+ * Handle `/healthcheck signin` — hand back a single-use sign-in link.
+ *
+ * Requirements: Slack Sign In 1.1, 1.3, 1.5
+ *
+ * Email was the only way in, and without a verified sending domain it reaches
+ * the account owner and nobody else — silently, because the magic-link route
+ * deliberately says nothing about which addresses exist. A colleague waits for
+ * ever. This request arrives with a verified Slack signature instead.
+ *
+ * Ephemeral, because the reply carries a credential. A sign-in link in a
+ * channel is a sign-in link for everyone in the channel.
+ */
+async function handleSignIn(slackUserId: string): Promise<Response> {
+  const result = await getContainer().auth.requestSlackSignIn(slackUserId);
+
+  if (result.status === 'unlinked') {
+    /*
+     * The same reply for a workspace member on no team and one whose account
+     * is merely unlinked. Telling them apart would make this command a way of
+     * asking who is on a team.
+     */
+    return ephemeral(
+      'Your Slack account is not linked to a Team Health Check member, so there is ' +
+        'nothing to sign you in to.\nUse `/healthcheck connect` to get a pairing code, ' +
+        'or ask your delivery manager to link your account.',
+    );
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+
+  return ephemeral(
+    `Here is your sign-in link: ${baseUrl}/auth/magic/${result.token}\n` +
+      'It works once, and only for you.',
+  );
 }
 
 /**
