@@ -888,6 +888,27 @@ Three things are worth knowing about how it is put together
 "Computed results for", never "materialised": the word is ours, and the reader
 is whoever has the cron dashboard open. `docs/operations.md` shows both shapes.
 
+**A note on how the journey E2E asserts it.** The first version pinned the
+count — "computed results for 1 check" — which passed locally and failed in CI,
+where the shared database carries every other spec's teams and the tick had
+fourteen to consider. The count is not the tick's to control, so the assertion
+does not claim one: it asserts the shape, and the unit tests pin the counts
+where the input is known. Run `npx playwright test` whole, not one spec, or
+this class of failure waits for CI.
+
+**The PR-description gate had drifted from AGENTS.md.**
+`check-requirement-coverage` accepted only `Requirement 1.1` while the rule
+requires a reference outside the original spec to name it, so following the
+rule failed the gate and passing it meant claiming the wrong spec. It takes
+"Requirements: Explaining Itself 4.1" now. The spec name must be Title Case,
+which is what stops the pattern matching any sentence containing a decimal.
+
+There were two implementations of that one rule — a `.sh` CI runs and a `.ts`
+the tests exercised — so the tested rule and the enforced rule could differ
+with nothing going red, which is how the gap survived. A test now runs the
+shell and compares the two, and caught the shell lagging the moment the
+TypeScript was fixed.
+
 A materialisation failure was swallowed with a comment saying it would be
 retried next tick. It is — for ever, silently, if the cause is permanent. It
 is recorded now.

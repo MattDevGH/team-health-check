@@ -160,15 +160,26 @@ async function closeAndMaterialise(page: Page, current: typeof state): Promise<v
    *
    * The body is what cron-job.org puts in front of a person, and the counts
    * alone could not be acted on at a glance. This is the only place the real
-   * response is read, so it is where the sentence has to be proved — and it
-   * proves the route composes it from what the tick actually did, not from a
-   * constant.
+   * response is read, so it is where the sentence has to be proved.
+   *
+   * The count is deliberately not pinned. A first version asserted "computed
+   * results for 1 check" — true when this spec runs alone, and false in CI,
+   * where the shared database carries every other spec's teams and the tick
+   * had fourteen of them to consider. A test that only passes when it runs by
+   * itself is a defect, not a stricter test.
+   *
+   * What is asserted instead holds however many teams exist: the tick names
+   * what it did in words a person would use, and never in field names. The
+   * exact counts are pinned in the unit tests, where the tick's input is
+   * known.
    */
-  const body = (await tick.json()) as { summary?: string };
-  expect(body.summary, "the tick should say what it did in a sentence").toMatch(
-    /computed results for 1 check/i,
+  const body = (await tick.json()) as { summary?: string; materialised?: number };
+  expect(body.materialised, 'the tick should have materialised this session').toBeGreaterThan(0);
+  expect(body.summary, 'the tick should say what it did in a sentence').toMatch(
+    /computed results for \d+ check/i,
   );
-  expect(body.summary, "and never in field names").not.toMatch(/materialised/i);
+  expect(body.summary, 'and never in field names').not.toMatch(/materialised/i);
+  expect(body.summary, 'and should read as a sentence').toMatch(/\.$/);
 }
 
 test.describe.serial('team lifecycle journey', () => {
