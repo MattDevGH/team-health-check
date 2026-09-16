@@ -21,10 +21,16 @@
  * whole picture, and it has already composed the sentence from both halves.
  */
 
+import type { Recorder } from '@/lib/observability/recorder';
 import type { SchedulerHeartbeatRepository } from '@/lib/repositories/types';
 
 export interface TickRecordServiceDeps {
   schedulerHeartbeatRepo: SchedulerHeartbeatRepository;
+  /**
+   * Optional, like the scheduler's. Tests and scripts should not have to wire
+   * a recorder in order to do nothing with it.
+   */
+  recorder?: Recorder;
 }
 
 /** What a completed tick has to say for itself. */
@@ -43,20 +49,42 @@ export interface TickRecordService {
   record(tick: TickRecord): Promise<void>;
 }
 
+const NO_RECORDER: Pick<Recorder, 'error'> = { error: () => {} };
+
 export function createTickRecordService(deps: TickRecordServiceDeps): TickRecordService {
   const { schedulerHeartbeatRepo } = deps;
+  const record_ = deps.recorder ?? NO_RECORDER;
 
   async function record(tick: TickRecord): Promise<void> {
-    /*
-     * Every tick, including one that did nothing.
-     *
-     * This is the criterion the whole requirement rests on. A quiet week and a
-     * stopped scheduler are indistinguishable unless something is written when
-     * nothing happens — which is also why the heartbeat cannot be "the newest
-     * row of the ledger" once the ledger exists, since the ledger will
-     * deliberately hold no quiet ticks at all.
-     */
-    await schedulerHeartbeatRepo.record(tick);
+    try {
+      /*
+       * Every tick, including one that did nothing.
+       *
+       * This is the criterion the whole requirement rests on. A quiet week and
+       * a stopped scheduler are indistinguishable unless something is written
+       * when nothing happens — which is also why the heartbeat cannot be "the
+       * newest row of the ledger" once the ledger exists, since the ledger will
+       * deliberately hold no quiet ticks at all.
+       */
+      await schedulerHeartbeatRepo.record(tick);
+    } catch (error: unknown) {
+      /*
+       * Swallowed, because the caller is the tick.
+       *
+       * The route awaits this before answering, so a rejection here would turn
+       * a tick that opened a check into a 500 and have the cron service report
+       * a failure for work that succeeded. A scheduler that stops working
+       * because it could not write down that it was working is strictly worse
+       * than one that forgets it did.
+       *
+       * Unlike the recorder — which swallows in silence, having nowhere to
+       * complain to — this has somewhere: the recorder.
+       */
+      record_.error('tick.record.failed', {
+        tickId: tick.tickId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   return { record };

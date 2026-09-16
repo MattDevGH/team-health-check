@@ -224,7 +224,10 @@ export const POST = withErrorHandling(async (request: Request) => {
    * accounts of one tick would leave anybody comparing them with no way to
    * choose between the two.
    */
-  await createTickRecordService({ schedulerHeartbeatRepo: repos.schedulerHeartbeat }).record({
+  await createTickRecordService({
+    schedulerHeartbeatRepo: repos.schedulerHeartbeat,
+    recorder,
+  }).record({
     tickId: summary.tickId,
     ranAt: now,
     summary: sentence,

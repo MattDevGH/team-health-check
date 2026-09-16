@@ -532,3 +532,51 @@ describe('the proof a tick leaves behind', () => {
     expect(written).not.toMatch(/score|trend|improving|declining/i);
   });
 });
+
+describe('when the proof cannot be written', () => {
+  /*
+   * Requirements: Remembering What Happened 1.4, NFR 2.1
+   * Property: 4
+   *
+   * The service swallows its own failure, and this asserts what that is for at
+   * the level it matters: the tick still does its work. A rejection would turn
+   * a tick that opened a check into a 500, and the cron service would report a
+   * failure for work that succeeded.
+   */
+
+  beforeEach(() => {
+    vi.stubEnv('CRON_SECRET', CRON_SECRET);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    _resetTickTestDeps();
+  });
+
+  it('opens the check anyway', async () => {
+    const sink = createRecordingSink();
+    _setTickTestDeps({ notificationSink: sink, now: () => OPEN_TICK });
+    const team = await repos.team.create({
+      name: `Broken Heartbeat ${Date.now()}`,
+      timezone: 'UTC',
+    });
+    await repos.teamSchedule.create({
+      teamId: team.id,
+      cadence: 'weekly',
+      openDay: 1,
+      openTime: '09:00',
+      closeDay: 5,
+      closeTime: '17:00',
+      timezone: 'UTC',
+    });
+    vi.spyOn(repos.schedulerHeartbeat, 'record').mockRejectedValue(new Error('disk full'));
+
+    const response = await POST(tickRequest(), { params: Promise.resolve({}) });
+
+    expect(response.status).toBe(200);
+    // The outcome that matters, read back from the repository rather than
+    // inferred from the response the same code path produced
+    expect(await repos.session.findOpenByTeamId(team.id)).not.toBeNull();
+  });
+});

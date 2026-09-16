@@ -60,12 +60,19 @@ first, one PR per phase.
 
 ### 1.3 It cannot break the tick
 
-- [ ] Failing test: when the heartbeat write throws, the tick still returns its
-      summary, and the sessions it opened stayed open
-- [ ] Failing test: the failure is recorded as `tick.record.failed` through the
+- [x] Failing test: when the heartbeat write throws, the tick still returns its
+      summary, and the sessions it opened stayed open — asserted at the route,
+      reading the session back from the repository rather than inferring it
+      from the response the same code path produced
+- [x] Failing test: the failure is recorded as `tick.record.failed` through the
       existing recorder — this has somewhere to complain to, unlike the
       recorder itself, so it does not swallow silently
-- [ ] Mutation check: remove the try/catch and watch the tick fail
+- [x] Failing test: it says which tick and why, since a failure that cannot be
+      attributed is a line nobody can act on
+- [x] Failing test: a heartbeat that **was** written says nothing. A line per
+      tick is three hundred a day reporting the expected thing, which is how a
+      log stops being read
+- [x] Mutation check: removing the try/catch fails six tests across both levels
 - _Requirements: Remembering What Happened 1.4, NFR 2.1, NFR 2.2_
 - _Property: 4_
 
