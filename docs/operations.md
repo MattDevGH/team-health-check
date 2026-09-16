@@ -81,11 +81,27 @@ A failed heartbeat never fails the tick; it appears as `tick.record.failed`
 with the tick id and the reason. A successful one says nothing, because three
 hundred lines a day reporting the expected thing is how a log stops being read.
 
-What is still missing is **history**: the heartbeat says what the *last* tick
-did, not what happened on Monday. Phases 2 to 4 of
-`.kiro/specs/remembering-what-happened/` add a ledger of the ticks that did
-something. Until then, for anything older than the last tick, look within the
-hour or not at all.
+**And the ledger answers "what happened on Monday".** `SchedulerTickRecord`
+holds one row per tick that *did something* — opened, closed, materialised or
+prompted anything, or failed at any of it — with the same sentence, counts and
+skip reasons the response carried.
+
+Quiet ticks are deliberately absent. They are the overwhelming majority, the
+heartbeat has already said the scheduler ran, and keeping them is precisely what
+leaves a record holding fifty "nothing was due" entries and no trace of the
+morning a check opened. **What is kept is chosen by what happened, not by when.**
+
+A tick that failed to materialise is kept *although every count is zero* — it is
+eventful because nothing happened, and `session.materialise.failed` retries for
+ever if the cause is permanent, so it is the most valuable row in the table.
+
+**Retention is 90 days**, pruned by the tick itself: long enough to answer a
+question asked the following week, and it needs nothing scheduled of its own. On
+a weekly cadence the prune deletes nothing almost every time and costs one
+indexed statement. A prune that fails is reported as `tick.prune.failed` and
+never costs the tick the row it came to write.
+
+Neither table holds a member id, an email address, a token, a score or a trend.
 
 ## The events
 

@@ -60,6 +60,21 @@ export interface TickRecordService {
 
 const NO_RECORDER: Pick<Recorder, 'error'> = { error: () => {} };
 
+/**
+ * How long a ledger entry is kept.
+ *
+ * Requirements: Remembering What Happened 3.1, 3.4
+ *
+ * Ninety days, because the question this exists to answer — "why did no check
+ * open on Monday?" — is asked days later, and because a quarter is the
+ * shortest span over which a weekly cadence has a shape worth looking at. The
+ * alternative to somebody else's eviction policy is having one, not having
+ * none.
+ */
+export const LEDGER_RETENTION_DAYS = 90;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export function createTickRecordService(deps: TickRecordServiceDeps): TickRecordService {
   const { schedulerHeartbeatRepo, schedulerTickRecordRepo } = deps;
   const record_ = deps.recorder ?? NO_RECORDER;
@@ -136,6 +151,33 @@ export function createTickRecordService(deps: TickRecordServiceDeps): TickRecord
        * complain to — this has somewhere: the recorder.
        */
       record_.error('tick.record.failed', {
+        tickId: tick.tickId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    /*
+     * Tidying up, last and separately.
+     *
+     * Last, so that a prune which fails cannot cost the tick the row it came
+     * to write — the housekeeping must never be paid for with the record.
+     *
+     * Separately, so a prune failure is not reported as a failure to record.
+     * They are different faults: one loses this tick, the other lets the table
+     * grow. A prune that has been silently failing for months is a table
+     * nobody knows about, which is the shape of problem this milestone exists
+     * to remove.
+     *
+     * On every tick, including a quiet one, which is what makes a scheduled
+     * job of its own unnecessary. On a weekly cadence it deletes nothing
+     * almost every time and costs one indexed lookup.
+     */
+    try {
+      await schedulerTickRecordRepo.pruneBefore(
+        new Date(tick.ranAt.getTime() - LEDGER_RETENTION_DAYS * DAY_MS),
+      );
+    } catch (error: unknown) {
+      record_.error('tick.prune.failed', {
         tickId: tick.tickId,
         message: error instanceof Error ? error.message : String(error),
       });

@@ -148,15 +148,25 @@ first, one PR per phase.
 
 ### 2.3 It stops growing
 
-- [ ] Failing test: an entry older than the retention period is gone after a
-      tick
-- [ ] Failing test: one inside it is not
-- [ ] Failing test: pruning nothing is harmless, which is what happens on
+- [x] Failing test: an entry older than the retention period is gone after a
+      tick, and the cutoff is 90 days from **the tick's own clock** rather than
+      the process's
+- [x] Failing test: one inside it is not, and one exactly on the cutoff stays —
+      a boundary somebody will read as inclusive one day
+- [x] Failing test: pruning nothing is harmless, which is what happens on
       almost every tick
-- [ ] Failing test: a pruning failure does not fail the tick
-- [ ] Query-budget test: pruning is an indexed ranged delete, not a scan. The
-      existing counter harness is the only thing that can see the difference
-- [ ] State the period — 90 days — in `docs/operations.md`
+- [x] Failing test: a pruning failure does not fail the tick, **and does not
+      cost it the row it came to write** — the prune runs last and in its own
+      catch, so housekeeping is never paid for with the record
+- [x] Failing test: a pruning failure is reported as `tick.prune.failed`,
+      separately from `tick.record.failed`. They are different faults: one
+      loses this tick, the other lets the table grow unnoticed
+- [x] Query-budget test: pruning is one statement however much it deletes. It
+      runs on every tick, so a prune that read the table to decide would be
+      paid for three hundred times a day for ever
+- [x] State the period — 90 days — in `docs/operations.md`
+- [x] Mutation check: dropping the retention window fails a test, and flipping
+      the cutoff from `lt` to `lte` fails the boundary test
 - _Requirements: Remembering What Happened 3.1, 3.2, 3.3, 3.4, NFR 1.2_
 - _Property: 5_
 

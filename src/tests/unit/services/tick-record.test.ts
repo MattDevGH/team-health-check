@@ -235,3 +235,107 @@ describe('what the heartbeat repository is handed', () => {
     expect(written[0]).toMatchObject({ tickId: 'tick-1', durationMs: 12 });
   });
 });
+
+describe('the ledger stops growing on its own', () => {
+  /*
+   * Requirements: Remembering What Happened 3.1, 3.2, 3.3, 3.4
+   * Property: 5 (the ledger is bounded)
+   *
+   * The alternative to somebody else's eviction policy is having one, not
+   * having none. Ninety days, because the question this exists to answer —
+   * "why did no check open on Monday?" — is asked days later, and because a
+   * quarter is the shortest span over which a weekly cadence has a shape.
+   *
+   * Pruning rides along with the tick so that nothing has to be scheduled of
+   * its own. On a weekly cadence it deletes nothing on almost every tick.
+   */
+
+  function pruningLedger() {
+    const cutoffs: Date[] = [];
+    const repo: SchedulerTickRecordRepository = {
+      append: async () => {},
+      recent: async () => [],
+      pruneBefore: async cutoff => {
+        cutoffs.push(cutoff);
+        return 0;
+      },
+    };
+    return { cutoffs, repo };
+  }
+
+  it('prunes on every tick, including a quiet one', async () => {
+    // A quiet tick writes no row and is still a chance to tidy up, which is
+    // what makes a scheduled job unnecessary
+    const { cutoffs, repo } = pruningLedger();
+    const { service } = harness(working, repo);
+
+    await service.record(TICK);
+
+    expect(cutoffs).toHaveLength(1);
+  });
+
+  it('keeps ninety days, measured from when the tick ran', async () => {
+    /*
+     * From the tick's own clock, not the process's. The route already passes a
+     * fixed time in tests and production passes one time for the whole tick;
+     * two different notions of "now" inside one tick would be a bug waiting.
+     */
+    const { cutoffs, repo } = pruningLedger();
+    const { service } = harness(working, repo);
+
+    await service.record({ ...TICK, ranAt: new Date('2026-09-16T09:00:00.000Z') });
+
+    expect(cutoffs[0].toISOString()).toBe('2026-06-18T09:00:00.000Z');
+  });
+
+  it('does not fail the tick when pruning throws', async () => {
+    // Same trade as everywhere else here: forgetting to tidy up is better than
+    // not opening a check
+    const { service } = harness(working, {
+      append: async () => {},
+      recent: async () => [],
+      pruneBefore: async () => {
+        throw new Error('delete refused');
+      },
+    });
+
+    await expect(service.record(TICK)).resolves.toBeUndefined();
+  });
+
+  it('still writes the ledger entry when pruning throws', async () => {
+    /*
+     * Order matters, and this pins it. Pruning first and failing would lose the
+     * row the tick came to write — the housekeeping must never cost the record.
+     */
+    const kept: SchedulerTickRecord[] = [];
+    const { service } = harness(working, {
+      append: async record => {
+        kept.push(record);
+      },
+      recent: async () => kept,
+      pruneBefore: async () => {
+        throw new Error('delete refused');
+      },
+    });
+
+    await service.record({ ...TICK, opened: 1 });
+
+    expect(kept).toHaveLength(1);
+  });
+
+  it('says so when pruning fails, rather than quietly stopping', async () => {
+    // A prune that has silently failed for months is a table nobody knows is
+    // growing, which is the shape of problem this milestone exists to remove
+    const { service, events } = harness(working, {
+      append: async () => {},
+      recent: async () => [],
+      pruneBefore: async () => {
+        throw new Error('delete refused');
+      },
+    });
+
+    await service.record(TICK);
+
+    expect(events[0]).toMatchObject({ event: 'tick.prune.failed', level: 'error' });
+  });
+});
