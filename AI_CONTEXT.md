@@ -951,6 +951,37 @@ minutes fifty executions is about two hours — enough for "what did it just do?
 useless for "what happened on Monday", which is the question this milestone is
 named after.
 
+**Phase 1 is built: the scheduler leaves proof it ran.** `SchedulerHeartbeat`
+is one row, replaced by every tick — including a quiet one, which is the
+criterion the whole thing rests on. Four things worth carrying:
+
+- **The fixed primary key is load-bearing.** Without a constant to collide on
+  the upsert has nothing to replace and every tick appends, at three hundred a
+  day. The test that catches this counts rows over a real SQLite file through
+  the libSQL adapter: an in-memory fake replaces a key whatever the database
+  would have done, and "latest() returns the newest" is also true of an
+  implementation that appends.
+- **The route writes it, not the scheduler.** Only the route knows `prompts`,
+  and it has already composed the sentence. The heartbeat carries the *same*
+  sentence and tick id as the response — two accounts of one tick would leave
+  anybody comparing the cron dashboard against the application with no way to
+  choose.
+- **A failed write never fails the tick.** The route awaits it before
+  answering, so a rejection would turn a tick that opened a check into a 500.
+  Caught, and recorded as `tick.record.failed` — unlike the recorder, which
+  swallows in silence because it has nowhere to complain to, this has the
+  recorder. A *successful* write says nothing: three hundred lines a day
+  reporting the expected thing is how a log stops being read.
+- **A mutation check found a defect in a test, not the code.** The flagship
+  "writes one even when the tick did nothing" asserted a heartbeat was
+  *present*, and the module-level container still held one from an earlier test
+  — so it passed against an implementation that skipped quiet ticks entirely.
+  It asserts on the heartbeat *this* tick wrote now. The shared-container
+  pollution trap, for the fourth time in this repo.
+
+`20260916140000_add_scheduler_heartbeat` is additive and applied locally.
+Production needs `scripts/migrate-production.ts` and an export first.
+
 Then the second number arrived: **Vercel's Hobby plan keeps runtime logs for one
 hour.** That is where every recorder event goes. So the milestone named *Knowing
 What Happened* remembers what happened for somewhere between fifty minutes and

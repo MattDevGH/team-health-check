@@ -352,6 +352,16 @@ The counts are still there for anything that parses them. The sentence exists
 because `"opened": 0` is the correct outcome on a Wednesday and a failure on
 Monday at 15:30, and no count tells the two apart. See docs/operations.md.
 
+**The response does not last.** cron-job.org keeps the last 50 executions —
+counted in ticks, so between fifty minutes and four hours depending on the
+interval — and Vercel's Hobby plan keeps the runtime logs for one hour. So every
+tick also writes a **heartbeat**: one row in the application's own database,
+replaced each time, carrying when it ran, what it did, and the same sentence and
+tick id the response carried. It is written even when the tick did nothing,
+because a quiet week and a stopped scheduler are otherwise identical, and no row
+at all means the scheduler has never run. A failed heartbeat never fails the
+tick.
+
 ### Local Development with Slack
 
 For testing Slack locally:
