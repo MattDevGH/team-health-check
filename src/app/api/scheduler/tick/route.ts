@@ -169,8 +169,18 @@ export const POST = withErrorHandling(async (request: Request) => {
       // Session was just opened — prompt eligible members
       const members = await repos.teamMember.findByTeamId(team.id);
       for (const member of members) {
-        await notificationService.sendSlackPrompt(member.id, openSession);
-        prompts += 1;
+        /*
+         * The return value decides the count.
+         *
+         * This incremented once per member regardless, and `sendSlackPrompt`
+         * returns false for a member with no Slack link, one marked away, or a
+         * team outside its delivery window. So the response said "prompting 2
+         * members" while sending one, and on a deployment where nobody has
+         * linked Slack it claimed a whole team while sending nothing.
+         */
+        if (await notificationService.sendSlackPrompt(member.id, openSession)) {
+          prompts += 1;
+        }
       }
     }
 
@@ -226,6 +236,7 @@ export const POST = withErrorHandling(async (request: Request) => {
    */
   await createTickRecordService({
     schedulerHeartbeatRepo: repos.schedulerHeartbeat,
+    schedulerTickRecordRepo: repos.schedulerTickRecord,
     recorder,
   }).record({
     tickId: summary.tickId,
@@ -235,7 +246,9 @@ export const POST = withErrorHandling(async (request: Request) => {
     closed: summary.closed,
     materialised: summary.materialised,
     prompts,
+    failures: summary.failures,
     durationMs: summary.durationMs,
+    reasons: summary.reasons,
   });
 
   return Response.json({

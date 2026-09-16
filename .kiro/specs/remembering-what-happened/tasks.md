@@ -86,42 +86,87 @@ first, one PR per phase.
 
 ### 2.1 Which ticks are eventful
 
-- [ ] Failing test: a tick that opened, closed, materialised or prompted
+- [x] **Defect found first.** `prompts` counted members considered, not
+      prompts sent: it incremented regardless of what `sendSlackPrompt`
+      returned, and that returns false for a member with no Slack link, one
+      marked away, or a team outside its delivery window. The response said
+      "prompting 2 members" while sending one. The count decides eventfulness,
+      so it had to be right before anything read it
+- [x] Failing test: a tick that opened, closed, materialised or prompted
       anything is eventful
-- [ ] Failing test: a tick that did none of those is not
-- [ ] Failing test: a tick that failed to materialise is eventful **even though
+- [x] Failing test: a tick that did none of those is not, however many teams it
+      passed over — a Wednesday is not an event
+- [x] The scheduler counts its failures. They were recorded and dropped from
+      the summary, so a tick that failed to compute a result reported exactly
+      the counts of a quiet Wednesday. Counted where it is recorded, and a test
+      compares the count against the lines it produced
+- [x] Failing test: a tick that failed to materialise is eventful **even though
       every count is zero** — it is eventful precisely because nothing happened,
       and this is the single most valuable row the ledger will hold
-- [ ] Property test: eventfulness is a function of the summary alone, so it can
+- [x] Property test: eventfulness is a function of the summary alone, so it can
       never disagree with what the tick reported
+- [x] Mutation check on every term of the predicate.
+      **The property test failed to catch the first mutation** — generating
+      counts up to 50 made "four zeros and one non-zero" vanishingly rare, so
+      the example test caught what the property test missed, which is the wrong
+      way round. Ranges of 0..2, 500 runs, and the five single-field cases
+      enumerated rather than left to chance
 - _Requirements: Remembering What Happened 2.1, 2.2, 2.3_
 - _Property: 2, 3_
 
 ### 2.2 The ledger
 
-- [ ] `SchedulerTickRecord`: `tickId`, `ranAt`, counts, reasons, summary. Index
+- [x] `SchedulerTickRecord`: `tickId`, `ranAt`, counts, reasons, summary. Index
       on `ranAt`, which both the reverse-chronological read and the prune need
-- [ ] Additive migration; production snapshot again if 1.1's has gone stale
-- [ ] Failing test: an eventful tick adds exactly one row
-- [ ] Failing test: a quiet tick adds none — the eviction problem, asserted
-- [ ] Failing test: entries read back newest first
-- [ ] Failing test: no row contains a member id, an email, a token, a score or
-      a trend. Generated, not exampled: the assertion is about every row the
-      system can produce, and an example test checks the row somebody thought of
+- [x] Additive migration, applied locally
+- [x] Failing test: an eventful tick adds exactly one row
+- [x] Failing test: a quiet tick adds none — the eviction problem, asserted.
+      On this tick's own id, since the container is shared across the file
+- [x] Failing test: entries read back newest first, a page at a time
+- [x] Failing test: reasons survive a round trip through a text column, and a
+      row holding text that is not JSON reads as `{}` rather than taking a page
+      down
+- [x] Failing test: no row contains a member id, an email, a token, a score or
+      a trend. Generated, and as an **allowlist over the row's keys** rather
+      than a search for forbidden words — a search passes for every input
+      nobody thought to generate, while this fails the moment a field is added
+- [x] **The property test found a real leak**, and following it up found a
+      worse one: the service spread the whole `TickRecord` into the heartbeat,
+      which has no `failures` or `reasons` columns. TypeScript accepted it
+      (excess property checking only fires on literals), the fakes accepted it,
+      and Prisma would have rejected every heartbeat in production — silently,
+      since the service catches its own write failures. Both writes map field
+      by field now
+- [x] Integration test of the **service over the real repositories**, which is
+      the gap that hid it: route tests use fakes, repository tests build their
+      own rows, and neither exercised the production path. Restoring the spread
+      fails all three
+- [x] Fixed a unit test that was **asserting the defect** — it expected the
+      heartbeat repository to receive the whole tick
 - _Requirements: Remembering What Happened 2.1, 2.3, 2.4, 2.5, 4.1, 4.2, 4.3_
 - _Property: 2, 3, 6_
 
 ### 2.3 It stops growing
 
-- [ ] Failing test: an entry older than the retention period is gone after a
-      tick
-- [ ] Failing test: one inside it is not
-- [ ] Failing test: pruning nothing is harmless, which is what happens on
+- [x] Failing test: an entry older than the retention period is gone after a
+      tick, and the cutoff is 90 days from **the tick's own clock** rather than
+      the process's
+- [x] Failing test: one inside it is not, and one exactly on the cutoff stays —
+      a boundary somebody will read as inclusive one day
+- [x] Failing test: pruning nothing is harmless, which is what happens on
       almost every tick
-- [ ] Failing test: a pruning failure does not fail the tick
-- [ ] Query-budget test: pruning is an indexed ranged delete, not a scan. The
-      existing counter harness is the only thing that can see the difference
-- [ ] State the period — 90 days — in `docs/operations.md`
+- [x] Failing test: a pruning failure does not fail the tick, **and does not
+      cost it the row it came to write** — the prune runs last and in its own
+      catch, so housekeeping is never paid for with the record
+- [x] Failing test: a pruning failure is reported as `tick.prune.failed`,
+      separately from `tick.record.failed`. They are different faults: one
+      loses this tick, the other lets the table grow unnoticed
+- [x] Query-budget test: pruning is one statement however much it deletes. It
+      runs on every tick, so a prune that read the table to decide would be
+      paid for three hundred times a day for ever
+- [x] State the period — 90 days — in `docs/operations.md`
+- [x] Mutation check: dropping the retention window fails a test, and flipping
+      the cutoff from `lt` to `lte` fails the boundary test
 - _Requirements: Remembering What Happened 3.1, 3.2, 3.3, 3.4, NFR 1.2_
 - _Property: 5_
 

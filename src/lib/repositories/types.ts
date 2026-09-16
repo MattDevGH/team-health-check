@@ -24,6 +24,7 @@ import type {
   TeamSchedule,
   SlackIdentityLink,
   SchedulerHeartbeat,
+  SchedulerTickRecord,
 } from './entities';
 
 /** Complete team-creation aggregate persisted atomically by repository implementations. */
@@ -217,4 +218,18 @@ export interface SchedulerHeartbeatRepository {
   record(beat: SchedulerHeartbeat): Promise<void>;
   /** Null when the scheduler has never run — a real state with its own message. */
   latest(): Promise<SchedulerHeartbeat | null>;
+}
+
+/**
+ * Requirements: Remembering What Happened 2.1, 2.5, 3.2
+ *
+ * Appended, not replaced — the opposite policy to the heartbeat, and the
+ * reason they are two tables rather than one with a flag.
+ */
+export interface SchedulerTickRecordRepository {
+  append(record: SchedulerTickRecord): Promise<void>;
+  /** Newest first, a page at a time. */
+  recent(limit: number): Promise<SchedulerTickRecord[]>;
+  /** Removes entries older than the cutoff; returns how many went. */
+  pruneBefore(cutoff: Date): Promise<number>;
 }

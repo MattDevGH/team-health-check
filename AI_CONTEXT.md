@@ -951,6 +951,44 @@ minutes fifty executions is about two hours — enough for "what did it just do?
 useless for "what happened on Monday", which is the question this milestone is
 named after.
 
+**Phase 2 is built: the ledger keeps the ticks that did something.**
+`SchedulerTickRecord` is appended rather than replaced — the opposite policy to
+the heartbeat, and the reason they are two tables. A quiet tick writes no row:
+the heartbeat has already said the scheduler ran, and keeping quiet ticks is
+exactly what leaves fifty "nothing was due" entries and no trace of the morning
+a check opened. Retention is 90 days, pruned by the tick itself.
+
+Three defects came out of it, two of them in tests:
+
+- **`prompts` counted members considered, not prompts sent.** It incremented
+  regardless of what `sendSlackPrompt` returned, and that returns false for a
+  member with no Slack link, one marked away, or a team outside its delivery
+  window. So the response said "prompting 2 members" while sending one, and on
+  a deployment where nobody has linked Slack it claimed a whole team while
+  sending nothing. The sink assertions were right all along; nothing compared
+  them to the number the response reported.
+- **The service spread the whole `TickRecord` into the heartbeat**, which has
+  no `failures` or `reasons` columns. TypeScript accepted it — excess property
+  checking only fires on object literals — the in-memory fakes accepted it, and
+  Prisma would have rejected every heartbeat in production, *silently*, since
+  the service catches its own write failures. Found by a property test that
+  handed the service an undefined field and found it in the row. Both writes
+  map field by field now, and there is an integration test of the **service
+  over the real repositories** — the gap that hid it, since route tests use
+  fakes and repository tests build their own rows.
+- **A unit test was asserting the defect**, expecting the heartbeat repository
+  to receive the whole tick. It asserts the exact key set now; `toMatchObject`
+  passes with extra fields still there.
+
+Also worth carrying: the eventfulness **property test failed to catch a
+mutation an example test caught** — generating counts up to 50 made "four zeros
+and one non-zero" vanishingly rare. Ranges of 0..2 and 500 runs. A property test
+weaker than the example it generalises is the wrong way round.
+
+And `npm test | tail -4` hid a parse error that stopped a whole file running:
+the summary line said "1909 passed" with no failures visible. Check the exit
+code and the file count, not the tail.
+
 **Phase 1 is built: the scheduler leaves proof it ran.** `SchedulerHeartbeat`
 is one row, replaced by every tick — including a quiet one, which is the
 criterion the whole thing rests on. Four things worth carrying:
