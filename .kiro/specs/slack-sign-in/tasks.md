@@ -227,13 +227,33 @@ being speculative; it stops being speculative here, but the decision is its own.
 Not optional, and not replaceable by tests. The 2026-08-26 pass found three
 defects a 1,150-test suite could not see, each visible only outside the app.
 
-- [ ] A linked member signs in from Slack and reaches their dashboard
-- [ ] The sign-in link is ephemeral — confirm it is not visible to anyone else
-- [ ] A second use of the same link fails
-- [ ] An unlinked user gets guidance rather than an error
-- [ ] With phase 3: a never-seen member signs in with no setup at all
+Run against Matt's sandbox workspace on 2026-09-17, against the hosted app
+rather than an ngrok tunnel.
+
+- [x] A linked member signs in from Slack and reaches their dashboard
+- [x] The sign-in link is ephemeral — Slack marked it "only visible to you"
+- [x] A second use of the same link fails: "Invalid or expired access link",
+      with a route to request a new one. **The single-use claim, proven in
+      production** — until this run it had been proved against a JavaScript
+      `Map` and a temporary SQLite file, never against Turso through Slack
+- [x] `/healthcheck connect` still issues a ten-minute pairing code, so the
+      manual path is intact alongside the automatic one
+- [x] **With phase 3: an unlinked account is matched and signed in with no
+      setup at all.** Unlinked deliberately, then `signin` returned a working
+      link and the profile showed Slack linked again — which exercises the two
+      `users:read` scopes, the `users.info` call, the exact-email match, the
+      automatic link and the sign-in in one pass
+- [ ] An unlinked user gets guidance rather than an error. **Not reachable in a
+      one-person workspace**: every Slack account there matches a member, so
+      the automatic path always succeeds. Needs a second address
 - [ ] Confirm what Slack actually returns for a guest account, rather than
-      assuming the fallback path is reachable
+      assuming the fallback path is reachable. Same blocker
+- [x] **Found by this pass, and by nothing else:** `slack_binding_matched` had
+      no label, so an automatic link rendered in the audit log as "Slack
+      binding matched". Phase 2 labelled its two change types and phase 3 added
+      a third without one. Fixed, with two tests — one of which passed against
+      the defect until its regex was found to contain literal backspace
+      characters where `` was intended
 - _Requirements: 1.1, 1.2, 1.4, 3.1, 3.5_
 
 ### 5.2 Reconcile

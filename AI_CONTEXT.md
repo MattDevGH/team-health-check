@@ -951,6 +951,31 @@ minutes fifty executions is about two hours — enough for "what did it just do?
 useless for "what happened on Monday", which is the question this milestone is
 named after.
 
+**Slack sign-in works in a real workspace, proved 2026-09-17** against the
+hosted app rather than an ngrok tunnel. A linked member signs in; the reply is
+ephemeral; a second use of the link fails with "Invalid or expired access link";
+and — unlinking first — an account with no binding at all is matched on its
+verified Slack email, linked automatically, and signed in.
+
+That last one exercises the two `users:read` scopes, the `users.info` call, the
+exact-email match, the automatic link and the sign-in in a single pass. **The
+single-use claim is now proved against Turso through Slack**, where before it
+had only ever been proved against a JavaScript `Map` and a temporary file.
+
+**The pass found a defect nothing else had.** `slack_binding_matched` had no
+label, so an automatic link rendered in the audit log as "Slack binding
+matched" — phase 2 named its two change types and phase 3 added a third without
+one. Two tests watch for it now, and the second is worth remembering: it
+*passed* against the defect it was written for, because `/(binding|…)/i` in
+the source had been written to disk with literal backspace characters where the
+`` escapes belonged. The pattern required control characters around the word
+and could never match. A test that cannot fail reports safety it does not have.
+
+Two acceptance items stay open and are **not reachable in a one-person
+workspace**: the guidance an unlinked stranger sees, and what Slack returns for
+a guest account. Every account in that workspace matches a member, so the
+automatic path always succeeds. Both need a second address.
+
 **Slack sign-in is complete through phase 4.** Email is off the critical path:
 production now starts with a Resend key **or** a Slack token, and refuses with
 neither rather than accepting an address, saying "check your email" and sending
