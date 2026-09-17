@@ -1000,6 +1000,17 @@ linked — email for a member without it, Slack alone for a member with it.
   local SQLite file would prove nothing about it.
 - `PATCH /api/me/preferences` therefore treats **null as a value** and only an
   absent key as "leave it alone".
+- **Delivery consults it, and this is a reduction in what gets sent.** A member
+  with Slack linked and no preference no longer receives an email prompt.
+  Phase 2 emailed everybody with an address, which was right for a team with no
+  Slack and told everybody else twice. The gate lives inside `sendEmailPrompt`
+  rather than in its callers, so no future caller can forget it.
+- **The known hole is asserted, not implied.** A Slack-linked member who has
+  chosen nothing hears nothing when Slack delivery fails, because email
+  defaults off for them. That is the stated hole in design decision 3, and the
+  fallback needs the retry queue to report outcomes — roadmap, not this phase.
+  There is a test asserting the current behaviour so that closing it later is a
+  test that changes rather than a surprise found in production.
 - Design properties 6 and 7 are new: an explicit choice wins whatever else is
   true, and a member who has chosen nothing always has at least one channel.
   Property 6 exists because the design stated the default and never stated that
