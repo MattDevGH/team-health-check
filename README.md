@@ -243,17 +243,24 @@ on a team.
 1. Click **Install to Workspace** and authorise the app
 2. Copy the **Bot User OAuth Token** (`xoxb-...`) — set it as `SLACK_BOT_TOKEN` in your `.env`
 
-### 4. Configure the Events Endpoint
+### 4. Configure the Events Endpoint — *optional, and currently unnecessary*
+
+Nothing in the application subscribes to a Slack event. `/api/slack/events`
+answers the URL-verification challenge and acknowledges every callback without
+acting on it, so **you can skip this section entirely** and everything works:
+prompts, buttons, `/healthcheck`, and sign-in.
+
+If you want the endpoint registered anyway, for when conversational behaviour
+arrives:
 
 1. Under **Event Subscriptions**, toggle events **On**
 2. Set the Request URL to: `https://your-domain.com/api/slack/events`
    - Slack's verification challenge is implemented
    - For local development, use an HTTPS tunnel such as `ngrok http 3000`
 
-The current integration does **not** implement conversational behavior for
-`app_mention` or `message.im`; those callbacks are acknowledged only. Do not add
-those subscriptions as a functional setup requirement unless that deferred Slack
-enhancement is implemented.
+Do **not** subscribe to `app_mention` or `message.im`. Those callbacks are
+acknowledged and dropped, so subscribing advertises a behaviour the app does not
+have.
 
 ### 5. Configure Interactivity
 
@@ -272,7 +279,15 @@ enhancement is implemented.
    - **Command**: `/healthcheck`
    - **Request URL**: `https://your-domain.com/api/slack/commands`
    - **Short Description**: "Respond to the current health check"
-   - **Usage Hint**: `[connect]`
+   - **Usage Hint**: `[connect|signin]`
+
+One command, three behaviours:
+
+| What somebody types | What happens |
+|---|---|
+| `/healthcheck` | The open check's questions, as buttons |
+| `/healthcheck connect` | A pairing code, to link their account from the web profile |
+| `/healthcheck signin` | A single-use sign-in link, so they never need the email |
 
 ### 7. Account Linking — Integration Closure Status
 

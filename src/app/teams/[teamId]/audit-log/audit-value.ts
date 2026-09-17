@@ -139,6 +139,15 @@ const CHANGE_TYPE_LABELS: Record<string, string> = {
    * the application's own.
    */
   slack_binding_asserted: 'Slack account linked by a delivery manager',
+  /*
+   * Added late, and only because somebody was about to look at a real audit
+   * log. Phase 2 labelled its two change types and phase 3 introduced a third
+   * without one, so this entry read "Slack binding matched" — a variable name
+   * with the underscores taken out, which is the exact defect these labels
+   * exist to fix.
+   */
+  slack_binding_matched: 'Slack account linked automatically, by matching email',
+  slack_binding_self_linked: 'Slack account linked by the member, with a pairing code',
   slack_binding_removed: 'Slack account unlinked',
 };
 

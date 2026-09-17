@@ -153,6 +153,77 @@ describe('describeChangeType', () => {
     expect(describeChangeType('member_removed')).toBe('Member removed');
   });
 
+  it('tells the four ways a Slack account binding changes apart', () => {
+    /*
+     * Requirements: Slack Sign In 2.3, 3.6, NFR 2.1
+     *
+     * Who linked an account and on what basis are different questions, and the
+     * whole reason there are separate change types. A manager reading their
+     * own team's history should be able to see that one of these happened
+     * without a human deciding it.
+     *
+     * `slack_binding_matched` had no label until 2026-09-17: phase 2 named its
+     * two types and phase 3 added a third without one, so the entry read
+     * "Slack binding matched" — a variable name with the underscores taken
+     * out, which is the exact defect these labels exist to remove. Found by
+     * looking at what a real audit log was about to show.
+     */
+    expect(describeChangeType('slack_binding_asserted')).toMatch(/delivery manager/i);
+    expect(describeChangeType('slack_binding_matched')).toMatch(/automatically/i);
+    expect(describeChangeType('slack_binding_self_linked')).toMatch(/by the member/i);
+    expect(describeChangeType('slack_binding_removed')).toMatch(/unlinked/i);
+
+    const labels = [
+      describeChangeType('slack_binding_asserted'),
+      describeChangeType('slack_binding_matched'),
+      describeChangeType('slack_binding_self_linked'),
+      describeChangeType('slack_binding_removed'),
+    ];
+    expect(new Set(labels).size).toBe(4);
+  });
+
+  it('never shows a manager a word that only means something inside the code', () => {
+    /*
+     * The narrower rule, and the true one.
+     *
+     * A first version of this test demanded an explicit label for every change
+     * type the application writes — and failed on `team_created`, because
+     * "Team created" is a perfectly good sentence and the fallback produces it.
+     * That test encoded a preference as a project rule; the codebase
+     * deliberately lets the fallback handle types that already read well.
+     *
+     * What actually went wrong is narrower: `slack_binding_matched` fell
+     * through to "Slack binding matched", and *binding* is a word from this
+     * repository rather than from a delivery manager's vocabulary. So that is
+     * what is banned.
+     */
+    const written = [
+      'team_created',
+      'schedule_change',
+      'delivery_window_change',
+      'name_change',
+      'data_deletion',
+      'privacy_mode_changed',
+      'member_added',
+      'member_removed',
+      'role_assigned',
+      'role_removed',
+      'role_replaced',
+      'team_archived',
+      'slack_binding_asserted',
+      'slack_binding_matched',
+      'slack_binding_self_linked',
+      'slack_binding_removed',
+    ];
+    const jargon = /\b(binding|asserted|materialis|tick|payload|repo)\b/i;
+
+    for (const changeType of written) {
+      expect(describeChangeType(changeType), `${changeType} still reads as code`).not.toMatch(
+        jargon,
+      );
+    }
+  });
+
   it('is specific about which window a delivery window is', () => {
     // "Delivery window changed" could be the health check's; it is Slack's
     expect(describeChangeType('delivery_window_change')).toBe('Slack delivery window changed');
