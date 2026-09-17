@@ -982,6 +982,30 @@ had answered everything could still get back in — mutation-checked by hiding t
 link at full participation, which is exactly the "helpful" change that would
 have passed.
 
+**The email-prompt preference is nullable, and that is the design**
+(`reaching-your-health-check` 3.1). `TeamMember.emailPromptsEnabled` has three
+states: on, off, and null for *has not chosen*. The effective answer for null is
+derived by `src/lib/services/email-prompt-preference.ts` from whether Slack is
+linked — email for a member without it, Slack alone for a member with it.
+
+- A stored default could not serve both Requirement 4.3 (somebody who
+  configures nothing still hears about their check) and 5.2 (Slack stays
+  primary for anyone who has it). It would have to be chosen when the row is
+  written, before anybody knows whether Slack will be linked, and would then be
+  wrong for every member who links or unlinks afterwards.
+- **Null is not false.** A member who turned email off and a member who never
+  touched the control want different things, and nothing downstream can tell
+  them apart once a database coerces one into the other. That is proved through
+  the libSQL adapter, because Turso is where such a coercion would happen and a
+  local SQLite file would prove nothing about it.
+- `PATCH /api/me/preferences` therefore treats **null as a value** and only an
+  absent key as "leave it alone".
+- Design properties 6 and 7 are new: an explicit choice wins whatever else is
+  true, and a member who has chosen nothing always has at least one channel.
+  Property 6 exists because the design stated the default and never stated that
+  a choice overrode it — an implementation consulting the Slack link first would
+  have satisfied every example where the two happen to agree.
+
 **Slack sign-in works in a real workspace, proved 2026-09-17** against the
 hosted app rather than an ngrok tunnel. A linked member signs in; the reply is
 ephemeral; a second use of the link fails with "Invalid or expired access link";

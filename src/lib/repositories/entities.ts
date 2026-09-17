@@ -26,6 +26,8 @@ export interface TeamMember {
   email: string | null;
   cadencePreference: string;
   remindersEnabled: boolean;
+  /** Null means unchosen — the effective answer is derived from the Slack link. */
+  emailPromptsEnabled: boolean | null;
   currentStreak: number;
   bestStreak: number;
   lastStreakSessionClose: Date | null;

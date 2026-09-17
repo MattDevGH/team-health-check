@@ -30,6 +30,8 @@ export class InMemoryTeamMemberRepository implements TeamMemberRepository {
       email,
       cadencePreference: 'weekly',
       remindersEnabled: true,
+      // Unchosen. The fake must not invent a preference the column does not hold
+      emailPromptsEnabled: null,
       currentStreak: 0,
       bestStreak: 0,
       lastStreakSessionClose: null,
@@ -70,7 +72,7 @@ export class InMemoryTeamMemberRepository implements TeamMemberRepository {
 
   async update(
     id: string,
-    data: Partial<Pick<TeamMember, 'name' | 'email' | 'cadencePreference' | 'remindersEnabled' | 'currentStreak' | 'bestStreak' | 'lastStreakSessionClose'>>
+    data: Partial<Pick<TeamMember, 'name' | 'email' | 'cadencePreference' | 'remindersEnabled' | 'emailPromptsEnabled' | 'currentStreak' | 'bestStreak' | 'lastStreakSessionClose'>>
   ): Promise<TeamMember> {
     const existing = this.store.get(id);
     if (!existing) {

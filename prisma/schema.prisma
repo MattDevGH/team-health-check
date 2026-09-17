@@ -33,6 +33,10 @@ model TeamMember {
   email                  String?
   cadencePreference      String    @default("weekly")
   remindersEnabled       Boolean   @default(true)
+  /// Null means the member has not chosen. The effective answer is derived
+  /// from whether Slack is linked — see email-prompt-preference.ts. A default
+  /// of true or false here would be a choice made before anybody knew.
+  emailPromptsEnabled    Boolean?
   currentStreak          Int       @default(0)
   bestStreak             Int       @default(0)
   lastStreakSessionClose DateTime?

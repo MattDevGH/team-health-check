@@ -77,7 +77,7 @@ export interface TeamMemberRepository {
    * unsafe for sign-in, which must be able to see that there is more than one.
    */
   findAllByEmail(email: string): Promise<TeamMember[]>;
-  update(id: string, data: Partial<Pick<TeamMember, 'name' | 'email' | 'cadencePreference' | 'remindersEnabled' | 'currentStreak' | 'bestStreak' | 'lastStreakSessionClose'>>): Promise<TeamMember>;
+  update(id: string, data: Partial<Pick<TeamMember, 'name' | 'email' | 'cadencePreference' | 'remindersEnabled' | 'emailPromptsEnabled' | 'currentStreak' | 'bestStreak' | 'lastStreakSessionClose'>>): Promise<TeamMember>;
   remove(id: string): Promise<void>;
 }
 
