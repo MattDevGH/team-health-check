@@ -66,11 +66,12 @@ in each case. Phases 2 and 3 are untouched: `EmailService` still has one method,
 - [x] Failing test: it does not replace or disturb the close control — adding a
       control can make an existing one ambiguous, which this project has already
       learned once
-- [ ] Failing test: a member who has answered everything can still get back in
-      to review — the link renders unconditionally while a check collects, so
-      the behaviour is there and nothing asserts it
-- [ ] axe and keyboard operation — the panel's test file has no axe coverage at
-      all, which is a gap this reconciliation found rather than one it made
+- [x] Failing test: a member who has answered everything can still get back in
+      to review. Mutation-checked by hiding the link at full participation,
+      which is exactly the "helpful" change that would otherwise have passed
+- [x] axe on both states, and the two controls reached by keyboard in a
+      sensible order — answer before close, so somebody tabbing meets the
+      ordinary action before the destructive one
 - _Requirements: 1.1, 1.4_
 
 **Checkpoint:** the defect is fixed. A check that opens can be answered by
@@ -82,25 +83,40 @@ anyone signed in, with no delivery channel involved. One PR.
 
 ### 2.1 `EmailService` can send a prompt
 
-- [ ] Failing test: the message contains the member's session link
-- [ ] Failing test: it says when the check closes
-- [ ] Failing test: it is distinguishable from a magic link — assert the body,
-      not that a sender was called. A reminder that rendered identically to an
-      opening prompt passed a "was it called" test for an entire milestone
-- [ ] A second method rather than a `type` flag, so the templates cannot drift
-      into being the same one
+- [x] Failing test: the message contains the member's session link
+- [x] Failing test: it says when the check closes, and still sends when nothing
+      says — a check opened by hand has no scheduled close, and a prompt that
+      threw would mean opening one manually silently stopped telling anybody
+- [x] Failing test: it is distinguishable from a magic link — asserted on the
+      subject and the body, and that it carries no `/auth/magic/` link at all
+- [x] A second method rather than a `type` flag, so the templates cannot drift
+      into being the same one. The in-memory fake keeps them in **separate
+      lists** for the same reason: one list would let a test assert "an email
+      was sent" and pass when the wrong one was
 - _Requirements: 3.1, 3.3_
 
 ### 2.2 An opening check prompts by email
 
-- [ ] Failing test: an eligible member is prompted by email when a check opens
-- [ ] Failing test: availability still gates it — an away member is not
-      prompted by a channel that did not exist when that rule was written
-- [ ] Failing test: email failure does not prevent Slack delivery
-- [ ] Failing test: Slack failure does not prevent email
-- [ ] Failing test: a member is prompted at most once per check per channel,
-      through the existing `NotificationDelivery` claim
-- [ ] Failing test: a delivery failure is reported rather than swallowed
+- [x] Failing test: an eligible member is prompted by email when a check opens
+- [x] Failing test: availability still gates it — an away member is not
+      prompted by a channel that did not exist when that rule was written.
+      The delivery window gates it too
+- [x] Failing test: email failure does not prevent Slack delivery
+- [x] Failing test: Slack failure does not prevent email
+- [x] Failing test: a member is prompted at most once per check per channel,
+      through the existing `NotificationDelivery` claim — under its **own**
+      claim type, since one shared with Slack would mean a member with Slack
+      never receiving the email
+- [x] Failing test: a delivery failure is reported rather than swallowed, and
+      the record carries neither the address nor the session token
+- [x] Failing test: the email carries **that member's** link and no other, and
+      sends nothing when they have none — a session link authenticates whoever
+      holds it
+- [x] The tick counts members reached rather than messages sent: somebody who
+      got both has been prompted once as far as a reader of the response is
+      concerned
+- [x] Mutation check: the away gate fails 2 tests, falling back to any link
+      fails 1, and removing the idempotency claim fails 1
 - _Requirements: 3.2, 3.4, 3.5, NFR 2.1, NFR 2.2_
 - _Properties: 3, 4_
 

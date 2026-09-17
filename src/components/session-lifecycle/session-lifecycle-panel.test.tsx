@@ -17,10 +17,13 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { axe, toHaveNoViolations } from 'jest-axe';
 import { http, HttpResponse } from 'msw';
 
 import { server } from '@/tests/mocks/server';
 import { SessionLifecyclePanel } from './session-lifecycle-panel';
+
+expect.extend(toHaveNoViolations);
 
 const TEAM_ID = 'team-1';
 
@@ -555,6 +558,66 @@ describe('SessionLifecyclePanel offers a way to answer', () => {
     const close = await screen.findByRole('button', { name: /^close the health check$/i });
     expect(close).toBeEnabled();
     expect(countPatches(), 'rendering must not close anything').toBe(0);
+  });
+
+  it('still offers it to somebody who has answered everything', async () => {
+    /*
+     * Requirement 1.4. Responses are editable until close, so "you have
+     * answered" is not a reason to take the route away — and the panel has no
+     * idea whether the *reader* is among those who answered, only how many
+     * have.
+     *
+     * The behaviour is already right: the link renders while a check
+     * collects, unconditionally. Nothing asserted it, which is how a later
+     * "helpful" change hiding it at full participation would have passed.
+     */
+    mockParticipation('open-1', { totalCount: 8, respondedCount: 8 });
+    mockSessions({ initial: [openSession] });
+    renderPanel();
+
+    const link = await screen.findByRole('link', { name: /answer the health check/i });
+    expect(link).toHaveAttribute('href', '/me/health-check');
+  });
+
+  it('has no axe-detectable violations while collecting', async () => {
+    // NFR 3.1. This file had no axe coverage at all — a gap the phase-1
+    // reconciliation found rather than one it made
+    mockParticipation('open-1', { totalCount: 8, respondedCount: 3 });
+    mockSessions({ initial: [openSession] });
+    const { container } = renderPanel();
+
+    await screen.findByRole('link', { name: /answer the health check/i });
+
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('has no violations with nothing collecting either', async () => {
+    // The other state a reader actually lands on, and the one with a different
+    // set of controls
+    mockSessions({ initial: [] });
+    const { container } = renderPanel();
+
+    await screen.findByRole('button', { name: /open a health check/i });
+
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('reaches both controls by keyboard, in a sensible order', async () => {
+    /*
+     * Answer before close. Somebody tabbing through should meet the ordinary
+     * action before the destructive one.
+     */
+    mockParticipation('open-1', { totalCount: 8, respondedCount: 3 });
+    mockSessions({ initial: [openSession] });
+    const user = userEvent.setup();
+    renderPanel();
+
+    const answer = await screen.findByRole('link', { name: /answer the health check/i });
+    answer.focus();
+    expect(answer).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByRole('button', { name: /^close the health check$/i })).toHaveFocus();
   });
 
   it('routes through the member’s own page rather than embedding a token', async () => {

@@ -93,7 +93,7 @@ describe('createCapturingEmailService', () => {
   });
 
   it('still forwards to a delegate when one is supplied', async () => {
-    const delegate = { sendMagicLink: vi.fn(async () => {}) };
+    const delegate = { sendMagicLink: vi.fn(async () => {}), sendHealthCheckPrompt: vi.fn(async () => {}) };
     const service = createCapturingEmailService(delegate);
 
     await service.sendMagicLink('alice@example.invalid', 'tok-abc', 'http://localhost:3000');
@@ -111,6 +111,7 @@ describe('createCapturingEmailService', () => {
       sendMagicLink: vi.fn(async () => {
         throw new Error('provider down');
       }),
+      sendHealthCheckPrompt: vi.fn(async () => {}),
     };
     const service = createCapturingEmailService(delegate);
 

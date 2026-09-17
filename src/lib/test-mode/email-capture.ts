@@ -58,5 +58,32 @@ export function createCapturingEmailService(delegate?: EmailService): EmailServi
         console.error(`[test-mode] delegate email send failed: ${message}`);
       }
     },
+
+    /**
+     * Passed straight through, and deliberately **not** captured.
+     *
+     * Requirements: Reaching Your Health Check 3.1
+     *
+     * The capture exists so the E2E suite can sign in without an inbox, and a
+     * magic-link token is what it needs. A session-link token is a different
+     * credential with a different purpose, and the suite already gets one by
+     * seeding. Capturing it would widen a deliberate authentication bypass for
+     * no gain.
+     */
+    async sendHealthCheckPrompt(
+      to: string,
+      sessionLinkToken: string,
+      baseUrl: string,
+      closesAt: Date | null,
+    ): Promise<void> {
+      if (!delegate) return;
+
+      try {
+        await delegate.sendHealthCheckPrompt(to, sessionLinkToken, baseUrl, closesAt);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'unknown error';
+        console.error(`[test-mode] delegate prompt send failed: ${message}`);
+      }
+    },
   };
 }

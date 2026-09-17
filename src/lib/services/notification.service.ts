@@ -13,8 +13,11 @@ import type {
   AvailabilityRepository,
   SessionRepository,
   NotificationDeliveryRepository,
+  SessionLinkRepository,
 } from '@/lib/repositories/types';
 import type { HealthCheckSession, Team } from '@/lib/repositories/entities';
+import type { EmailService } from '@/lib/services/email.service';
+import { recorder as defaultRecorder, type Recorder } from '@/lib/observability';
 import { getLocalDayAndTime, isWithinTimeWindow } from '@/lib/local-time';
 
 /** Injectable sink that captures notification intents for delivery */
@@ -41,14 +44,44 @@ export interface NotificationServiceDeps {
    * exercise repeat delivery; production wiring always injects it.
    */
   notificationDeliveryRepo?: NotificationDeliveryRepository;
+  /**
+   * Requirements: Reaching Your Health Check 3.1, 3.2
+   *
+   * The three below are what a second channel needs, and all three are
+   * optional: a deployment with no email configured still prompts by Slack,
+   * which is the arrangement every deployment had before this existed.
+   */
+  sessionLinkRepo?: SessionLinkRepository;
+  emailService?: EmailService;
+  baseUrl?: string;
+  recorder?: Recorder;
   now?: () => Date;
 }
 
 /** Requirement 13.2: closing reminders default to 24 hours before close. */
 export const DEFAULT_REMINDER_LEAD_MS = 24 * 60 * 60 * 1000;
 
+/** What reached a member when a check opened. */
+export interface PromptOutcome {
+  slack: boolean;
+  email: boolean;
+}
+
 export interface NotificationService {
   sendSlackPrompt(memberId: string, session: HealthCheckSession): Promise<boolean>;
+  /**
+   * Tell a member by email, with their own session link.
+   *
+   * Requirements: Reaching Your Health Check 3.1, 3.5, NFR 2.2
+   */
+  sendEmailPrompt(memberId: string, session: HealthCheckSession): Promise<boolean>;
+  /**
+   * Every channel the member is eligible for, and one failing does not stop
+   * the other.
+   *
+   * Requirements: Reaching Your Health Check 3.2, 3.4
+   */
+  promptByEveryChannel(memberId: string, session: HealthCheckSession): Promise<PromptOutcome>;
   sendClosingReminder(memberId: string, session: HealthCheckSession): Promise<boolean>;
   /**
    * Reminds every eligible member when the session is inside its closing window.
@@ -80,8 +113,12 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     notificationSink,
     slackLinkChecker,
     notificationDeliveryRepo,
+    sessionLinkRepo,
+    emailService,
   } = deps;
   const now = deps.now ?? (() => new Date());
+  const baseUrl = deps.baseUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const record = deps.recorder ?? defaultRecorder;
 
   /**
    * Claims the single allowed delivery of `type` for this member and session.
@@ -144,6 +181,101 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     });
 
     return true;
+  }
+
+  /**
+   * Tell a member by email, with their own session link.
+   *
+   * Requirements: Reaching Your Health Check 3.1, 3.5, NFR 1.1, NFR 2.2
+   *
+   * The same gates as Slack, deliberately. Somebody who marked themselves away
+   * did so to stop being prompted, not to stop being prompted *in Slack*, and
+   * a new channel that ignored the setting would quietly redefine it.
+   *
+   * The link is resolved from the member, never passed in. A session link
+   * authenticates whoever holds it, so sending the wrong one would be handing
+   * somebody another member's identity.
+   */
+  async function sendEmailPrompt(
+    memberId: string,
+    session: HealthCheckSession,
+  ): Promise<boolean> {
+    if (!emailService || !sessionLinkRepo) return false;
+
+    const member = await teamMemberRepo.findById(memberId);
+    // No address is not a failure — plenty of members are Slack-only
+    if (!member?.email) return false;
+
+    const at = now();
+
+    const awayRecord = await availabilityRepo.findActiveByMemberIdAndDate(memberId, at);
+    if (awayRecord !== null) return false;
+
+    const team = await teamRepo.findById(session.teamId);
+    if (!isDeliveryWindowOpen(team, at)) return false;
+
+    const link = await sessionLinkRepo.findByMemberAndSession(memberId, session.id);
+    // Requirement 2.3: say nothing rather than fall back to another member's
+    if (!link) return false;
+
+    /*
+     * Claimed under its own type. One claim shared with Slack would mean a
+     * member with Slack never receiving the email, and a member whose Slack
+     * failed receiving neither.
+     */
+    if (!(await claimDelivery(memberId, session.id, 'email_prompt'))) return false;
+
+    await emailService.sendHealthCheckPrompt(
+      member.email,
+      link.token,
+      baseUrl,
+      session.scheduledCloseAt ?? null,
+    );
+
+    return true;
+  }
+
+  /**
+   * Every channel the member is eligible for.
+   *
+   * Requirements: Reaching Your Health Check 3.2, 3.4, NFR 2.1
+   *
+   * Each channel is attempted independently and a failure in one is recorded
+   * rather than thrown: a Resend outage that stopped Slack prompts would be a
+   * worse system than the one that had no email at all.
+   */
+  async function promptByEveryChannel(
+    memberId: string,
+    session: HealthCheckSession,
+  ): Promise<PromptOutcome> {
+    const [slack, email] = await Promise.all([
+      attempt('slack_prompt', () => sendSlackPrompt(memberId, session), memberId),
+      attempt('email_prompt', () => sendEmailPrompt(memberId, session), memberId),
+    ]);
+
+    return { slack, email };
+  }
+
+  /** Runs one channel, turning a throw into a recorded false. */
+  async function attempt(
+    channel: string,
+    send: () => Promise<boolean>,
+    memberId: string,
+  ): Promise<boolean> {
+    try {
+      return await send();
+    } catch (error: unknown) {
+      /*
+       * NFR 2.1. The magic-link path swallowed its failures and nobody could
+       * say why a colleague never heard anything. Ids and a reason only —
+       * never the address or the token.
+       */
+      record.error(`notification.${channel}.failed`, {
+        memberId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
   }
 
   /**
@@ -360,6 +492,8 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
 
   return {
     sendSlackPrompt,
+    sendEmailPrompt,
+    promptByEveryChannel,
     sendClosingReminder,
     sendDueClosingReminders,
     sendMidSessionNudge,
