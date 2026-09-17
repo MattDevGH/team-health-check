@@ -248,6 +248,17 @@ rather than an ngrok tunnel.
       the automatic path always succeeds. Needs a second address
 - [ ] Confirm what Slack actually returns for a guest account, rather than
       assuming the fallback path is reachable. Same blocker
+- [x] **Found by this pass, and by nothing else — a hole in the audit log.**
+      Matt read his own log and saw two `slack_binding_matched` entries, each
+      with "Slack user id: None" beforehand, and nothing between them saying
+      how the account came to be unlinked. Unlinking from the profile page
+      deleted straight from the repository and wrote nothing; so did linking
+      with a pairing code. Three of the four ways a binding changes were
+      audited and the two a member does for themselves were not, which is NFR
+      2.1 half-kept. Both are audited now —
+      `slack_binding_self_linked` for the pairing code, and the existing
+      `slack_binding_removed` for the unlink, since it is the same event and
+      `userId` is what says who did it
 - [x] **Found by this pass, and by nothing else:** `slack_binding_matched` had
       no label, so an automatic link rendered in the audit log as "Slack
       binding matched". Phase 2 labelled its two change types and phase 3 added

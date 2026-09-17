@@ -70,6 +70,16 @@ export interface SessionLinkAuthResult {
 export interface AuthService {
   generatePairingCode(slackUserId: string): Promise<string>;
   verifyPairingCode(memberId: string, code: string): Promise<{ slackUserId: string } | null>;
+  /**
+   * Remove the member's own Slack account link.
+   *
+   * Requirements: Slack Sign In 2.3, NFR 2.1
+   *
+   * Here rather than in the route because it audits. The route deleted
+   * straight from the repository and wrote nothing, so a member unlinking
+   * themselves left no trace at all.
+   */
+  unlinkSlackAccount(memberId: string): Promise<void>;
   requestMagicLink(email: string): Promise<void>;
   requestSlackSignIn(slackUserId: string): Promise<SlackSignInResult>;
   verifyMagicLink(token: string): Promise<MagicLinkVerifyResult>;
@@ -176,9 +186,68 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
     // Persist Slack identity link (upsert to handle re-linking)
     if (slackIdentityLinkRepo) {
       await slackIdentityLinkRepo.upsertByMemberId(memberId, stored.slackUserId);
+      /*
+       * A third way a binding comes about, and it was the only one that left
+       * no record. `asserted` is a manager's doing, `matched` is the
+       * application's, and this is the member's own — "on what basis" is the
+       * question a single change type could not answer.
+       */
+      await recordBindingChange(memberId, 'slack_binding_self_linked', {
+        previous: null,
+        next: stored.slackUserId,
+      });
     }
 
     return { slackUserId: stored.slackUserId };
+  }
+
+  /**
+   * Remove the member's own Slack account link.
+   *
+   * Requirements: Slack Sign In 2.3, NFR 2.1
+   *
+   * The same change type a manager's removal writes, because it is the same
+   * event — `userId` is what says who did it, and that is exactly what it is
+   * for.
+   */
+  async function unlinkSlackAccount(memberId: string): Promise<void> {
+    if (!slackIdentityLinkRepo) return;
+
+    const existing = await slackIdentityLinkRepo.findByMemberId(memberId);
+    // Nothing to remove is not a change, and recording it would suggest one
+    if (!existing) return;
+
+    await slackIdentityLinkRepo.delete(memberId);
+    await recordBindingChange(memberId, 'slack_binding_removed', {
+      previous: existing.slackUserId,
+      next: null,
+    });
+  }
+
+  /**
+   * One audit entry for a binding that changed.
+   *
+   * The team comes from the member, because an audit log is read per team and
+   * an entry with no team is an entry nobody will see. Ids only — the address
+   * an email match was made on has no business here.
+   */
+  async function recordBindingChange(
+    memberId: string,
+    changeType: string,
+    slackUserId: { previous: string | null; next: string | null },
+  ): Promise<void> {
+    if (!auditLogRepo || !teamMemberRepo) return;
+
+    const member = await teamMemberRepo.findById(memberId);
+    if (!member) return;
+
+    await auditLogRepo.create({
+      teamId: member.teamId,
+      changeType,
+      previousValue: JSON.stringify({ memberId, slackUserId: slackUserId.previous }),
+      newValue: JSON.stringify({ memberId, slackUserId: slackUserId.next }),
+      userId: memberId,
+    });
   }
 
   /**
@@ -536,6 +605,7 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
   return {
     generatePairingCode,
     verifyPairingCode,
+    unlinkSlackAccount,
     requestMagicLink,
     requestSlackSignIn,
     verifyMagicLink,

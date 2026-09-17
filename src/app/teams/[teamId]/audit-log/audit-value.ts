@@ -147,6 +147,7 @@ const CHANGE_TYPE_LABELS: Record<string, string> = {
    * exist to fix.
    */
   slack_binding_matched: 'Slack account linked automatically, by matching email',
+  slack_binding_self_linked: 'Slack account linked by the member, with a pairing code',
   slack_binding_removed: 'Slack account unlinked',
 };
 

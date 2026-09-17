@@ -153,7 +153,7 @@ describe('describeChangeType', () => {
     expect(describeChangeType('member_removed')).toBe('Member removed');
   });
 
-  it('tells the three ways a Slack account gets linked apart', () => {
+  it('tells the four ways a Slack account binding changes apart', () => {
     /*
      * Requirements: Slack Sign In 2.3, 3.6, NFR 2.1
      *
@@ -170,14 +170,16 @@ describe('describeChangeType', () => {
      */
     expect(describeChangeType('slack_binding_asserted')).toMatch(/delivery manager/i);
     expect(describeChangeType('slack_binding_matched')).toMatch(/automatically/i);
+    expect(describeChangeType('slack_binding_self_linked')).toMatch(/by the member/i);
     expect(describeChangeType('slack_binding_removed')).toMatch(/unlinked/i);
 
     const labels = [
       describeChangeType('slack_binding_asserted'),
       describeChangeType('slack_binding_matched'),
+      describeChangeType('slack_binding_self_linked'),
       describeChangeType('slack_binding_removed'),
     ];
-    expect(new Set(labels).size).toBe(3);
+    expect(new Set(labels).size).toBe(4);
   });
 
   it('never shows a manager a word that only means something inside the code', () => {
@@ -210,6 +212,7 @@ describe('describeChangeType', () => {
       'team_archived',
       'slack_binding_asserted',
       'slack_binding_matched',
+      'slack_binding_self_linked',
       'slack_binding_removed',
     ];
     const jargon = /\b(binding|asserted|materialis|tick|payload|repo)\b/i;

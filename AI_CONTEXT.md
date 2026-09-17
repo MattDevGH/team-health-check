@@ -962,6 +962,19 @@ exact-email match, the automatic link and the sign-in in a single pass. **The
 single-use claim is now proved against Turso through Slack**, where before it
 had only ever been proved against a JavaScript `Map` and a temporary file.
 
+**And a second one, from Matt reading his own audit log.** It showed two
+`slack_binding_matched` entries, each preceded by "Slack user id: None", with
+nothing between them saying how the account had become unlinked. Unlinking from
+the profile page deleted straight from the repository and wrote no audit entry;
+linking with a pairing code did the same. Three of the four ways a binding
+changes were recorded and the two a member does for themselves were not — NFR
+2.1 half-kept, and a log with a hole in it reads as a log that is complete.
+
+Both are recorded now. `slack_binding_self_linked` for the pairing code, and
+the existing `slack_binding_removed` for the unlink: it is the same event as a
+manager's removal, and `userId` is what distinguishes who did it, which is what
+that field is for.
+
 **The pass found a defect nothing else had.** `slack_binding_matched` had no
 label, so an automatic link rendered in the audit log as "Slack binding
 matched" — phase 2 named its two change types and phase 3 added a third without

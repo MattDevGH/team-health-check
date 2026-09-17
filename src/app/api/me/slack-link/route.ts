@@ -1,15 +1,15 @@
 /**
  * DELETE /api/me/slack-link — Unlink Slack identity
  *
- * Requirements: 2.6, 2.1, 2.4, 9.3
- * Thin route handler: authenticate, delete the SlackIdentityLink record.
+ * Requirements: 2.6, 2.1, 2.4, 9.3; Slack Sign In 2.3, NFR 2.1
+ * Thin route handler: authenticate, delegate to the service.
  * Uses getAuthContext for cookie-based authentication (no x-member-id header).
  */
 
 import { NextRequest } from 'next/server';
 
 import { withErrorHandling } from '@/lib/api-utils';
-import { repos } from '@/lib/container-production';
+import { container, repos } from '@/lib/container-production';
 import { createGetAuthContext } from '@/lib/auth/with-auth';
 
 // Test seam: allows route tests to seed data via repos
@@ -27,6 +27,13 @@ export const DELETE = withErrorHandling(async (request: Request) => {
     );
   }
 
-  await repos.slackIdentityLink.delete(auth.memberId);
+  /*
+   * Through the service, because unlinking is audited.
+   *
+   * This deleted straight from the repository and wrote nothing, so a member
+   * unlinking themselves left no trace — found on 2026-09-17 by reading a real
+   * audit log, which showed an account linked twice and never unlinked.
+   */
+  await container.auth.unlinkSlackAccount(auth.memberId);
   return Response.json({ success: true, message: 'Slack identity unlinked' });
 });
