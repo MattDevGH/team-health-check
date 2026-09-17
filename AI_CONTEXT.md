@@ -951,6 +951,37 @@ minutes fifty executions is about two hours — enough for "what did it just do?
 useless for "what happened on Monday", which is the question this milestone is
 named after.
 
+**Email can carry a prompt now** (`reaching-your-health-check` phases 1–2).
+Before this, `EmailService` had exactly one method and the tick called
+`sendSlackPrompt` and nothing else — so a team without Slack was never told a
+check had opened. Email was the only way *in* and Slack the only way to hear
+there was anything to do: two single points of failure pointing in opposite
+directions.
+
+- `sendHealthCheckPrompt` is a **second method, not a `type` flag**, so the
+  templates cannot drift into being the same one. The in-memory fake keeps them
+  in separate lists for the same reason: one list would let a test assert "an
+  email was sent" and pass when the wrong one was, which is the exact shape of
+  the reminder defect this project already shipped once.
+- `promptByEveryChannel` attempts both independently. **One failing does not
+  stop the other** — a Resend outage that stopped Slack prompts would be worse
+  than having no email at all — and each failure is recorded with ids only,
+  never the address or the session token.
+- The **away and delivery-window gates apply to email**. Somebody who marked
+  themselves away did so to stop being prompted, not to stop being prompted *in
+  Slack*, and a new channel ignoring that would quietly redefine the setting.
+- Idempotency is claimed under its **own** type. Sharing Slack's claim would
+  mean a member with Slack never receiving the email, and a member whose Slack
+  failed receiving neither.
+- The email resolves **that member's own** session link and sends nothing if
+  they have none. A session link authenticates whoever holds it.
+
+Phase 1 was already built; the two boxes it had left were real. The panel's
+test file had **no axe coverage at all**, and nothing asserted that somebody who
+had answered everything could still get back in — mutation-checked by hiding the
+link at full participation, which is exactly the "helpful" change that would
+have passed.
+
 **Slack sign-in works in a real workspace, proved 2026-09-17** against the
 hosted app rather than an ngrok tunnel. A linked member signs in; the reply is
 ephemeral; a second use of the link fails with "Invalid or expired access link";

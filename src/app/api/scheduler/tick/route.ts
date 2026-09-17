@@ -28,6 +28,8 @@ import { createInteractionQueue } from '@/lib/slack/interaction-queue';
 import { createQueuedDeliveryDispatcher } from '@/lib/slack/queue-drain';
 import { createInteractionResponder } from '@/lib/slack/interaction-response';
 import type { NotificationSink } from '@/lib/services/notification.service';
+import type { EmailService } from '@/lib/services/email.service';
+import { emailService as productionEmailService } from '@/lib/container-production';
 
 /**
  * Test seam: lets route tests drive the exported handler with a recording sink
@@ -35,6 +37,8 @@ import type { NotificationSink } from '@/lib/services/notification.service';
  */
 interface TickTestDeps {
   notificationSink?: NotificationSink;
+  /** Lets a route test assert what an email prompt carried. */
+  emailService?: EmailService;
   now?: () => Date;
   /** Replaces the Slack transports used when draining the retry queue. */
   queueDeliver?: (responseUrl: string, payload: string) => Promise<boolean>;
@@ -151,6 +155,16 @@ export const POST = withErrorHandling(async (request: Request) => {
     notificationDeliveryRepo: repos.notificationDelivery,
     notificationSink: recordedSink,
     slackLinkChecker,
+    /*
+     * Requirements: Reaching Your Health Check 3.1, 3.2
+     *
+     * The second channel. Absent an email provider these are undefined and the
+     * tick prompts by Slack alone, which is the arrangement every deployment
+     * had before this existed.
+     */
+    sessionLinkRepo: repos.sessionLink,
+    emailService: _testDeps.emailService ?? productionEmailService,
+    recorder,
     now: tickClock,
   });
 
@@ -170,15 +184,18 @@ export const POST = withErrorHandling(async (request: Request) => {
       const members = await repos.teamMember.findByTeamId(team.id);
       for (const member of members) {
         /*
-         * The return value decides the count.
+         * Every channel the member is eligible for, not only Slack.
          *
-         * This incremented once per member regardless, and `sendSlackPrompt`
-         * returns false for a member with no Slack link, one marked away, or a
-         * team outside its delivery window. So the response said "prompting 2
-         * members" while sending one, and on a deployment where nobody has
-         * linked Slack it claimed a whole team while sending nothing.
+         * A team with no Slack was never told a check had opened — the tick
+         * called `sendSlackPrompt` and nothing else. One channel failing does
+         * not stop the other, and each failure is recorded.
+         *
+         * The count is of members reached, not messages sent: somebody who
+         * got both has been prompted once as far as a person reading the
+         * response is concerned.
          */
-        if (await notificationService.sendSlackPrompt(member.id, openSession)) {
+        const reached = await notificationService.promptByEveryChannel(member.id, openSession);
+        if (reached.slack || reached.email) {
           prompts += 1;
         }
       }

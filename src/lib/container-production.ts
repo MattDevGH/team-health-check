@@ -32,7 +32,13 @@ const resendEmailService = process.env.RESEND_API_KEY
  * can sign in without an inbox. Any real sender still runs behind it.
  * See src/lib/test-mode/email-capture.ts for the security caveat.
  */
-const emailService = isTestMode()
+/**
+ * Exported so the scheduler tick can prompt by email as well as Slack.
+ *
+ * Requirements: Reaching Your Health Check 3.2. Undefined when no provider is
+ * configured, which is what makes the second channel optional.
+ */
+export const emailService = isTestMode()
   ? createCapturingEmailService(resendEmailService)
   : resendEmailService;
 

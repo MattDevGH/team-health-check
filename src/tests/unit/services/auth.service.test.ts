@@ -387,6 +387,7 @@ describe('AuthService.requestMagicLink — EmailService integration', () => {
     // Replace emailService with one that throws
     const failingEmailService = {
       sendMagicLink: vi.fn().mockRejectedValue(new Error('Network timeout')),
+      sendHealthCheckPrompt: vi.fn(),
     };
     const authWithFailingEmail = createAuthService({
       pairingCodeRepo: repos.pairingCode,
