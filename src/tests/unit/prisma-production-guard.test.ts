@@ -53,10 +53,13 @@ describe('assertProductionReady', () => {
   });
 
   it('allows a production environment that has one', () => {
+    // A sign-in provider too, since production is refused without one — this
+    // test is about the database URL and should not fail for another reason
     expect(() =>
       assertProductionReady({
         NODE_ENV: 'production',
         TURSO_DATABASE_URL: 'libsql://team-health.turso.io',
+        RESEND_API_KEY: 're_test',
       }),
     ).not.toThrow();
   });
@@ -102,7 +105,18 @@ describe('the instrumentation hook', () => {
  * production not define it at all.
  */
 describe('assertProductionReady and TEST_MODE', () => {
-  const configured = { NODE_ENV: 'production', TURSO_DATABASE_URL: 'libsql://x.turso.io' };
+  /*
+   * A production environment with nothing else wrong with it.
+   *
+   * `RESEND_API_KEY` is here because a production process with no way for
+   * anybody to sign in is refused too — these tests are about TEST_MODE, and
+   * an environment that failed for a second reason would not exercise it.
+   */
+  const configured = {
+    NODE_ENV: 'production',
+    TURSO_DATABASE_URL: 'libsql://x.turso.io',
+    RESEND_API_KEY: 're_test',
+  };
 
   it('refuses a production environment with test mode enabled', () => {
     expect(() => assertProductionReady({ ...configured, TEST_MODE: 'true' })).toThrow();
@@ -202,5 +216,84 @@ describe('assertProductionReady and the end-to-end suite', () => {
     expect(() =>
       assertProductionReady({ NODE_ENV: 'production', TEST_MODE: 'true', E2E_LOCAL_RUN: '1' }),
     ).toThrow();
+  });
+});
+
+describe('a production process with no way for anybody to sign in', () => {
+  /*
+   * Requirements: Slack Sign In 5.1, 5.2, 5.3
+   *
+   * There are two ways in now, and the application is fully usable with
+   * either. With neither, every route still answers and the sign-in page still
+   * renders — it simply cannot deliver anything, and the person trying to use
+   * it sees "check your email" and waits for ever. That is the exact silence
+   * the whole Slack sign-in spec exists to remove, so it fails at startup
+   * where somebody deploying will meet it.
+   */
+  const withDatabase = {
+    NODE_ENV: 'production',
+    TURSO_DATABASE_URL: 'libsql://example.turso.io',
+  };
+
+  it('refuses to start', () => {
+    expect(() => assertProductionReady(withDatabase)).toThrow();
+  });
+
+  it('says what is missing, and that either would do', () => {
+    // A guard that stops the deployment without saying which of two variables
+    // to set has moved the puzzle rather than solved it
+    expect(() => assertProductionReady(withDatabase)).toThrow(/RESEND_API_KEY/);
+    expect(() => assertProductionReady(withDatabase)).toThrow(/SLACK_BOT_TOKEN/);
+  });
+
+  it('names the consequence, not just the variable', () => {
+    expect(() => assertProductionReady(withDatabase)).toThrow(/sign in|signing in/i);
+  });
+});
+
+describe('a production process with one way in', () => {
+  const withDatabase = {
+    NODE_ENV: 'production',
+    TURSO_DATABASE_URL: 'libsql://example.turso.io',
+  };
+
+  it('starts with email alone', () => {
+    // Requirement 5.2. The arrangement every deployment had before Slack
+    // sign-in existed, and it must keep working unchanged
+    expect(() =>
+      assertProductionReady({ ...withDatabase, RESEND_API_KEY: 're_test' }),
+    ).not.toThrow();
+  });
+
+  it('starts with Slack alone', () => {
+    /*
+     * Requirement 5.1, and the point of the whole spec: a team can be run
+     * without a verified sending domain, which is the thing that made this
+     * untrialable.
+     */
+    expect(() =>
+      assertProductionReady({ ...withDatabase, SLACK_BOT_TOKEN: 'xoxb-test' }),
+    ).not.toThrow();
+  });
+
+  it('treats an empty string as absent', () => {
+    // A variable set to nothing is the shape a misconfigured deployment takes,
+    // and it would otherwise satisfy a presence check
+    expect(() =>
+      assertProductionReady({ ...withDatabase, RESEND_API_KEY: '', SLACK_BOT_TOKEN: '' }),
+    ).toThrow(/SLACK_BOT_TOKEN/);
+  });
+
+  it('leaves development alone', () => {
+    // The local suites and the dev server have neither, and need neither
+    expect(() => assertProductionReady({ NODE_ENV: 'development' })).not.toThrow();
+  });
+
+  it('leaves the end-to-end run alone', () => {
+    // It marks itself, and captures magic-link tokens in process rather than
+    // sending them
+    expect(() =>
+      assertProductionReady({ ...withDatabase, E2E_LOCAL_RUN: 'true' }),
+    ).not.toThrow();
   });
 });

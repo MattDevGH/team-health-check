@@ -17,8 +17,10 @@ import type {
   SessionLinkRepository,
   SessionRepository,
   SlackIdentityLinkRepository,
+  AuditLogRepository,
 } from '@/lib/repositories/types';
 import type { EmailService } from '@/lib/services/email.service';
+import type { SlackUserDirectory } from '@/lib/slack/user-directory';
 
 /**
  * What a Slack sign-in request produced.
@@ -47,7 +49,17 @@ export interface AuthServiceDeps {
   sessionLinkRepo?: SessionLinkRepository;
   sessionRepo?: SessionRepository;
   slackIdentityLinkRepo?: SlackIdentityLinkRepository;
+  auditLogRepo?: AuditLogRepository;
   emailService?: EmailService;
+  /**
+   * Reads a Slack user's verified email, when the workspace grants the scope.
+   *
+   * Requirements: Slack Sign In 3.1, 3.5. Optional on purpose: a deployment
+   * without `users:read.email` still has the manager-asserted path, and the
+   * two are separable so that a new scope stays a decision rather than a
+   * prerequisite.
+   */
+  slackUserDirectory?: SlackUserDirectory;
 }
 
 export interface SessionLinkAuthResult {
@@ -124,7 +136,7 @@ function generateRandomCode(): string {
  * Accepts repository dependencies via injection.
  */
 export function createAuthService(deps: AuthServiceDeps): AuthService {
-  const { pairingCodeRepo, magicLinkRepo, teamMemberRepo, userSessionRepo, pendingGenesisRepo, sessionLinkRepo, sessionRepo, slackIdentityLinkRepo, emailService } = deps;
+  const { pairingCodeRepo, magicLinkRepo, teamMemberRepo, userSessionRepo, pendingGenesisRepo, sessionLinkRepo, sessionRepo, slackIdentityLinkRepo, auditLogRepo, emailService, slackUserDirectory } = deps;
 
   /**
    * Generate a pairing code for Slack identity linking.
@@ -308,16 +320,80 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
     }
 
     const link = await slackIdentityLinkRepo.findBySlackUserId(slackUserId);
-    if (!link) return { status: 'unlinked' };
+    const memberId = link?.memberId ?? (await matchByVerifiedEmail(slackUserId));
+    if (!memberId) return { status: 'unlinked' };
 
     const token = crypto.randomBytes(32).toString('hex');
     await magicLinkRepo.create({
       token,
-      memberId: link.memberId,
+      memberId,
       expiresAt: new Date(Date.now() + MAGIC_LINK_EXPIRY_MS),
     });
 
     return { status: 'issued', token };
+  }
+
+  /**
+   * The member this Slack account belongs to, according to Slack's own email.
+   *
+   * Requirements: Slack Sign In 3.1, 3.2, 3.3, 3.4, 3.6, 4.1
+   * Properties: 1 (no Slack interaction creates a member), 4 (ambiguity refuses)
+   *
+   * Returns null for every reason it cannot match — no directory, no readable
+   * email, no member, or more than one. The caller replies identically to all
+   * of them, which is what stops the command being a way of asking who is on a
+   * team.
+   */
+  async function matchByVerifiedEmail(slackUserId: string): Promise<string | null> {
+    if (!slackUserDirectory || !teamMemberRepo || !slackIdentityLinkRepo) return null;
+
+    const email = await slackUserDirectory.emailFor(slackUserId);
+    if (!email) return null;
+
+    /*
+     * Exact, and case-insensitive only because an address is. Prefix or domain
+     * matching would let anybody in the workspace with an address at the same
+     * company sign in as a colleague, which is the whole risk this carries.
+     */
+    const members = await teamMemberRepo.findAllByEmail(email.trim().toLowerCase());
+
+    if (members.length > 1) {
+      /*
+       * The same refusal the magic-link route makes, for the same reason: the
+       * schema permits one address on members of two teams, and choosing would
+       * sign somebody into a team at random.
+       */
+      recorder.error('signin.ambiguous', {
+        count: members.length,
+        message: 'one address matches members on several teams; no Slack sign-in issued',
+      });
+      return null;
+    }
+
+    const member = members[0];
+    // Requirement 4.1: workspace membership is not team membership, so a match
+    // that finds nobody creates nobody
+    if (!member) return null;
+
+    await slackIdentityLinkRepo.upsertByMemberId(member.id, slackUserId);
+
+    if (auditLogRepo) {
+      await auditLogRepo.create({
+        teamId: member.teamId,
+        /*
+         * Distinct from `slack_binding_asserted`. "Who linked this" and "on
+         * what basis" are different questions, and one change type would
+         * answer only the first.
+         */
+        changeType: 'slack_binding_matched',
+        previousValue: JSON.stringify({ memberId: member.id, slackUserId: null }),
+        // Ids, never the address the match was made on
+        newValue: JSON.stringify({ memberId: member.id, slackUserId }),
+        userId: member.id,
+      });
+    }
+
+    return member.id;
   }
 
   async function verifyMagicLink(token: string): Promise<MagicLinkVerifyResult> {

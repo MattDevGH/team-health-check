@@ -1,7 +1,7 @@
 /**
  * Configuration that must be right before the server accepts a request.
  *
- * Requirements: Deployment 2.1, 2.3
+ * Requirements: Deployment 2.1, 2.3; Slack Sign In 5.1, 5.2, 5.3
  *
  * These are the mistakes that would otherwise be discovered by a user rather
  * than by a deployment: a production process with nowhere durable to write.
@@ -31,6 +31,8 @@ export interface StartupEnvironment {
   TURSO_DATABASE_URL?: string;
   TEST_MODE?: string;
   E2E_LOCAL_RUN?: string;
+  RESEND_API_KEY?: string;
+  SLACK_BOT_TOKEN?: string;
 }
 
 /**
@@ -78,6 +80,7 @@ export function assertProductionReady(env: StartupEnvironment): void {
     );
   }
 
+
   /**
    * `/api/test/magic-link` returns a live magic-link token when TEST_MODE is
    * enabled — a complete authentication bypass for anyone who can reach it.
@@ -95,6 +98,28 @@ export function assertProductionReady(env: StartupEnvironment): void {
         'tokens through /api/test/magic-link, which is an authentication bypass for ' +
         'anyone who can reach the URL. Remove TEST_MODE from the production ' +
         'environment entirely; it exists for the end-to-end suite.',
+    );
+  }
+  /**
+   * Requirements: Slack Sign In 5.1, 5.2, 5.3
+   *
+   * There are two ways into this application, and either alone is enough:
+   * a magic link by email, or a sign-in link from Slack. With neither, every
+   * route still answers and the sign-in page still renders — it simply cannot
+   * deliver anything, and somebody trying to use it sees "check your email"
+   * and waits for ever.
+   *
+   * That silence is the exact failure this spec was written to remove, so it
+   * is caught here rather than by the first person to try signing in. Empty
+   * counts as absent: a variable set to nothing is the shape a misconfigured
+   * deployment actually takes.
+   */
+  if (!env.RESEND_API_KEY && !env.SLACK_BOT_TOKEN) {
+    throw new Error(
+      'Neither RESEND_API_KEY nor SLACK_BOT_TOKEN is set, so nobody could sign in: ' +
+        'the application would accept an address, say "check your email", and send ' +
+        'nothing. Set RESEND_API_KEY to sign in by email, or SLACK_BOT_TOKEN to sign ' +
+        'in from Slack. Either alone is enough.',
     );
   }
 }

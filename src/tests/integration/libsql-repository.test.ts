@@ -25,6 +25,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '@/generated/prisma';
 import { PrismaTeamRepository } from '@/lib/repositories/prisma/team.repository';
 import { PrismaSlackIdentityLinkRepository } from '@/lib/repositories/prisma/slack-identity-link.repository';
+import { PrismaTeamMemberRoleRepository } from '@/lib/repositories/prisma/team-member-role.repository';
 import { PrismaNotificationDeliveryRepository } from '@/lib/repositories/prisma/notification-delivery.repository';
 
 const MIGRATIONS_DIR = path.resolve(process.cwd(), 'prisma', 'migrations');
@@ -131,6 +132,64 @@ describe('repositories over the libSQL adapter', () => {
     await expect(
       repository.hasDelivered(claim.memberId, claim.sessionId, claim.type),
     ).resolves.toBe(true);
+  });
+
+  it('takes a removed member’s way in with them', async () => {
+    /*
+     * Requirements: Slack Sign In 4.4; Property 6
+     *
+     * A Slack identity link is a standing statement that this account *is*
+     * this person. If it outlives the membership it names, somebody removed
+     * from a team can still type a slash command and be handed a session.
+     *
+     * The in-memory fake disagreed with this until 2026-09-17 — it removed the
+     * member and left the link — so this is the tier that decides. The deletes
+     * happen inside one transaction, which is a database behaviour and not a
+     * repository one.
+     */
+    const team = await new PrismaTeamRepository(prisma).create({ name: 'Revocation Team' });
+    const [stays, leaves] = await Promise.all([
+      prisma.teamMember.create({
+        data: { teamId: team.id, name: 'Stays', email: 'stays@revocation.invalid' },
+      }),
+      prisma.teamMember.create({
+        data: { teamId: team.id, name: 'Leaves', email: 'leaves@revocation.invalid' },
+      }),
+    ]);
+    await prisma.teamMemberRole.createMany({
+      data: [
+        { memberId: stays.id, teamId: team.id, role: 'delivery_manager' },
+        { memberId: leaves.id, teamId: team.id, role: 'team_member' },
+      ],
+    });
+    const links = new PrismaSlackIdentityLinkRepository(prisma);
+    await links.create({ memberId: stays.id, slackUserId: 'U_STAYS' });
+    await links.create({ memberId: leaves.id, slackUserId: 'U_LEAVES' });
+    await prisma.userSession.create({
+      data: {
+        memberId: leaves.id,
+        token: 'revocation-session',
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+    await prisma.magicLink.create({
+      data: {
+        memberId: leaves.id,
+        token: 'revocation-magic',
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+    await new PrismaTeamMemberRoleRepository(prisma).removeMemberWithRoleProtection(
+      leaves.id,
+      team.id,
+    );
+
+    expect(await links.findBySlackUserId('U_LEAVES')).toBeNull();
+    expect(await prisma.userSession.findUnique({ where: { token: 'revocation-session' } })).toBeNull();
+    expect(await prisma.magicLink.findUnique({ where: { token: 'revocation-magic' } })).toBeNull();
+    // and the colleague who stayed is untouched
+    expect(await links.findBySlackUserId('U_STAYS')).toMatchObject({ memberId: stays.id });
   });
 
   it('reports no delivery for an unclaimed combination', async () => {

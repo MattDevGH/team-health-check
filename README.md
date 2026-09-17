@@ -220,11 +220,23 @@ Under **OAuth & Permissions**, add these Bot Token Scopes:
 | `chat:write` | Send health check prompts and reminders — `chat.postMessage` is the only Slack Web API call the app makes |
 | `commands` | Handle the `/healthcheck` slash command |
 | `im:write` | Open the DM conversation when posting to a user ID |
+| `users:read`, `users:read.email` | Read a member's verified email on `/healthcheck signin`, so somebody nobody has set up can be matched to their team — the only call to `users.info` |
 
-These three are sufficient. `users:read` was previously listed here but nothing
-calls `users.info`; the Task 24.5 acceptance pass ran with only the three scopes
-above and every flow worked, so it has been removed rather than granted
-speculatively.
+**The last two are optional.** `users:read` was listed here once and then
+removed, because nothing called `users.info` and the Task 24.5 acceptance pass
+ran without it. That reasoning was about it being *unused*, not unwanted, and
+Slack sign-in is the thing that uses it.
+
+Without them, everything still works: a delivery manager records each member's
+Slack ID in team settings and those members sign in normally. With them, a
+member nobody has set up can run `/healthcheck signin` and be matched by the
+address Slack has already verified. A workspace that has not granted the scopes
+falls back to the manual path rather than failing — and the refusal is recorded
+as `slack.email.unavailable` with Slack's own error, so `missing_scope` is
+visible in the log rather than inferred from members who cannot sign in.
+
+A matching email never *creates* a member. Being in the workspace is not being
+on a team.
 
 ### 3. Install to Workspace
 

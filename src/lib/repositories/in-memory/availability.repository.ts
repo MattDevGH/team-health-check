@@ -34,4 +34,18 @@ export class InMemoryAvailabilityRepository implements AvailabilityRepository {
     }
     this.store.delete(id);
   }
+  /**
+   * Everything this member owns, gone with them.
+   *
+   * Requirements: Slack Sign In 4.4. Not part of the repository interface —
+   * the Prisma removal does this inside one transaction, and this exists so
+   * the fake tells the same truth. It did not, and a member removed from a
+   * team kept a working Slack identity link in every test that used fakes.
+   */
+  removeByMemberId(memberId: string): void {
+    for (const [key, value] of this.store) {
+      if (value.memberId === memberId) this.store.delete(key);
+    }
+  }
+
 }
