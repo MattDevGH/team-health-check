@@ -982,6 +982,71 @@ had answered everything could still get back in — mutation-checked by hiding t
 link at full participation, which is exactly the "helpful" change that would
 have passed.
 
+**The email-prompt preference is nullable, and that is the design**
+(`reaching-your-health-check` 3.1). `TeamMember.emailPromptsEnabled` has three
+states: on, off, and null for *has not chosen*. The effective answer for null is
+derived by `src/lib/services/email-prompt-preference.ts` from whether Slack is
+linked — email for a member without it, Slack alone for a member with it.
+
+- A stored default could not serve both Requirement 4.3 (somebody who
+  configures nothing still hears about their check) and 5.2 (Slack stays
+  primary for anyone who has it). It would have to be chosen when the row is
+  written, before anybody knows whether Slack will be linked, and would then be
+  wrong for every member who links or unlinks afterwards.
+- **Null is not false.** A member who turned email off and a member who never
+  touched the control want different things, and nothing downstream can tell
+  them apart once a database coerces one into the other. That is proved through
+  the libSQL adapter, because Turso is where such a coercion would happen and a
+  local SQLite file would prove nothing about it.
+- `PATCH /api/me/preferences` therefore treats **null as a value** and only an
+  absent key as "leave it alone".
+- **Delivery consults it, and this is a reduction in what gets sent.** A member
+  with Slack linked and no preference no longer receives an email prompt.
+  Phase 2 emailed everybody with an address, which was right for a team with no
+  Slack and told everybody else twice. The gate lives inside `sendEmailPrompt`
+  rather than in its callers, so no future caller can forget it.
+- **The control shows the effective state, not the stored one**
+  (`src/app/me/email-prompt-toggle.tsx`). A switch rendered off for somebody who
+  is in fact being emailed would be a lie told by a perfectly accessible
+  control. When it is following the default it says which default and why,
+  because "off because you said so" and "off because Slack can reach you"
+  behave differently the moment Slack is unlinked. Touching it always writes a
+  boolean: a click cannot have meant "put me back on the default".
+- The explanation names what it governs (the prompt when a check opens), what
+  it does not ("signing in is never affected: your access links arrive by email
+  whatever this says"), and how it differs from Reminders above it — which
+  governs *which* messages are sent rather than *how* they arrive.
+  Requirement 4.5 exists because "email notifications" alone does not say
+  whether sign-in is included, and this application sends its access links by
+  email.
+- `sign-in-survives-preferences.test.ts` is Property 5, and it was green the
+  moment it was written: nothing on the magic-link path reads a preference.
+  That is the point — it is an invariant about a path with every reason to grow
+  a check later, and adding one fails 3 tests.
+- **The known hole is asserted, not implied.** A Slack-linked member who has
+  chosen nothing hears nothing when Slack delivery fails, because email
+  defaults off for them. That is the stated hole in design decision 3, and the
+  fallback needs the retry queue to report outcomes — roadmap, not this phase.
+  There is a test asserting the current behaviour so that closing it later is a
+  test that changes rather than a surprise found in production.
+- Design properties 6 and 7 are new: an explicit choice wins whatever else is
+  true, and a member who has chosen nothing always has at least one channel.
+  Property 6 exists because the design stated the default and never stated that
+  a choice overrode it — an implementation consulting the Slack link first would
+  have satisfied every example where the two happen to agree.
+
+Phases 1 to 3 of `reaching-your-health-check` are complete — 43 of its 51
+boxes. What is left is phase 4: a contributor walking both surfaces in a
+browser, axe in the browser tier, and the production pass (open a check on the
+deployed application, answer it with no session link from any message, read the
+response back out of Turso, and — once a sending domain is verified — confirm
+an email prompt arrives and is not mistaken for a sign-in email).
+
+The channels are documented in README ("How a member hears a check has opened")
+and `docs/deployment.md` ("The two ways out"), including the part worth saying
+out loud: until 2026-09-18 Slack was the only prompt channel, so a deployment
+without it opened checks on schedule and told nobody they existed.
+
 **Slack sign-in works in a real workspace, proved 2026-09-17** against the
 hosted app rather than an ngrok tunnel. A linked member signs in; the reply is
 ephemeral; a second use of the link fails with "Invalid or expired access link";

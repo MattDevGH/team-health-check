@@ -91,6 +91,7 @@ export class PrismaTeamMemberRepository implements TeamMemberRepository {
         | 'email'
         | 'cadencePreference'
         | 'remindersEnabled'
+        | 'emailPromptsEnabled'
         | 'currentStreak'
         | 'bestStreak'
         | 'lastStreakSessionClose'
@@ -126,6 +127,7 @@ export class PrismaTeamMemberRepository implements TeamMemberRepository {
       email: record.email,
       cadencePreference: record.cadencePreference,
       remindersEnabled: record.remindersEnabled,
+      emailPromptsEnabled: record.emailPromptsEnabled,
       currentStreak: record.currentStreak,
       bestStreak: record.bestStreak,
       lastStreakSessionClose: record.lastStreakSessionClose,

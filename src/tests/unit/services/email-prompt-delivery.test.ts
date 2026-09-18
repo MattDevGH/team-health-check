@@ -93,6 +93,15 @@ beforeEach(async () => {
     email: 'member@prompt.test',
   });
   memberId = member.id;
+  /*
+   * Asked for email prompts, explicitly.
+   *
+   * Phase 3 made the default depend on the Slack link, and this fixture has
+   * one — so an unchosen member here would be ineligible for email and every
+   * test below would pass by never sending anything. The channel choice has
+   * its own file; these tests are about what happens once a channel applies.
+   */
+  await repos.teamMember.update(memberId, { emailPromptsEnabled: true });
   session = await repos.session.create({ teamId, status: 'open' });
   await repos.sessionLink.create({
     token: 'session-token-1',

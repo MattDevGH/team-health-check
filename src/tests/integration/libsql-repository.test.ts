@@ -24,6 +24,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { PrismaClient } from '@/generated/prisma';
 import { PrismaTeamRepository } from '@/lib/repositories/prisma/team.repository';
+import { PrismaTeamMemberRepository } from '@/lib/repositories/prisma/team-member.repository';
 import { PrismaSlackIdentityLinkRepository } from '@/lib/repositories/prisma/slack-identity-link.repository';
 import { PrismaTeamMemberRoleRepository } from '@/lib/repositories/prisma/team-member-role.repository';
 import { PrismaNotificationDeliveryRepository } from '@/lib/repositories/prisma/notification-delivery.repository';
@@ -190,6 +191,39 @@ describe('repositories over the libSQL adapter', () => {
     expect(await prisma.magicLink.findUnique({ where: { token: 'revocation-magic' } })).toBeNull();
     // and the colleague who stayed is untouched
     expect(await links.findBySlackUserId('U_STAYS')).toMatchObject({ memberId: stays.id });
+  });
+
+  it('keeps an unchosen email preference unchosen', async () => {
+    /*
+     * Requirements: Reaching Your Health Check 4.1, 4.3; Property 6
+     *
+     * The column is nullable on purpose, and this is the tier that can prove
+     * it survived the round trip. Null is "has not chosen" and false is "has
+     * chosen no": nothing downstream can tell them apart once the database has
+     * coerced one into the other, and the derived default would stop following
+     * the member Slack link for everybody.
+     *
+     * Turso is where that would happen, so a local SQLite file proves nothing
+     * about it — this runs the committed migration through the same libSQL
+     * adapter production uses.
+     */
+    const team = await new PrismaTeamRepository(prisma).create({ name: 'Preference Team' });
+    const repository = new PrismaTeamMemberRepository(prisma);
+    const member = await repository.create({
+      teamId: team.id,
+      name: 'Unchosen',
+      email: 'unchosen@libsql.invalid',
+    });
+
+    expect(member.emailPromptsEnabled).toBeNull();
+    expect((await repository.findById(member.id))?.emailPromptsEnabled).toBeNull();
+
+    // and each of the three states survives being written and read back
+    for (const chosen of [true, false, null]) {
+      const updated = await repository.update(member.id, { emailPromptsEnabled: chosen });
+      expect(updated.emailPromptsEnabled).toBe(chosen);
+      expect((await repository.findById(member.id))?.emailPromptsEnabled).toBe(chosen);
+    }
   });
 
   it('reports no delivery for an unclaimed combination', async () => {

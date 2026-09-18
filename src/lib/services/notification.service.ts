@@ -19,6 +19,7 @@ import type { HealthCheckSession, Team } from '@/lib/repositories/entities';
 import type { EmailService } from '@/lib/services/email.service';
 import { recorder as defaultRecorder, type Recorder } from '@/lib/observability';
 import { getLocalDayAndTime, isWithinTimeWindow } from '@/lib/local-time';
+import { wantsEmailPrompts } from '@/lib/services/email-prompt-preference';
 
 /** Injectable sink that captures notification intents for delivery */
 export interface NotificationSink {
@@ -205,6 +206,19 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     const member = await teamMemberRepo.findById(memberId);
     // No address is not a failure — plenty of members are Slack-only
     if (!member?.email) return false;
+
+    /*
+     * Requirements 4.1, 4.3, 5.2. The member decides, and where they have not,
+     * the Slack link decides for them.
+     *
+     * Asked here rather than by the caller so that no future caller can forget
+     * it. Phase 2 emailed everybody with an address, which was right for a team
+     * with no Slack and told everybody else twice.
+     */
+    const hasSlackLink = await slackLinkChecker.hasSlackLink(memberId);
+    if (!wantsEmailPrompts({ preference: member.emailPromptsEnabled, hasSlackLink })) {
+      return false;
+    }
 
     const at = now();
 

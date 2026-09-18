@@ -29,6 +29,7 @@ const MOCK_PROFILE = {
   email: 'alice@example.com',
   cadencePreference: 'session',
   remindersEnabled: true,
+  emailPromptsEnabled: null,
   currentStreak: 5,
   bestStreak: 8,
   slackLink: { slackUserId: 'U123' },

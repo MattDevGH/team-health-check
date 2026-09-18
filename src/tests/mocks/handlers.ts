@@ -41,6 +41,9 @@ export const handlers = [
       email: 'alice@example.com',
       cadencePreference: 'session',
       remindersEnabled: true,
+      // Null is the real default: the member has not chosen, and the effective
+      // answer is derived from the Slack link
+      emailPromptsEnabled: null,
       currentStreak: 0,
       bestStreak: 0,
       slackLink: null,

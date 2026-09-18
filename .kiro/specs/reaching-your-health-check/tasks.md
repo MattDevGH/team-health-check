@@ -128,30 +128,30 @@ anyone signed in, with no delivery channel involved. One PR.
 
 ### 3.1 An email-prompt preference
 
-- [ ] Failing test: the field persists and is returned by `GET /api/me`
-- [ ] Failing test: the profile page reads it from the API rather than assuming
+- [x] Failing test: the field persists and is returned by `GET /api/me`
+- [x] Failing test: the profile page reads it from the API rather than assuming
       — the page once rendered a `privacyMode` the API never sent, and this is
       the same shape of mistake
-- [ ] Failing test: it defaults to on for a member with no Slack link
-- [ ] Failing test: it defaults to off for a member with Slack linked
-- [ ] Failing test: an explicit setting overrides the default in both directions
+- [x] Failing test: it defaults to on for a member with no Slack link
+- [x] Failing test: it defaults to off for a member with Slack linked
+- [x] Failing test: an explicit setting overrides the default in both directions
 - _Requirements: 4.1, 4.3_
 
 ### 3.2 It governs prompts only
 
-- [ ] Failing test: a member with email prompts off still receives a magic link
-- [ ] Failing test: it does not affect `remindersEnabled` behaviour, or the
+- [x] Failing test: a member with email prompts off still receives a magic link
+- [x] Failing test: it does not affect `remindersEnabled` behaviour, or the
       reverse
-- [ ] Failing test: the control says what it affects and what it does not
-- [ ] axe and keyboard operation on the new control
+- [x] Failing test: the control says what it affects and what it does not
+- [x] axe and keyboard operation on the new control
 - _Requirements: 4.2, 4.4, 4.5, NFR 3.1_
 - _Property: 5_
 
 ### 3.3 Say which channels exist
 
-- [ ] README and `docs/deployment.md`: the channels, what each requires, and
+- [x] README and `docs/deployment.md`: the channels, what each requires, and
       what happens when only one is configured
-- [ ] State plainly that Slack was the only prompt channel until this milestone,
+- [x] State plainly that Slack was the only prompt channel until this milestone,
       so a deployment without it told nobody anything
 - _Requirements: 5.3_
 

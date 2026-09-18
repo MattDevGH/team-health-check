@@ -201,6 +201,48 @@ EMAIL_SENDER="Team Health Check <noreply@yourdomain.com>"
 CRON_SECRET="a_random_secret_string"
 ```
 
+## How a member hears a check has opened
+
+There are two prompt channels, and they are not the same as the two ways in.
+Signing in is covered under Email Setup and Slack Integration Setup below; this
+is about the message that says there is something to answer.
+
+| Channel | Needs | Reaches |
+|---|---|---|
+| Slack | `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, and the member's Slack account linked | Members with a Slack link |
+| Email | `RESEND_API_KEY`, `EMAIL_SENDER`, a verified sending domain, and an address on the member | Members with an address |
+
+**Until 2026-09-18, Slack was the only prompt channel.** The scheduler called
+`sendSlackPrompt` and nothing else, so a deployment without Slack opened checks
+on schedule and told nobody they existed. That is not a gap in configuration
+advice — it is what the `reaching-your-health-check` spec was written to fix,
+and it was found in production.
+
+**With neither configured**, checks still open and close on schedule and can
+still be answered: signed-in members reach the current check from the dashboard
+or from Health check in the navigation. Nothing arrives to tell them to.
+
+**With Slack only**, linked members are prompted in Slack. A member with no
+Slack link hears nothing, which is the situation above for them individually.
+
+**With email only**, every member with an address is prompted by email.
+
+**With both**, each member gets whichever channels they are eligible for, and
+one failing does not stop the other. A member who has chosen nothing gets Slack
+alone if they have a link and email if they do not — so nobody is left with no
+channel, and nobody already living in Slack is told twice.
+
+A member can override that on their profile page with **Email prompts**. It
+governs prompts only: sign-in links arrive by email whatever it says, and it is
+separate from **Reminders**, which decides *which* messages are sent rather than
+*how* they arrive. Turning it off with no Slack link is allowed and leaves that
+member with no prompt channel at all — they can still reach the check from the
+application.
+
+One known hole, on the roadmap rather than built: a Slack-linked member who has
+chosen nothing hears nothing if Slack delivery fails, because email defaults off
+for them. Closing it needs the retry queue to report outcomes.
+
 ## Slack Integration Setup
 
 Follow these steps to connect the app to your Slack workspace.

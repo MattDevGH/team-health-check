@@ -108,6 +108,14 @@ and stays Slack-specific.
    change the outcome on the other.
 5. **Sign-in survives every preference.** No combination of notification
    preferences prevents a magic link being sent.
+6. **An explicit preference wins.** Where a member has chosen, that choice
+   decides whether email is used, whatever else is true of their setup. Added
+   2026-09-18 while building 3.1: the design stated a default and never stated
+   that a choice overrode it, and an implementation consulting the Slack link
+   first would satisfy every example where the two happen to agree.
+7. **Nobody is unreachable by default.** A member who has chosen nothing always
+   has at least one prompt channel. Silence is only ever something somebody
+   asked for.
 
 ## Testing Strategy
 
