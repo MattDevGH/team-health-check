@@ -65,6 +65,23 @@ here.
 3. THE page SHALL offer a way onward rather than ending in a form with nowhere to go.
 4. WHERE a member has already submitted, THE control SHALL read as changing an answer rather than as submitting for the first time.
 5. THE member SHALL still be able to edit and resubmit, since the product allows revision until close.
+6. THE confirmation SHALL appear where the member's attention already is — with the control they pressed — rather than somewhere they have to go looking for.
+7. WHEN a member changes an answer and saves again, THE confirmation SHALL differ visibly from the one already on screen, so that a successful update cannot be mistaken for nothing having happened.
+
+*6 and 7 were added on 2026-09-18, from the production pass for
+`reaching-your-health-check` phase 4.2 — the first time anybody answered a
+check on the deployed application through the interface.*
+
+*He submitted from the bottom of a five-question form and thought nothing had
+happened; the confirmation was at the top, off screen. Then he changed an
+answer and saved again, and nothing on the page moved: the control still read
+"Update responses" and the confirmation from the first save was still sitting
+there saying the same words.*
+
+*Criterion 1 was met both times. The page did confirm. A confirmation nobody
+sees, and a confirmation that cannot be told from the last one, are two ways of
+failing a requirement that reads as satisfied — which is why they are written
+down separately rather than folded into 1.*
 
 ### Requirement 3: A Contributor Is Not Offered What They Cannot Use
 

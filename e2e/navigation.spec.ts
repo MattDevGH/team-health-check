@@ -357,9 +357,12 @@ test.describe('reaching your own health check', () => {
 
     // Open a check through the interface, the way a manager would
     await page.getByRole('button', { name: /open a health check/i }).click();
-    await expect(page.getByRole('link', { name: /answer the health check/i })).toBeVisible();
+    // The dashboard says where the link goes; the page it lands on says what
+    // to do there. Two buttons reading "Answer the health check" made the
+    // second click read as a step that achieved nothing
+    await expect(page.getByRole('link', { name: /your health check/i })).toBeVisible();
 
-    await page.getByRole('link', { name: /answer the health check/i }).click();
+    await page.getByRole('link', { name: /your health check/i }).click();
     await expect(page).toHaveURL(/\/me\/health-check$/);
 
     await page.getByRole('link', { name: /answer the health check/i }).click();
@@ -407,6 +410,7 @@ test.describe('reaching your own health check', () => {
     // The form is still there, and the control now says which thing it does
     await expect(page.getByRole('button', { name: /^update responses$/i })).toBeVisible();
 
+
     // Pressing it again is harmless, and says so
     await page.getByRole('button', { name: /^update responses$/i }).click();
     await expect(confirmation).toContainText(/no changes/i);
@@ -448,7 +452,16 @@ test.describe('reaching your own health check', () => {
     await page.getByRole('button', { name: /responses$/i }).click();
 
     const confirmation = page.getByRole('status');
-    await expect(confirmation).toContainText(/saved/i);
+    /*
+     * Saved or updated, depending on whether this member has already answered
+     * this check — which a sibling test in this file decides, and which is not
+     * what this one is about. The subject here is the door back into the
+     * application from a page that carries no navigation of its own.
+     *
+     * Each outcome's wording is asserted precisely in
+     * `src/tests/ui/saying-what-just-happened.test.tsx`.
+     */
+    await expect(confirmation).toContainText(/saved|updated/i);
 
     await confirmation.getByRole('link', { name: /health check/i }).click();
     await expect(page).toHaveURL(/\/me\/health-check$/);

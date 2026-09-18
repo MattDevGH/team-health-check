@@ -9,7 +9,7 @@
  * or a "session ended" message if the session is already closed.
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 import { FeedbackForm } from '@/components/feedback-form/feedback-form';
 import { answersMatch, type Answer } from '@/lib/answers-match';
@@ -64,7 +64,19 @@ export default function SessionLinkPage({ params }: PageProps) {
    * production and had no way to tell whether they had answered twice.
    */
   const [savedAnswers, setSavedAnswers] = useState<Answer[] | null>(null);
-  const [lastOutcome, setLastOutcome] = useState<'saved' | 'unchanged'>('saved');
+  /**
+   * What the last press of the button actually did.
+   *
+   * Requirements: Explaining Itself 2.7
+   *
+   * Three outcomes, not two. A member saved, changed an answer and saved
+   * again, and nothing on the page moved — the control still read "Update
+   * responses" and the confirmation from the first save was still there saying
+   * the same words. A successful update was indistinguishable from nothing
+   * happening, and the test covering it passed because it asserted the message
+   * did *not* say "no changes", which was true of a box that had not changed.
+   */
+  const [lastOutcome, setLastOutcome] = useState<'saved' | 'updated' | 'unchanged'>('saved');
   /**
    * Whether the reader has an application to return to.
    *
@@ -75,6 +87,16 @@ export default function SessionLinkPage({ params }: PageProps) {
    * to a sign-in page wearing the clothes of a destination.
    */
   const [canReturnToApp, setCanReturnToApp] = useState(false);
+  /**
+   * The confirmation, so it can be brought into view once it renders.
+   *
+   * Requirements: Explaining Itself 2.6
+   *
+   * Moving it beside the button was not enough on its own: a button at the
+   * foot of the screen leaves anything inserted after it just below the fold,
+   * which is the same "nothing happened" the move was meant to fix.
+   */
+  const confirmationRef = useRef<HTMLDivElement>(null);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [results, setResults] = useState<RollingAverageResult[]>([]);
 
@@ -165,7 +187,19 @@ export default function SessionLinkPage({ params }: PageProps) {
         whose first attempt failed, which is the case where pressing the
         button again is exactly the right instinct.
       */
-      setLastOutcome(savedAnswers && answersMatch(savedAnswers, responses) ? 'unchanged' : 'saved');
+      /*
+        Three outcomes. "Saved" is only true the first time: a member who
+        arrived with answers already stored, or who has pressed the button
+        once on this page, is revising rather than submitting — and calling
+        that a first save is both wrong about what happened and invisible,
+        because it renders the message already on screen.
+      */
+      const hadAnswers = savedAnswers !== null && savedAnswers.length > 0;
+      if (!hadAnswers) {
+        setLastOutcome('saved');
+      } else {
+        setLastOutcome(answersMatch(savedAnswers, responses) ? 'unchanged' : 'updated');
+      }
       setSavedAnswers(responses);
       setSubmitted(true);
       setIsSubmitting(false);
@@ -174,6 +208,25 @@ export default function SessionLinkPage({ params }: PageProps) {
       throw new Error('Submission failed. Please retry.');
     }
   }, [context, savedAnswers]);
+
+  /*
+   * Bring the confirmation into view, every time it says something new.
+   *
+   * Requirements: Explaining Itself 2.6
+   *
+   * `block: 'nearest'` scrolls the least that works — no movement at all when
+   * it is already on screen, which is the common case on a short form and on a
+   * desktop window. Being thrown about the page after pressing a button is its
+   * own kind of "what just happened".
+   *
+   * `lastOutcome` is in the dependencies as well as `submitted`, so a second
+   * save scrolls too: `submitted` is already true by then and would not fire
+   * this again.
+   */
+  useEffect(() => {
+    if (!submitted) return;
+    confirmationRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [submitted, lastOutcome]);
 
   /*
    * Asked after a submission rather than on arrival: until then there is
@@ -275,24 +328,54 @@ export default function SessionLinkPage({ params }: PageProps) {
           Hi {context.memberName}, rate each area from 1 (needs work) to 5 (great).
         </p>
 
-        {/*
-          The confirmation sits above the form rather than replacing it.
+        {isMicroPulse ? (
+          <MicroPulseView
+            questions={selectedFormQuestions}
+            allQuestions={allFormQuestions}
+            expandable={context.expandable}
+            initialResponses={initialResponses}
+            onSubmit={handleSubmit}
+            isSubmitting={isSubmitting}
+            hasSavedAnswers={hasSavedAnswers}
+          />
+        ) : (
+          <FeedbackForm
+            questions={selectedFormQuestions}
+            initialResponses={initialResponses}
+            onSubmit={handleSubmit}
+            isSubmitting={isSubmitting}
+            hasSavedAnswers={hasSavedAnswers}
+          />
+        )}
 
-          Submitting used to swap the whole page for a receipt, which said
-          nothing about whether the answers were still yours to change — so
-          pressing the button again read as submitting twice. The product
-          allows revision until close, and a member who believes an answer is
-          final answers more cautiously.
+        {/*
+          The confirmation sits with the control that produced it.
+
+          Requirements: Explaining Itself 2.6
+
+          It was above the form, and above five questions is off the top of the
+          screen by the time anybody reaches the button. The first person to
+          answer a check on the deployed application submitted, saw nothing
+          happen, and found the message by scrolling up. It only ever appears
+          in response to a click on that button, so the foot of the form is the
+          only place the reader is guaranteed to be looking.
+
+          Beside the form rather than replacing it, which is the older decision
+          and still right: submitting used to swap the whole page for a receipt,
+          which said nothing about whether the answers were still yours to
+          change, so pressing the button again read as submitting twice.
         */}
         {submitted && (
           <div
+            ref={confirmationRef}
             role="status"
-            className="mb-6 rounded-lg border border-green-700 bg-green-50 p-4"
+            className="mt-6 rounded-lg border border-green-700 bg-green-50 p-4"
           >
             <p className="font-medium text-green-900">
-              {lastOutcome === 'unchanged'
-                ? 'No changes — your answers were already saved.'
-                : 'Thank you — your answers are saved.'}
+              {lastOutcome === 'unchanged' && 'No changes — your answers were already saved.'}
+              {/* Named as an update, so a second save is visibly not the first */}
+              {lastOutcome === 'updated' && 'Your answers are updated.'}
+              {lastOutcome === 'saved' && 'Thank you — your answers are saved.'}
             </p>
             <p className="mt-1 text-sm text-green-900">
               You can change them until this health check closes; just pick a different
@@ -314,26 +397,6 @@ export default function SessionLinkPage({ params }: PageProps) {
               </a>
             )}
           </div>
-        )}
-
-        {isMicroPulse ? (
-          <MicroPulseView
-            questions={selectedFormQuestions}
-            allQuestions={allFormQuestions}
-            expandable={context.expandable}
-            initialResponses={initialResponses}
-            onSubmit={handleSubmit}
-            isSubmitting={isSubmitting}
-            hasSavedAnswers={hasSavedAnswers}
-          />
-        ) : (
-          <FeedbackForm
-            questions={selectedFormQuestions}
-            initialResponses={initialResponses}
-            onSubmit={handleSubmit}
-            isSubmitting={isSubmitting}
-            hasSavedAnswers={hasSavedAnswers}
-          />
         )}
 
         {/*
