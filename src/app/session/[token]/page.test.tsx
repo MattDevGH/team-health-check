@@ -534,7 +534,17 @@ describe('pressing the button a second time', () => {
     await waitFor(() => expect(posts).toBe(2));
   });
 
-  it('reports a real change as saved rather than as nothing', async () => {
+  it('reports a real change as an update', async () => {
+    /*
+     * Requirement 2.7. This asserted only that the message did *not* say "no
+     * changes", and passed for a year against a confirmation that had not
+     * changed at all since the previous save — which is precisely what a
+     * member experiences as nothing happening. Found on the deployed
+     * application on 2026-09-18, not here.
+     *
+     * Asserting the positive is the whole lesson: an absence is satisfied by a
+     * stale message.
+     */
     const user = userEvent.setup();
     renderPage();
 
@@ -547,7 +557,7 @@ describe('pressing the button a second time', () => {
     await user.click(screen.getByRole('button', { name: /update/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).not.toHaveTextContent(/no changes/i);
+      expect(screen.getByRole('status')).toHaveTextContent(/updated/i);
     });
   });
 

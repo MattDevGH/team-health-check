@@ -546,7 +546,7 @@ describe('SessionLifecyclePanel offers a way to answer', () => {
     mockSessions({ initial: [openSession] });
     renderPanel();
 
-    const link = await screen.findByRole('link', { name: /answer the health check/i });
+    const link = await screen.findByRole('link', { name: /your health check/i });
     expect(link).toHaveAttribute('href', '/me/health-check');
   });
 
@@ -586,7 +586,7 @@ describe('SessionLifecyclePanel offers a way to answer', () => {
     mockSessions({ initial: [openSession] });
     renderPanel();
 
-    const link = await screen.findByRole('link', { name: /answer the health check/i });
+    const link = await screen.findByRole('link', { name: /your health check/i });
     expect(link).toHaveAttribute('href', '/me/health-check');
   });
 
@@ -597,7 +597,7 @@ describe('SessionLifecyclePanel offers a way to answer', () => {
     mockSessions({ initial: [openSession] });
     const { container } = renderPanel();
 
-    await screen.findByRole('link', { name: /answer the health check/i });
+    await screen.findByRole('link', { name: /your health check/i });
 
     expect(await axe(container)).toHaveNoViolations();
   });
@@ -623,7 +623,7 @@ describe('SessionLifecyclePanel offers a way to answer', () => {
     const user = userEvent.setup();
     renderPanel();
 
-    const answer = await screen.findByRole('link', { name: /answer the health check/i });
+    const answer = await screen.findByRole('link', { name: /your health check/i });
     answer.focus();
     expect(answer).toHaveFocus();
 
@@ -641,7 +641,7 @@ describe('SessionLifecyclePanel offers a way to answer', () => {
     mockSessions({ initial: [openSession] });
     renderPanel();
 
-    const link = await screen.findByRole('link', { name: /answer the health check/i });
+    const link = await screen.findByRole('link', { name: /your health check/i });
     expect(link.getAttribute('href')).not.toMatch(/\/session\//);
   });
 });

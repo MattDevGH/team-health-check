@@ -10,7 +10,7 @@
  * one either.
  *
  * Writing it found the gap it was meant to prove absent. The dashboard rendered
- * the lifecycle panel — the thing that carries "Answer the health check" — only
+ * the lifecycle panel — the thing that carries the route to answer — only
  * for a Delivery Manager, so a contributor who came to read their team's
  * results while a check was collecting was shown no way to take part. The panel
  * is rendered for everybody now with its open and close controls gated, and
@@ -132,7 +132,7 @@ test.describe('a contributor, from the dashboard', () => {
 
     const panel = page.getByRole('region', { name: 'Health check' });
     await expect(panel).toContainText(/collecting responses/i);
-    await expect(panel.getByRole('link', { name: /answer the health check/i })).toBeVisible();
+    await expect(panel.getByRole('link', { name: /your health check/i })).toBeVisible();
 
     await expect(panel.getByRole('button', { name: /open a health check/i })).toHaveCount(0);
     await expect(panel.getByRole('button', { name: /close the health check/i })).toHaveCount(0);
@@ -144,7 +144,7 @@ test.describe('a contributor, from the dashboard', () => {
 
     await page
       .getByRole('region', { name: 'Health check' })
-      .getByRole('link', { name: /answer the health check/i })
+      .getByRole('link', { name: /your health check/i })
       .click();
     await expect(page).toHaveURL(/\/me\/health-check$/);
 
@@ -186,6 +186,42 @@ test.describe('a contributor, from the navigation', () => {
     expectStored(fixture.sessionId);
   });
 
+  test('sees the confirmation without going looking for it', async ({ page }) => {
+    /*
+     * Requirements: Explaining Itself 2.6
+     *
+     * The confirmation used to render above the form. Above five questions is
+     * off the top of the screen by the time anybody reaches the button — and
+     * the first person to answer a check on the deployed application submitted,
+     * saw nothing happen, and found the message by scrolling up.
+     *
+     * At phone width, so the form is certainly taller than the screen: on a
+     * tall desktop window the whole page fits and a confirmation at the top
+     * would pass regardless.
+     *
+     * `toBeVisible` would have passed throughout. An element scrolled out of
+     * view is still visible in Playwright's sense, so this has to assert where
+     * it is rather than whether it exists.
+     */
+    await page.setViewportSize({ width: 375, height: 812 });
+    await signIn(page, fixture.contributorEmail);
+    await page
+      .getByRole('navigation', { name: 'Main' })
+      .getByRole('link', { name: 'Health check' })
+      .click();
+    await page.getByRole('link', { name: /answer the health check/i }).click();
+
+    const scores = page.getByRole('radiogroup');
+    await expect(scores).toHaveCount(5);
+    for (const group of await scores.all()) {
+      await group.locator('label').filter({ hasText: /^3$/ }).click();
+    }
+    await page.getByRole('button', { name: /responses$/i }).click();
+
+    const confirmation = page.getByRole('status');
+    await expect(confirmation).toBeInViewport();
+  });
+
   test('can go back in and change an answer', async ({ page }) => {
     /*
      * Requirement 1.4. Answers are editable until the check closes, and a
@@ -201,6 +237,18 @@ test.describe('a contributor, from the navigation', () => {
 
     await page.getByRole('link', { name: /answer the health check/i }).click();
 
+    /*
+     * Wait for the control to say "Update", which is how the page says the
+     * stored answers have arrived.
+     *
+     * Without this the test races the fetch: the form mounts empty, a click on
+     * one score lands, the context arrives and re-renders, and the submission
+     * fails validation on the four questions the test believed were already
+     * answered. It passed until a test was inserted above it and shifted the
+     * timing, which is the definition of a test that was never really passing.
+     */
+    await expect(page.getByRole('button', { name: /^update responses$/i })).toBeVisible();
+
     const question = page.getByRole('group', { name: 'Ease of Delivery' });
     await question
       .getByRole('radiogroup', { name: 'Ease of Delivery score' })
@@ -208,7 +256,16 @@ test.describe('a contributor, from the navigation', () => {
       .filter({ hasText: /^5$/ })
       .click();
     await page.getByRole('button', { name: /update responses|submit responses/i }).click();
-    await expect(page.getByRole('status')).toContainText(/saved|no changes/i);
+    /*
+     * Named as an update, because that is what it was — they arrived with
+     * answers already stored and changed one.
+     *
+     * This asserted `/saved|no changes/i` before, which passed against the
+     * defect found on the deployed application on 2026-09-18: a second save
+     * rendering the message already on screen, so a successful update was
+     * indistinguishable from nothing happening.
+     */
+    await expect(page.getByRole('status')).toContainText(/updated/i);
 
     const stored = responsesForSession(fixture.sessionId);
     expect(
@@ -249,7 +306,7 @@ test.describe('a contributor with nothing open', () => {
 
     const panel = page.getByRole('region', { name: 'Health check' });
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole('link', { name: /answer the health check/i })).toHaveCount(0);
+    await expect(panel.getByRole('link', { name: /your health check/i })).toHaveCount(0);
     await expect(panel.getByRole('button', { name: /open a health check/i })).toHaveCount(0);
   });
 });

@@ -1064,6 +1064,62 @@ Both are one discipline: the application agreeing with itself is not evidence.
   way: they are read from the database, while a ledger records what somebody
   meant to do to it.
 
+**Four scheduler-record tests were reading the wall clock, and said so for the
+first time on 2026-09-18 at 17:00 UTC.** `sessionService.open` stamps
+`scheduledCloseAt` from its own clock, and the test built the service without
+one — so on a Friday evening the next Friday 17:00 it could find was a *week*
+after the date the tick was given. Nothing was due to close, and the four tests
+about closing and materialising had nothing to assert on.
+
+They had been green since they were written and would have gone green again by
+themselves the next morning, which is the worst version of the problem: a test
+whose result depends on the day it runs is not evidence about the code. The
+service now takes an injected clock, set by a `tickAt` helper to a minute
+behind the tick — a minute rather than zero because the rows a tick reads were
+written before it started, which is true of every real deployment and of no
+test that takes both from one instant.
+
+**The production pass for phase 4.2 happened on 2026-09-18 and found three
+things no test had.** A check was opened on the deployed application, answered
+from the interface with no session link from any message, and read back out of
+Turso: 5 answers, average 4.00, aggregates agreeing with the raw responses after
+the scheduler materialised them.
+
+The migration went first, and had to. `emailPromptsEnabled` is selected by name
+on every `TeamMember` query, so production sat one merge away from failing to
+sign anybody in until `scripts/migrate-production.ts` ran.
+
+What the pass found:
+
+- **The confirmation was above the form.** Above five questions is off the top
+  of the screen by the time anybody reaches the button. He submitted, saw
+  nothing happen, and found the message by scrolling up. It sits with the
+  control now, and scrolls itself into view with `block: 'nearest'` — moving it
+  was not enough on its own, because a button at the foot of the screen leaves
+  anything inserted after it just below the fold.
+- **A second save was indistinguishable from nothing happening.** He changed an
+  answer, pressed the button, and the page did not move: the control still read
+  "Update responses" and the confirmation from the first save was still there
+  saying the same words. There are three outcomes now — saved, updated, no
+  changes — and the wording differs for each.
+- **Two buttons said "Answer the health check".** The dashboard link now says
+  "Your health check", which is where it goes; the page it lands on keeps
+  "Answer the health check", which is what to do there. The landing page earns
+  its place from the navigation, where "Health check" is a destination rather
+  than an action.
+
+**A green test asserted the second defect was absent.** `page.test.tsx` had
+"reports a real change as saved rather than as nothing", which checked the
+message did *not* say "no changes" — true of a box that had not changed at all.
+Asserting an absence let a stale message through, and the fix was to assert the
+positive. `Explaining Itself 2.6` and `2.7` were added for the two behaviours,
+because criterion 2.1 — "the page SHALL confirm" — was met on both occasions.
+
+`toBeVisible` would not have caught the first one either: an element scrolled
+out of view is visible in Playwright's sense. The browser test asserts
+`toBeInViewport` at phone width, where the form is certainly taller than the
+screen.
+
 **Phase 4.1 found a gap the browser test was written to prove absent.** The
 dashboard rendered `SessionLifecyclePanel` only for a Delivery Manager, and that
 panel is what carries "Answer the health check" — so a contributor who came to

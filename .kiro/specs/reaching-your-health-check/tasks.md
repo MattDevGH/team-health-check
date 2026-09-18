@@ -179,9 +179,15 @@ anyone signed in, with no delivery channel involved. One PR.
 
 ### 4.2 Against production
 
-- [ ] Open a check on the deployed application and answer it from the interface,
-      with no session link from any message
-- [ ] Confirm the response reached Turso by reading it back
+- [x] Open a check on the deployed application and answer it from the interface,
+      with no session link from any message. *Done 2026-09-18. Found three
+      things no test had: the confirmation rendering above the form and so off
+      the top of the screen, a second save being indistinguishable from nothing
+      happening, and two buttons in a row both reading "Answer the health
+      check".*
+- [x] Confirm the response reached Turso by reading it back. *Five answers,
+      average 4.00, read back with `scripts/verify-production.ts` — which also
+      recomputes the aggregates from the raw rows and confirms the two agree.*
 - [ ] With a verified sending domain: confirm an email prompt arrives, carries a
       working link, and is not mistaken for a sign-in email
 - _Requirements: 1.1, 3.1, 3.3_

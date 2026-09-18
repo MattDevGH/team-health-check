@@ -166,6 +166,13 @@ raw responses. Ids and counts only, so the output is safe to paste into notes.
 The column list is the load-bearing part. It is read from the database itself,
 while the ledger is a record of what somebody meant to do to it.
 
+**Applied 2026-09-18: `20260918000000_add_email_prompts_enabled`.** Additive and
+nullable. It had to go in before the deploy that carried the code, not after:
+Prisma selects every column by name, so an unmigrated production could not have
+read a `TeamMember` row at all — no sign-in, no profile, no dashboard. The
+window between merging and migrating is the risk, and it is the reason to run
+the migration the moment a schema change merges rather than at leisure.
+
 **Applied 2026-09-15: `20260914212427_add_materialised_at` and
 `20260915111500_backfill_materialised_at`.** The first adds
 `HealthCheckSession.materialisedAt`, which the dashboard reads to tell "results

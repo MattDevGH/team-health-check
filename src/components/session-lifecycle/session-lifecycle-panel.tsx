@@ -406,11 +406,26 @@ export function SessionLifecyclePanel({
                 one and keeps the emphasis it had, because adding a control
                 can make an existing one ambiguous.
               */}
+              {/*
+                "Your health check", not "Answer the health check".
+
+                Requirements: Reaching Your Health Check 1.1
+
+                It said "Answer the health check" and led to a page whose only
+                content was a button saying "Answer the health check" — the
+                same words twice, so the second click read as a step that
+                achieved nothing. The landing page earns its place from the
+                navigation, where "Health check" is a destination rather than an
+                action; from here the honest label is the one that says where
+                this goes.
+
+                Found on the deployed application on 2026-09-18.
+              */}
               <a
                 href="/me/health-check"
                 className="mt-3 mr-2 inline-block rounded bg-blue-700 px-4 py-2 text-white hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
-                Answer the health check
+                Your health check
               </a>
 
               {/* Closing is a manager's decision, so a contributor is not

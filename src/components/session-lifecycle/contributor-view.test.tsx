@@ -80,7 +80,7 @@ describe('a contributor, while a check is collecting', () => {
     renderAs(false);
     await settled();
 
-    expect(screen.getByRole('link', { name: /answer the health check/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /your health check/i })).toHaveAttribute(
       'href',
       '/me/health-check',
     );
@@ -142,7 +142,7 @@ describe('a contributor, while nothing is open', () => {
     renderAs(false);
     await settled();
 
-    expect(screen.queryByRole('link', { name: /answer the health check/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: /your health check/i })).toBeNull();
   });
 });
 
@@ -152,7 +152,7 @@ describe('a Delivery Manager keeps everything they had', () => {
     renderAs(true);
     await settled();
 
-    expect(screen.getByRole('link', { name: /answer the health check/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /your health check/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /close the health check/i })).toBeInTheDocument();
   });
 
