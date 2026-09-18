@@ -23,6 +23,21 @@ import { deriveSessionState, type SessionState } from './derive-session-state';
 
 interface SessionLifecyclePanelProps {
   teamId: string;
+  /**
+   * Whether the reader may open and close checks.
+   *
+   * Requirements: Reaching Your Health Check 1.1, 1.5
+   *
+   * Required rather than defaulted, because a default of true would hand a
+   * contributor two controls the API will refuse the moment somebody adds a
+   * second caller and forgets.
+   *
+   * The panel itself is for everybody: Requirement 1.1 asks the dashboard to
+   * offer a route to answer a collecting check, and says nothing about roles.
+   * Rendering it for a manager only meant a contributor who went to read their
+   * team results was offered no way to take part.
+   */
+  canManage: boolean;
   /** Ids of closed sessions whose aggregates exist, from the trends response. */
   materialisedSessionIds: string[];
 }
@@ -176,6 +191,7 @@ function describe(state: SessionState): string {
 export function SessionLifecyclePanel({
   teamId,
   materialisedSessionIds,
+  canManage,
 }: SessionLifecyclePanelProps) {
   const headingId = useId();
   const confirmHeadingId = useId();
@@ -360,7 +376,7 @@ export function SessionLifecyclePanel({
             </ul>
           )}
 
-          {state.control === 'open' && (
+          {state.control === 'open' && canManage && (
             <button
               type="button"
               onClick={openSession}
@@ -397,20 +413,24 @@ export function SessionLifecyclePanel({
                 Answer the health check
               </a>
 
-              <button
-                ref={closeTriggerRef}
-                type="button"
-                onClick={() => setConfirming(true)}
-                className="mt-3 rounded border border-gray-400 px-4 py-2 text-gray-800 hover:bg-gray-50"
-              >
-                Close the health check
-              </button>
+              {/* Closing is a manager's decision, so a contributor is not
+                  offered a control the route would refuse them */}
+              {canManage && (
+                <button
+                  ref={closeTriggerRef}
+                  type="button"
+                  onClick={() => setConfirming(true)}
+                  className="mt-3 rounded border border-gray-400 px-4 py-2 text-gray-800 hover:bg-gray-50"
+                >
+                  Close the health check
+                </button>
+              )}
 
               {/*
                 Rendered only while confirming, so nothing of the dialog exists
                 in the accessibility tree when it is not being asked.
               */}
-              {confirming && (
+              {canManage && confirming && (
                 <dialog
                   ref={dialogRef}
                   aria-labelledby={confirmHeadingId}

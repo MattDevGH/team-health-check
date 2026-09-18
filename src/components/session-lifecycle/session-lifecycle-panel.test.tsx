@@ -148,9 +148,20 @@ function mockParticipation(
   );
 }
 
+/**
+ * Renders the panel as a Delivery Manager.
+ *
+ * `canManage` is passed explicitly rather than defaulted in the component: a
+ * default of true would hand a contributor controls the route refuses. What a
+ * contributor sees instead has its own file, `contributor-view.test.tsx`.
+ */
 function renderPanel(materialisedSessionIds: string[] = []) {
   return render(
-    <SessionLifecyclePanel teamId={TEAM_ID} materialisedSessionIds={materialisedSessionIds} />,
+    <SessionLifecyclePanel
+      teamId={TEAM_ID}
+      materialisedSessionIds={materialisedSessionIds}
+      canManage
+    />,
   );
 }
 
