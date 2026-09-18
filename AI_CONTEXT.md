@@ -1035,9 +1035,46 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
-Phases 1 to 3 of `reaching-your-health-check` are complete — 43 of its 51
-boxes. What is left is phase 4: a contributor walking both surfaces in a
-browser, axe in the browser tier, and the production pass (open a check on the
+**Phase 4.1 found a gap the browser test was written to prove absent.** The
+dashboard rendered `SessionLifecyclePanel` only for a Delivery Manager, and that
+panel is what carries "Answer the health check" — so a contributor who came to
+read their team's results while a check was collecting was shown no way to take
+part. Requirement 1.1 asks the dashboard for that route and says nothing about
+roles.
+
+- The panel is rendered for **everybody** now, with `canManage` gating the open
+  control, the close control and the confirmation dialog. One panel rather than a
+  contributor-shaped second one: two components deriving "what is happening with
+  this check" would disagree eventually, and the one nobody used daily would be
+  the one that drifted.
+- `canManage` is **required, not defaulted**. A default of true would hand a
+  contributor controls the route refuses the moment somebody adds a caller and
+  forgets.
+- The participation count stays visible to a contributor. It is aggregate and
+  carries no names, which is the same reasoning that gives a contributor the
+  dashboard at all.
+- Two tests asserted the old behaviour and were changed rather than deleted:
+  `trend-dashboard-page.test.tsx` and `e2e/session-lifecycle.spec.ts` both said
+  the panel was absent for a contributor. Each now says the controls are absent
+  and names what it replaced.
+
+The navigation route hid this. A contributor who clicks "Health check" reaches
+their check, so it only showed for somebody who went to the dashboard first —
+which is exactly what a contributor does after being told their team's results
+are worth reading.
+
+`e2e/contributor-health-check.spec.ts` walks it: a contributor answers from the
+dashboard, answers from the navigation, goes back in and changes an answer, and
+is told plainly when nothing is open. Every step is a click, and the answers are
+read back out of the database rather than trusted from the confirmation.
+
+axe now covers `/me/health-check` in both states and the contributor's view of
+the panel in a real browser. jsdom has no computed styles and cannot see a
+contrast failure; four pages once shipped with AA contrast failures that jsdom
+audits had passed.
+
+Phases 1 to 3 of `reaching-your-health-check` are complete, and so is 4.1 —
+45 of its 51 boxes. What is left is the production pass (open a check on the
 deployed application, answer it with no session link from any message, read the
 response back out of Turso, and — once a sending domain is verified — confirm
 an email prompt arrives and is not mistaken for a sign-in email).

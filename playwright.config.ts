@@ -71,7 +71,7 @@ export default defineConfig({
       DATABASE_URL,
       TEST_MODE: 'true',
       // Marks this as a local end-to-end run rather than a deployment.
-      //  sets NODE_ENV=production here too, so the startup guard
+      // `next start` sets NODE_ENV=production here too, so the startup guard
       // in src/lib/startup-guards.ts cannot tell the two apart without it.
       // Set here and nowhere else; never set it in a deployed environment.
       E2E_LOCAL_RUN: 'true',

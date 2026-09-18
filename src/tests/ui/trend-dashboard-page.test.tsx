@@ -103,10 +103,16 @@ function renderDashboard(roles: string[] = []) {
 
 describe('Trend Dashboard Page', () => {
   /**
-   * Manager Experience 2.1, 2.6: the panel is where a check is opened and
-   * closed, so it belongs in every data state — a team with nothing to show is
-   * exactly the team that needs to open its first check — and nowhere at all
-   * for a member who would be refused the action.
+   * Manager Experience 2.1, 2.6; Reaching Your Health Check 1.1, 1.5.
+   *
+   * The panel is where a check is opened and closed, so it belongs in every
+   * data state — a team with nothing to show is exactly the team that needs to
+   * open its first check.
+   *
+   * It used to be withheld entirely from anybody who could not manage, and
+   * that was wrong: the panel is also where a collecting check offers a route
+   * to answer it, so a contributor reading their team results was shown no way
+   * to take part. The controls are gated now, not the panel.
    */
   describe('session lifecycle panel', () => {
     it('offers the panel to a delivery manager with no data yet', async () => {
@@ -129,7 +135,10 @@ describe('Trend Dashboard Page', () => {
       expect(await screen.findByRole('region', { name: /health check/i })).toBeInTheDocument();
     });
 
-    it('withholds it from a member who is not a delivery manager', async () => {
+    it('withholds its controls, not the panel, from a member who cannot manage', async () => {
+      // Replaced an assertion that the panel was absent altogether. What a
+      // contributor is shown inside it has its own file,
+      // src/components/session-lifecycle/contributor-view.test.tsx
       mockTrendsApi({ sessions: [] });
       renderDashboard();
 
@@ -137,7 +146,7 @@ describe('Trend Dashboard Page', () => {
       // against a rendered dashboard rather than an empty document
       await screen.findByText(/more data needed/i);
 
-      expect(screen.queryByRole('region', { name: /health check/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('region', { name: /health check/i })).toBeInTheDocument();
       expect(
         screen.queryByRole('button', { name: /open a health check/i }),
       ).not.toBeInTheDocument();

@@ -233,15 +233,26 @@ export default function TrendDashboardPage({ params }: PageProps) {
     canManage,
   });
 
-  const lifecyclePanel =
-    canManage && teamId ? (
-      <div className="mb-6">
-        <SessionLifecyclePanel
-          teamId={teamId}
-          materialisedSessionIds={sessions.map(session => session.sessionId)}
-        />
-      </div>
-    ) : null;
+  /*
+   * Shown to everybody, with its writes gated.
+   *
+   * Requirements: Reaching Your Health Check 1.1, 1.5
+   *
+   * It was rendered for a Delivery Manager only, so a contributor who came to
+   * read their team results while a check was collecting was offered no way to
+   * answer it — and 1.1 asks the dashboard for that route without making it a
+   * privilege. Found writing the browser test that was meant to walk a
+   * contributor through it.
+   */
+  const lifecyclePanel = teamId ? (
+    <div className="mb-6">
+      <SessionLifecyclePanel
+        teamId={teamId}
+        materialisedSessionIds={sessions.map(session => session.sessionId)}
+        canManage={canManage}
+      />
+    </div>
+  ) : null;
 
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4">

@@ -166,6 +166,17 @@ test('the whole close flow is operable by keyboard alone', async ({ page }) => {
 });
 
 test('a contributor sees no lifecycle controls', async ({ page }) => {
+  /*
+   * Requirements: Reaching Your Health Check 1.1, 1.5
+   *
+   * This asserted the whole panel was absent until 2026-09-18, and that was
+   * more than the requirement asked for: the panel is also where a collecting
+   * check offers a route to answer it, so withholding it left a contributor
+   * reading their team's results with no way to take part.
+   *
+   * The controls are what a contributor must not be offered. What they are
+   * offered instead is walked end to end in `contributor-health-check.spec.ts`.
+   */
   await signIn(page, CONTRIBUTOR);
   await page.goto(`/teams/${teamId}/dashboard`);
 
@@ -173,6 +184,7 @@ test('a contributor sees no lifecycle controls', async ({ page }) => {
   // asserted against a loaded page
   await expect(page.getByRole('heading', { name: /trend dashboard/i })).toBeVisible();
 
-  await expect(page.getByRole('region', { name: 'Health check' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Health check' })).toBeVisible();
   await expect(page.getByRole('button', { name: /open a health check/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /close the health check/i })).toHaveCount(0);
 });
