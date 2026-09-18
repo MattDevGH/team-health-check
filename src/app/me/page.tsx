@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 
 import { CadencePreference } from './cadence-preference';
 import { ReminderToggle } from './reminder-toggle';
+import { EmailPromptToggle } from './email-prompt-toggle';
 import { AvailabilityPicker } from './availability-picker';
 import { StreakDisplay } from './streak-display';
 import { SlackSection } from './slack-section';
@@ -35,6 +36,14 @@ interface ProfileData {
   email: string;
   cadencePreference: string;
   remindersEnabled: boolean;
+  /**
+   * The stored email-prompt choice, null when the member has not made one.
+   *
+   * Nullable on purpose: the effective answer is derived from the Slack link,
+   * so null and false are different states and the page has to be able to tell
+   * them apart.
+   */
+  emailPromptsEnabled: boolean | null;
   currentStreak: number;
   bestStreak: number;
   slackLink: SlackLink | null;
@@ -151,6 +160,12 @@ export default function ProfilePage() {
         <ReminderToggle
           enabled={profile.remindersEnabled}
           onChange={(enabled) => setProfile({ ...profile, remindersEnabled: enabled })}
+        />
+
+        <EmailPromptToggle
+          preference={profile.emailPromptsEnabled}
+          hasSlackLink={profile.slackLink !== null}
+          onChange={(preference) => setProfile({ ...profile, emailPromptsEnabled: preference })}
         />
 
         <AvailabilityPicker />

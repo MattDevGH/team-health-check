@@ -1005,6 +1005,24 @@ linked — email for a member without it, Slack alone for a member with it.
   Phase 2 emailed everybody with an address, which was right for a team with no
   Slack and told everybody else twice. The gate lives inside `sendEmailPrompt`
   rather than in its callers, so no future caller can forget it.
+- **The control shows the effective state, not the stored one**
+  (`src/app/me/email-prompt-toggle.tsx`). A switch rendered off for somebody who
+  is in fact being emailed would be a lie told by a perfectly accessible
+  control. When it is following the default it says which default and why,
+  because "off because you said so" and "off because Slack can reach you"
+  behave differently the moment Slack is unlinked. Touching it always writes a
+  boolean: a click cannot have meant "put me back on the default".
+- The explanation names what it governs (the prompt when a check opens), what
+  it does not ("signing in is never affected: your access links arrive by email
+  whatever this says"), and how it differs from Reminders above it — which
+  governs *which* messages are sent rather than *how* they arrive.
+  Requirement 4.5 exists because "email notifications" alone does not say
+  whether sign-in is included, and this application sends its access links by
+  email.
+- `sign-in-survives-preferences.test.ts` is Property 5, and it was green the
+  moment it was written: nothing on the magic-link path reads a preference.
+  That is the point — it is an invariant about a path with every reason to grow
+  a check later, and adding one fails 3 tests.
 - **The known hole is asserted, not implied.** A Slack-linked member who has
   chosen nothing hears nothing when Slack delivery fails, because email
   defaults off for them. That is the stated hole in design decision 3, and the
