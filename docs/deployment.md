@@ -152,6 +152,20 @@ merge.
 
 **Verify by reading the schema back.** An exit code is not evidence.
 
+```bash
+npx tsx scripts/verify-production.ts
+```
+
+Read-only — every statement behind it is a SELECT or a PRAGMA, which matters
+because there is no point-in-time restore on this plan. It reports which
+migrations the ledger records, whether the columns a recent milestone added
+actually exist, and what the most recent health check holds: how many answers,
+from how many members, and whether the stored aggregates still agree with the
+raw responses. Ids and counts only, so the output is safe to paste into notes.
+
+The column list is the load-bearing part. It is read from the database itself,
+while the ledger is a record of what somebody meant to do to it.
+
 **Applied 2026-09-15: `20260914212427_add_materialised_at` and
 `20260915111500_backfill_materialised_at`.** The first adds
 `HealthCheckSession.materialisedAt`, which the dashboard reads to tell "results
