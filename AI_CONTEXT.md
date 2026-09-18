@@ -1035,6 +1035,35 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**Production can be read back with a command** (`scripts/verify-production.ts`,
+`src/lib/production-check/verification.ts`). Deployment 3.6 asks for a migrated
+schema to be verified by reading it back rather than inferred from an exit code,
+and phase 4.2 asks the same of an answer given through the deployed interface.
+Both are one discipline: the application agreeing with itself is not evidence.
+
+- **Read-only by construction.** Every statement is a SELECT or a PRAGMA, and
+  the client parameter is narrowed to an `execute` that returns rows. There is
+  no point-in-time restore on the current Turso plan, so a script pointed at
+  production had better not be able to write.
+- **Ids and counts only.** The output gets pasted into notes; a session link
+  authenticates whoever holds it, and an address in a pasted log cannot be taken
+  back. Asserted rather than trusted — one test serialises the whole report and
+  fails on an address or the word "token".
+- **It recomputes the averages from the raw answers and compares them to
+  `SessionAggregate`.** Reading the aggregates back proves they exist;
+  recomputing them proves they are right, and a disagreement is precisely the
+  defect a reader of the dashboard could never see. Mutation-checked: a test
+  corrupts one stored average and requires the disagreement to be named, so a
+  comparison that always returned "clean" could not pass.
+- **`ledgerPresent` exists because running the script against `prisma/dev.db`
+  first reported every migration as missing** against a database that was
+  entirely up to date. Prisma's local file has no `_applied_migration` table —
+  that ledger is written only by `migrate-production.ts`. Somebody who sees a
+  false alarm once stops believing the next one, so the report distinguishes
+  "no ledger" from "behind", and the columns are the load-bearing check either
+  way: they are read from the database, while a ledger records what somebody
+  meant to do to it.
+
 **Phase 4.1 found a gap the browser test was written to prove absent.** The
 dashboard rendered `SessionLifecyclePanel` only for a Delivery Manager, and that
 panel is what carries "Answer the health check" — so a contributor who came to
