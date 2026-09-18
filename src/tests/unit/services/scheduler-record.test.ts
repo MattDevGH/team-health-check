@@ -33,6 +33,36 @@ let sessionService: SessionService;
 let events: Record<string, unknown>[];
 let scheduler: ReturnType<typeof createSchedulerService>;
 
+/**
+ * Where the session service thinks it is, which the tick sets before it runs.
+ *
+ * Injected rather than left to the wall clock, and that is a fix rather than a
+ * tidy-up: four tests here failed for the first time on 2026-09-18 at 17:00
+ * UTC, having passed since they were written. `sessionService.open` stamps
+ * `scheduledCloseAt` from its own clock, so on a Friday evening the next
+ * Friday 17:00 it could find was a **week** after the date the tick was given —
+ * nothing was due to close, and the four tests about closing and materialising
+ * had nothing to assert on.
+ *
+ * A test whose result depends on the day it runs is not evidence about the
+ * code. This one was green for months and would have gone green again by
+ * itself the following morning, which is the worst version of the problem.
+ */
+let serviceClock = new Date(0);
+
+/**
+ * Runs a tick with the service clock set a minute behind it.
+ *
+ * A minute rather than zero because the rows a tick reads were written before
+ * it started: closing stamps `actualCloseAt`, and materialising asks whether
+ * the quiet period since that stamp has elapsed. With both taken from the same
+ * instant the answer is always "no", which is true of no real deployment.
+ */
+async function tickAt(when: Date) {
+  serviceClock = new Date(when.getTime() - 60_000);
+  return scheduler.tick(when);
+}
+
 beforeEach(() => {
   repos = createInMemoryRepositories();
   sessionService = createSessionService({
@@ -42,6 +72,7 @@ beforeEach(() => {
     responseRepo: repos.response,
     sessionAggregateRepo: repos.sessionAggregate,
     teamScheduleRepo: repos.teamSchedule,
+    now: () => serviceClock,
   });
 
   events = [];
@@ -80,7 +111,7 @@ describe('what a tick records', () => {
     // from outside, and only one of them is a problem
     await teamWithSchedule();
 
-    await scheduler.tick(MONDAY_0900);
+    await tickAt(MONDAY_0900);
 
     expect(named('tick.started')).toHaveLength(1);
     expect(named('tick.finished')[0]).toHaveProperty('durationMs');
@@ -89,7 +120,7 @@ describe('what a tick records', () => {
   it('names the team and session it opened', async () => {
     const team = await teamWithSchedule();
 
-    await scheduler.tick(MONDAY_0900);
+    await tickAt(MONDAY_0900);
 
     const opened = named('session.opened')[0];
     expect(opened).toMatchObject({ teamId: team.id });
@@ -98,26 +129,30 @@ describe('what a tick records', () => {
 
   it('names the team and session it closed', async () => {
     const team = await teamWithSchedule();
-    await scheduler.tick(MONDAY_0900);
+    await tickAt(MONDAY_0900);
     events.length = 0;
 
-    await scheduler.tick(FRIDAY_AFTER_CLOSE);
+    await tickAt(FRIDAY_AFTER_CLOSE);
 
     expect(named('session.closed')[0]).toMatchObject({ teamId: team.id });
   });
 
   it('names the session it materialised', async () => {
     /*
-     * In the same tick as the close, because the in-memory repository stamps
-     * `actualCloseAt` from the wall clock while the tick is given a date years
-     * away — so the quiet period has always elapsed. Against a real database
-     * this would be the following tick, and the record is the same either way.
+     * In the same tick as the close, because `tickAt` puts the service clock a
+     * minute behind the tick: the close stamps `actualCloseAt` a minute ago and
+     * the quiet period has therefore elapsed by the time materialisation is
+     * considered. Against a real database this would be the following tick,
+     * and the record is the same either way.
+     *
+     * It used to rely on the wall clock being years from the fixture dates,
+     * which stopped being true on 2026-09-18.
      */
     await teamWithSchedule();
-    await scheduler.tick(MONDAY_0900);
+    await tickAt(MONDAY_0900);
     events.length = 0;
 
-    await scheduler.tick(FRIDAY_AFTER_CLOSE);
+    await tickAt(FRIDAY_AFTER_CLOSE);
 
     expect(named('session.materialised')[0].sessionId).toEqual(expect.any(String));
   });
@@ -130,7 +165,7 @@ describe('what a tick records', () => {
      */
     await repos.team.create({ name: 'Unscheduled' });
 
-    await scheduler.tick(MONDAY_0900);
+    await tickAt(MONDAY_0900);
 
     expect(named('tick.skipped')[0]).toMatchObject({ reason: 'no schedule configured' });
   });
@@ -139,7 +174,7 @@ describe('what a tick records', () => {
     const team = await repos.team.create({ name: 'Archived' });
     await repos.team.update(team.id, { archived: true });
 
-    await scheduler.tick(MONDAY_0900);
+    await tickAt(MONDAY_0900);
 
     expect(named('tick.skipped')[0]).toMatchObject({
       teamId: team.id,
@@ -152,7 +187,7 @@ describe('what a tick records', () => {
     // defect the dashboard's "overdue" state exists to fix
     await teamWithSchedule();
 
-    await scheduler.tick(SATURDAY);
+    await tickAt(SATURDAY);
 
     expect(named('tick.skipped')[0].reason).toMatch(/collection window/i);
   });
@@ -164,22 +199,22 @@ describe('what a tick records', () => {
      * gone, and the reason becomes that instead.
      */
     const team = await teamWithSchedule();
-    await scheduler.tick(MONDAY_0900);
+    await tickAt(MONDAY_0900);
     const open = await repos.session.findOpenByTeamId(team.id);
     await sessionService.close(team.id, open!.id);
     events.length = 0;
 
-    await scheduler.tick(WEDNESDAY);
+    await tickAt(WEDNESDAY);
 
     expect(named('tick.skipped')[0].reason).toMatch(/already been served/i);
   });
 
   it('says a check is already collecting rather than inventing another reason', async () => {
     await teamWithSchedule();
-    await scheduler.tick(MONDAY_0900);
+    await tickAt(MONDAY_0900);
     events.length = 0;
 
-    await scheduler.tick(new Date('2026-09-15T09:00:00.000Z'));
+    await tickAt(new Date('2026-09-15T09:00:00.000Z'));
 
     expect(named('tick.skipped')[0].reason).toMatch(/already collecting/i);
   });
@@ -192,7 +227,7 @@ describe('what a tick records', () => {
     await teamWithSchedule();
     await repos.team.create({ name: 'Unscheduled' });
 
-    await scheduler.tick(MONDAY_0900);
+    await tickAt(MONDAY_0900);
 
     const ids = new Set(events.map(e => e.tickId));
     expect(ids.size).toBe(1);
@@ -202,10 +237,10 @@ describe('what a tick records', () => {
   it('gives a second tick a different id', async () => {
     await teamWithSchedule();
 
-    await scheduler.tick(MONDAY_0900);
+    await tickAt(MONDAY_0900);
     const first = events[0].tickId;
     events.length = 0;
-    await scheduler.tick(new Date('2026-09-15T09:00:00.000Z'));
+    await tickAt(new Date('2026-09-15T09:00:00.000Z'));
 
     expect(events[0].tickId).not.toBe(first);
   });
@@ -216,7 +251,7 @@ describe('what a tick records', () => {
      * tick. It is retried — for ever, silently, if the cause is permanent.
      */
     await teamWithSchedule();
-    await scheduler.tick(MONDAY_0900);
+    await tickAt(MONDAY_0900);
     events.length = 0;
 
     const failing = createSchedulerService({
@@ -244,7 +279,7 @@ describe('what a tick returns', () => {
   it('counts what it did, for the cron service that shows the response', async () => {
     await teamWithSchedule();
 
-    const summary = await scheduler.tick(MONDAY_0900);
+    const summary = await tickAt(MONDAY_0900);
 
     expect(summary).toMatchObject({ opened: 1, closed: 0, materialised: 0 });
   });
@@ -252,16 +287,16 @@ describe('what a tick returns', () => {
   it('carries the tick id, so a response ties to the lines it produced', async () => {
     await teamWithSchedule();
 
-    const summary = await scheduler.tick(MONDAY_0900);
+    const summary = await tickAt(MONDAY_0900);
 
     expect(summary.tickId).toBe(events[0].tickId);
   });
 
   it('counts a close and a materialisation', async () => {
     await teamWithSchedule();
-    await scheduler.tick(MONDAY_0900);
+    await tickAt(MONDAY_0900);
 
-    const closing = await scheduler.tick(FRIDAY_AFTER_CLOSE);
+    const closing = await tickAt(FRIDAY_AFTER_CLOSE);
 
     expect(closing.closed).toBe(1);
     expect(closing.materialised).toBe(1);
@@ -275,7 +310,7 @@ describe('what a tick returns', () => {
      */
     await teamWithSchedule();
 
-    const summary = await scheduler.tick(SATURDAY);
+    const summary = await tickAt(SATURDAY);
 
     expect(summary).toMatchObject({ opened: 0, closed: 0, materialised: 0 });
   });
@@ -295,7 +330,7 @@ describe('the reasons a tick passed a team over', () => {
     const team = await repos.team.create({ name: "Unscheduled" });
     await repos.teamMember.create({ teamId: team.id, name: "M", email: "m@example.invalid" });
 
-    const summary = await scheduler.tick(MONDAY_0900);
+    const summary = await tickAt(MONDAY_0900);
 
     expect(summary.reasons).toEqual({ 'no schedule configured': 1 });
   });
@@ -308,7 +343,7 @@ describe('the reasons a tick passed a team over', () => {
       await repos.teamMember.create({ teamId: team.id, name: "M", email: `${name}@example.invalid` });
     }
 
-    const summary = await scheduler.tick(MONDAY_0900);
+    const summary = await tickAt(MONDAY_0900);
 
     expect(summary.reasons['no schedule configured']).toBe(2);
   });
@@ -318,7 +353,7 @@ describe('the reasons a tick passed a team over', () => {
     const archived = await repos.team.create({ name: "Gone" });
     await repos.team.update(archived.id, { archived: true });
 
-    const summary = await scheduler.tick(SATURDAY);
+    const summary = await tickAt(SATURDAY);
 
     expect(summary.reasons).toMatchObject({
       'team archived': 1,
@@ -329,7 +364,7 @@ describe('the reasons a tick passed a team over', () => {
   it('carries nothing when every team was acted on', async () => {
     await teamWithSchedule();
 
-    const summary = await scheduler.tick(MONDAY_0900);
+    const summary = await tickAt(MONDAY_0900);
 
     expect(summary.reasons).toEqual({});
   });
@@ -346,7 +381,7 @@ describe('the reasons a tick passed a team over', () => {
     const bare = await repos.team.create({ name: "Unscheduled" });
     await repos.teamMember.create({ teamId: bare.id, name: "M", email: "b@example.invalid" });
 
-    const summary = await scheduler.tick(SATURDAY);
+    const summary = await tickAt(SATURDAY);
 
     const recorded: Record<string, number> = {};
     for (const skip of named('tick.skipped')) {
@@ -388,7 +423,7 @@ describe('what a tick failed to do', () => {
   it('reports nothing failed when nothing did', async () => {
     await teamWithSchedule();
 
-    expect((await scheduler.tick(MONDAY_0900)).failures).toBe(0);
+    expect((await tickAt(MONDAY_0900)).failures).toBe(0);
   });
 
   it('counts a materialisation that threw', async () => {
