@@ -164,10 +164,17 @@ anyone signed in, with no delivery channel involved. One PR.
 - [x] A signed-in member opens a check, reaches it from the dashboard, answers,
       and sees their answers saved
 - [x] The same from the navigation route
-- [ ] A contributor, not a Delivery Manager, can do both — the route tests
-      prove the API answers one; no browser test walks it as one
-- [ ] axe on both new surfaces — covered for the `/me/health-check` page in its
-      own tests, not in the browser tier
+- [x] A contributor, not a Delivery Manager, can do both. *Writing it found the
+      gap it was meant to prove absent: the dashboard rendered the lifecycle
+      panel — and so the "Answer the health check" link inside it — only for a
+      Delivery Manager, so a contributor reading their team's results while a
+      check collected was offered no way to take part. Requirement 1.1 asks the
+      dashboard for that route and does not make it a privilege. The panel is
+      rendered for everybody now with its open and close controls gated.*
+- [x] axe on both new surfaces, in the browser tier rather than only jsdom.
+      *Both states of the `/me/health-check` page, and the contributor's view of
+      the panel — a state no manager ever lands on, and so one no page-level
+      audit had ever visited.*
 - _Requirements: 1.1, 1.2, 1.5, NFR 3.1_
 
 ### 4.2 Against production

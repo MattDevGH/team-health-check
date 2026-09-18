@@ -488,6 +488,78 @@ test.describe('session lifecycle states', () => {
 });
 
 /**
+ * The member's own health check, in the browser.
+ *
+ * Requirements: Reaching Your Health Check 1.2, 1.3, NFR 3.1
+ *
+ * Covered by jest-axe in its own page tests, which is not the same claim: jsdom
+ * has no computed styles, so it cannot see a contrast failure. Four pages
+ * shipped with WCAG AA contrast failures that jsdom audits had passed.
+ *
+ * Both states, because they render different content and only one of them has
+ * anything to click.
+ */
+test.describe('a member’s own health check', () => {
+  const OPEN = 'a11y-my-check-open@e2e.invalid';
+  const NOTHING = 'a11y-my-check-nothing@e2e.invalid';
+  const CONTRIBUTOR = 'a11y-my-check-contributor@e2e.invalid';
+  let contributorTeamId = '';
+
+  test.beforeAll(() => {
+    const open = seedTeam({ teamName: 'A11y My Check Team', memberEmail: OPEN });
+    seedSession({ teamId: open.teamId, memberId: open.memberId, status: 'open' });
+
+    seedTeam({ teamName: 'A11y No Check Team', memberEmail: NOTHING });
+
+    const contributorTeam = seedTeam({
+      teamName: 'A11y Contributor Panel Team',
+      memberEmail: 'a11y-contributor-manager@e2e.invalid',
+    });
+    contributorTeamId = contributorTeam.teamId;
+    const contributor = seedMember({
+      teamId: contributorTeam.teamId,
+      email: CONTRIBUTOR,
+      role: 'contributor',
+    });
+    seedSession({
+      teamId: contributorTeam.teamId,
+      memberId: contributor.memberId,
+      status: 'open',
+    });
+  });
+
+  test('offering the check that is open', async ({ page }) => {
+    await signIn(page, OPEN);
+    await page.goto('/me/health-check');
+    await expect(page.getByRole('link', { name: /answer the health check/i })).toBeVisible();
+
+    await expectNoViolations(page, 'my health check, one open');
+  });
+
+  test('saying nothing is open', async ({ page }) => {
+    await signIn(page, NOTHING);
+    await page.goto('/me/health-check');
+    await expect(page.getByText(/no health check is open/i)).toBeVisible();
+
+    await expectNoViolations(page, 'my health check, nothing open');
+  });
+
+  test('the lifecycle panel as a contributor sees it', async ({ page }) => {
+    /*
+     * A state no manager ever lands on, and so one no audit had ever visited:
+     * the same panel without its two controls.
+     */
+    await signIn(page, CONTRIBUTOR);
+    await page.goto(`/teams/${contributorTeamId}/dashboard`);
+    await expect(page.getByRole('region', { name: 'Health check' })).toContainText(
+      /collecting responses/i,
+    );
+
+    await expectNoViolations(page, 'lifecycle panel as a contributor');
+  });
+});
+
+/**
  * States the shell introduces that a page-level audit never reaches.
  *
  * Requirements: Manager Experience 1.2, 1.5, 1.6; NFR 1
