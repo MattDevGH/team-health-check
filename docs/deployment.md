@@ -386,6 +386,59 @@ carries Slack's own error, so `missing_scope` is visible rather than inferred.
 A Slack email match never *creates* a member. Being in the workspace is not
 being on a team.
 
+## The two ways out
+
+Signing in and being told there is something to answer are different problems
+with different failure modes, and the second one is easier to get wrong because
+nobody complains about a message they never knew to expect.
+
+| Channel | Needs | Reaches |
+|---|---|---|
+| Slack prompt | `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, member's Slack account linked | Members with a Slack link |
+| Email prompt | `RESEND_API_KEY`, `EMAIL_SENDER`, **verified sending domain**, an address on the member | Members with an address |
+
+**Until 2026-09-18 there was only one.** The scheduler tick called
+`sendSlackPrompt` and nothing else, so a deployment with Resend configured and
+no Slack opened checks on schedule and told nobody. It was found in production
+on 2026-09-14, on this deployment, and the `reaching-your-health-check` spec
+exists because of it.
+
+**With neither**, the scheduler still opens and closes checks and members can
+still answer: the dashboard and the Health check route both offer the current
+check to anybody signed in. Nothing tells them to look.
+
+**With Slack only**, linked members are prompted. Anyone unlinked is in the
+situation above — which is worth checking against your member list rather than
+assuming, because it is invisible from the tick's response.
+
+**With email only**, every member with an address is prompted. The sending
+domain matters here exactly as much as it does for sign-in: `onboarding@resend.dev`
+delivers only to the Resend account owner and drops everything else silently.
+
+**With both**, each member gets whichever channels apply to them, attempted
+independently — a Resend outage does not stop Slack prompts, and vice versa. A
+member who has expressed no preference gets Slack alone if they have a link and
+email if they do not.
+
+The member's own choice lives on their profile page (**Email prompts**) and
+governs prompts only. No preference can stop a sign-in link; that is asserted
+as a property, not a convention.
+
+### What to look for when nobody was prompted
+
+The tick's response body says what it did, and `prompts` counts **members
+reached**, not messages sent — somebody who got both has been prompted once as
+far as that number is concerned. A tick that opened a check and prompted nobody
+is the symptom this section exists for.
+
+Delivery failures are recorded with ids only, never an address or a session
+token: look for `notification.email_prompt.failed` and its Slack equivalent.
+
+One hole is known and deliberate: a Slack-linked member who has chosen nothing
+hears nothing if Slack delivery fails, because email defaults off for them.
+Closing it needs the retry queue to report outcomes, and it is on the roadmap
+rather than built.
+
 ## Email
 
 `onboarding@resend.dev` delivers **only to the Resend account owner**. Every

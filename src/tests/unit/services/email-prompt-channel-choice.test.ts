@@ -168,6 +168,22 @@ describe('what the preference does not touch', () => {
     expect(result).toEqual({ slack: true, email: true });
   });
 
+  it('prompts by email even with reminders turned off', async () => {
+    /*
+     * Requirement 4.4, the direction that is easy to miss. `remindersEnabled`
+     * governs *which* messages are sent — the nudge partway through and the
+     * warning that a check is closing — and has never gated the prompt that
+     * opens one. `sendSlackPrompt` does not read it, and neither does this.
+     *
+     * Two adjacent switches both about email is exactly where one quietly
+     * starts doing the other one's job.
+     */
+    await repos.teamMember.update(memberId, { remindersEnabled: false });
+
+    await expect(build(false).sendEmailPrompt(memberId, session)).resolves.toBe(true);
+    expect(email.sentPrompts).toHaveLength(1);
+  });
+
   it('still refuses to email a member who is away, whatever they asked for', async () => {
     /*
      * The preference says which channels may be used, not whether to ignore

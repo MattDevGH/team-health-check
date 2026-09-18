@@ -1035,6 +1035,18 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+Phases 1 to 3 of `reaching-your-health-check` are complete — 43 of its 51
+boxes. What is left is phase 4: a contributor walking both surfaces in a
+browser, axe in the browser tier, and the production pass (open a check on the
+deployed application, answer it with no session link from any message, read the
+response back out of Turso, and — once a sending domain is verified — confirm
+an email prompt arrives and is not mistaken for a sign-in email).
+
+The channels are documented in README ("How a member hears a check has opened")
+and `docs/deployment.md` ("The two ways out"), including the part worth saying
+out loud: until 2026-09-18 Slack was the only prompt channel, so a deployment
+without it opened checks on schedule and told nobody they existed.
+
 **Slack sign-in works in a real workspace, proved 2026-09-17** against the
 hosted app rather than an ngrok tunnel. A linked member signs in; the reply is
 ephemeral; a second use of the link fails with "Invalid or expired access link";
