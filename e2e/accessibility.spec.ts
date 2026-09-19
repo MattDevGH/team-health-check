@@ -22,7 +22,13 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
 import { allowConsoleErrors, test, expect } from './fixtures';
-import { seedMember, seedSession, seedTeam, type SeededAggregate } from './db';
+import {
+  seedMember,
+  seedSession,
+  seedTeam,
+  setSchedulerHeartbeat,
+  type SeededAggregate,
+} from './db';
 import { signIn } from './sign-in';
 
 /**
@@ -484,6 +490,94 @@ test.describe('session lifecycle states', () => {
     await expect(page.getByRole('dialog', { name: /close this health check/i })).toBeVisible();
 
     await expectNoViolations(page, 'close confirmation dialog');
+  });
+});
+
+/**
+ * The two dashboard states that say why there is nothing to read.
+ *
+ * Requirements: Explaining Itself 1.1, 1.2, 1.4; NFR 1
+ *
+ * "Results are being prepared" and "overdue" were the whole point of the
+ * milestone — three different silences that used to render as one blankness —
+ * and neither had ever been through axe in a browser. jsdom has no computed
+ * styles, so its audits cannot see a contrast failure, and both of these are
+ * muted grey text carrying the only explanation on the page.
+ *
+ * The third silence, a value suppressed for anonymity, has its own describe
+ * further down.
+ */
+test.describe('a dashboard with nothing to show yet', () => {
+  const PREPARING = 'a11y-preparing@e2e.invalid';
+  const OVERDUE = 'a11y-overdue@e2e.invalid';
+  let preparingTeamId = '';
+  let overdueTeamId = '';
+
+  const LONG_AGO = new Date('2026-08-17T17:00:00.000Z');
+
+  test.beforeAll(() => {
+    /*
+     * Closed moments ago, because "being prepared" is bounded by the clock:
+     * results not computed within fifteen minutes of a close stop being
+     * pending and start being overdue, which is the other test below.
+     */
+    const preparing = seedTeam({ teamName: 'A11y Preparing Team', memberEmail: PREPARING });
+    seedSession({
+      teamId: preparing.teamId,
+      memberId: preparing.memberId,
+      status: 'closed',
+      closedAt: new Date(Date.now() - 5_000),
+      aggregates: [],
+    });
+    preparingTeamId = preparing.teamId;
+
+    const overdue = seedTeam({ teamName: 'A11y Overdue Team', memberEmail: OVERDUE });
+    seedSession({
+      teamId: overdue.teamId,
+      memberId: overdue.memberId,
+      status: 'closed',
+      closedAt: LONG_AGO,
+      aggregates: [],
+    });
+    overdueTeamId = overdue.teamId;
+  });
+
+  test('while the results are still being prepared', async ({ page }) => {
+    // A scheduler that ran recently: the wait is normal, and bounded
+    setSchedulerHeartbeat(new Date());
+
+    await signIn(page, PREPARING);
+    await page.goto(`/teams/${preparingTeamId}/dashboard`);
+    /*
+     * Asserted on the Latest Session panel, which is where this explanation
+     * lives on a page load. The lifecycle panel carries its own version, but
+     * only for a reader who closed the check in this same page session — it
+     * takes which sessions are materialised from the trends response fetched
+     * when the page loaded, so on a fresh load an already-closed check reads
+     * as simply the last one.
+     */
+    await expect(page.getByRole('region', { name: /latest session/i })).toContainText(
+      /few minutes/i,
+    );
+
+    await expectNoViolations(page, 'dashboard while results are being prepared');
+  });
+
+  test('once the results are overdue', async ({ page }) => {
+    /*
+     * The same closed check, with a scheduler that has not run for an hour.
+     * A different sentence for a different problem — and the one a reader acts
+     * on, so it must be legible rather than merely present.
+     */
+    setSchedulerHeartbeat(new Date(LONG_AGO.getTime() - 60 * 60 * 1000));
+
+    await signIn(page, OVERDUE);
+    await page.goto(`/teams/${overdueTeamId}/dashboard`);
+    await expect(
+      page.getByRole('region', { name: /latest session/i }).getByText(/overdue/i).first(),
+    ).toBeVisible();
+
+    await expectNoViolations(page, 'dashboard with overdue results');
   });
 });
 

@@ -1035,6 +1035,44 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**`explaining-itself` phase 5.1 is done, and closing it found the defect it was
+looking for** (2026-09-19). The spec is at 57 of 61; what remains needs a person
+at the deployed application.
+
+Two of the four boxes were already covered by tests that existed —
+`navigation.spec.ts` proves a member answers, sees the confirmation and reaches
+somewhere from it, and that a contributor's navigation offers Health check,
+Dashboard and Profile. They were ticked on the tests that exist rather than
+rewritten, which is the whole point of checking box by box.
+
+- **`e2e/results-arriving.spec.ts` is new.** The two halves of "results are
+  being prepared, then results" existed separately and nothing joined them:
+  `session-lifecycle.spec.ts` watched the message appear and `journey.spec.ts`
+  ticked and read aggregates out of the database. A message that appears
+  correctly and never clears is the same defect in slow motion, and nothing
+  would have caught it.
+- **axe reached two dashboard states for the first time** — results being
+  prepared, and results overdue. Both are muted text carrying the only
+  explanation on the page, and jsdom has no computed styles to judge contrast
+  with.
+
+**The defect.** Criterion 1.2 asks that "being prepared" bound the wait, and the
+bounded wording — "this usually takes a few minutes" — lived only in the
+dashboard's Latest Session panel, which does not render until a team has
+results. So after a team's **first** check closed, the only sentence on the page
+was the lifecycle panel's open-ended "Results are still being prepared." That is
+the worst possible moment for an unbounded message: a first check is when nobody
+yet knows whether the tool works, and open-ended is indistinguishable from
+never. The horizon is in both panels now; removing it fails one unit test and
+two browser tests.
+
+Worth keeping about the two panels: the lifecycle panel takes which sessions are
+materialised from the trends response fetched when the page loaded, so it shows
+`awaiting_results` to a reader who closed the check in that same page session,
+and reads as simply "the last one" on a fresh load. The Latest Session panel is
+what carries the explanation for everybody else. That is why the sentence has to
+be in both, and why the axe scan for it targets the Latest Session panel.
+
 **The session service was writing two of its timestamps from the wall clock**
 while taking every other date from its injected `now()`, and that is fixed
 (`src/lib/services/session.service.ts`, pinned by
