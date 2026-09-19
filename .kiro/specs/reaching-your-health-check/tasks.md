@@ -194,9 +194,23 @@ anyone signed in, with no delivery channel involved. One PR.
 
 ### 4.3 Reconcile
 
-- [ ] Update README and AI_CONTEXT
-- [ ] Record anything the production pass found that no test could
-- [ ] Full gate set, then merge
+- [x] Update README and AI_CONTEXT. *README had drifted well past this
+      milestone — it opened with "all three specs are complete" against twelve,
+      and its Spec section listed four of them. All twelve are listed now, each
+      with what is open and why.*
+- [x] Record anything the production pass found that no test could. *Three
+      defects, plus the one that writing the browser test found, plus a fifth
+      that belonged to no milestone: four scheduler tests reading the wall clock,
+      which failed for the first time at 17:00 UTC on a Friday and would have
+      repaired themselves by morning.*
+- [x] Full gate set, then merge
+
+**Checkpoint: the milestone is closed except 4.2’s third box**, which needs a
+verified Resend sending domain rather than any code. Slack is the only prompt
+channel proved end to end in production; email is proved at every tier below
+that. The unproved part is Resend delivering to somebody who is not the account
+owner — which is the failure this project has already been bitten by once,
+silently.
 
 ---
 

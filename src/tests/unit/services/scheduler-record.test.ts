@@ -47,6 +47,12 @@ let scheduler: ReturnType<typeof createSchedulerService>;
  * A test whose result depends on the day it runs is not evidence about the
  * code. This one was green for months and would have gone green again by
  * itself the following morning, which is the worst version of the problem.
+ *
+ * Injecting the clock here was only half of it, and three of the four failed
+ * again the next day: `close` and the supersede-on-open path were writing
+ * `actualCloseAt` with `new Date()` while everything else used the injected
+ * clock, so the tick was comparing two different clocks. That is fixed in the
+ * service, and pinned by `session-service-clock.test.ts`.
  */
 let serviceClock = new Date(0);
 
