@@ -193,11 +193,34 @@ phase exists to stop.
 
 ### 5.1 End to end
 
-- [ ] A member answers, sees confirmation, and reaches somewhere from it
-- [ ] A manager closes a check and sees results being prepared, then results
-- [ ] A contributor's navigation offers Health check, Dashboard and Profile
-- [ ] axe across the new states
+- [x] A member answers, sees confirmation, and reaches somewhere from it.
+      *Already covered when this was checked, by `navigation.spec.ts`
+      "answering ends somewhere, and says the answers can still change" — the
+      confirmation, the wording about changing answers until close, the control
+      that now reads "update", and the door back into the application. Ticked
+      on the test that exists rather than rewritten.*
+- [x] A manager closes a check and sees results being prepared, then results.
+      *New: `e2e/results-arriving.spec.ts`. The halves existed separately —
+      `session-lifecycle.spec.ts` watched the message appear and
+      `journey.spec.ts` ticked and read aggregates out of the database — and
+      nothing walked a person from one to the other. A message that appears
+      correctly and never clears is the same defect in slow motion.*
+- [x] A contributor's navigation offers Health check, Dashboard and Profile.
+      *Already covered by `navigation.spec.ts` "keeps the dashboard, the health
+      check and the profile".*
+- [x] axe across the new states. *Two were missing from the browser tier and
+      are added: a dashboard whose results are being prepared, and one whose
+      results are overdue. Both are muted text carrying the only explanation on
+      the page, and jsdom cannot see a contrast failure.*
 - _Requirements: 1.1, 2.1, 2.3, 3.1_
+
+**What writing 5.1 found.** Criterion 1.2 asks the message to bound the wait,
+and the bounded wording lived only in the dashboard's Latest Session panel —
+which does not render until a team has results. So after a team's **first**
+check closed, the one sentence on the page was the lifecycle panel's
+open-ended "Results are still being prepared.", at the exact moment nobody yet
+knows whether the tool works. The horizon is in both places now, and removing
+it fails one unit test and two browser tests.
 
 ### 5.2 Against production
 
@@ -207,11 +230,20 @@ phase exists to stop.
 - [ ] Set an away period, see it, cancel it
 - _Requirements: 1.1, 1.3, 5.1, 5.2_
 
+*Needs a person at the deployed application. Everything 5.1 covers is proved in
+a browser against a disposable database; what these two ask is whether the same
+states read correctly against real data, which is how every previous production
+pass has found something a test could not.*
+
 ### 5.3 Reconcile
 
-- [ ] Update README and AI_CONTEXT
+- [x] Update README and AI_CONTEXT
 - [ ] Record what the production pass found that no test could
 - [ ] Full gate set, then merge
+
+*The second box cannot be ticked before 5.2 happens, and the third belongs to
+the milestone's own final merge rather than to the pull request that closed
+5.1.*
 
 ---
 

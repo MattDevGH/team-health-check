@@ -178,9 +178,22 @@ function describe(state: SessionState): string {
     case 'collecting':
       return 'Collecting responses.';
     case 'awaiting_results':
-      // Closing does not compute results — a scheduler tick does, shortly
-      // after. Saying nothing here would read as nobody having answered.
-      return 'This check has closed. Results are still being prepared.';
+      /*
+       * Closing does not compute results — a scheduler tick does, shortly
+       * after. Saying nothing here would read as nobody having answered.
+       *
+       * Requirement 1.2: the wait is bounded here as well as on the dashboard's
+       * Latest Session panel, which has carried that horizon all along and does
+       * not render until a team has results. So after a team's **first** check
+       * closes this was the only sentence on the page, and it was open-ended —
+       * indistinguishable from a message that will never change, at the exact
+       * moment nobody yet knows whether the tool works.
+       *
+       * "A few minutes" rather than a number: the interval belongs to an
+       * external trigger somebody can edit, so a precise promise is one this
+       * code cannot keep.
+       */
+      return 'This check has closed. Results are still being prepared — this usually takes a few minutes.';
     case 'idle':
       return `Last health check closed on ${formatDate(state.lastClosed.actualCloseAt)}.`;
     case 'never_run':
