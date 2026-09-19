@@ -40,11 +40,15 @@ rather than only once a pull request exists.
 
 ### Project status
 
-All three specs in `.kiro/specs/` are complete. The application supports the full
-loop: magic-link and genesis sign-in, team and schedule configuration, scheduled
-sessions, feedback through the web interface or Slack, close and materialisation,
-and a trends dashboard — and a delivery manager can now run all of it from the
-interface, without knowing URLs or calling the API.
+**Live, and used against a real team's data.** The application supports the full
+loop: magic-link, Slack and genesis sign-in; team and schedule configuration;
+scheduled sessions; feedback through the web interface or Slack; close and
+materialisation; and a trends dashboard — with a delivery manager able to run
+all of it from the interface, without knowing URLs or calling the API.
+
+Twelve specs live in `.kiro/specs/`, listed under **Spec** below. Eight are
+closed; the open boxes in the rest are named there and are mostly things that
+need a person rather than more code.
 
 Integration hardening passed its final verification gate on 2026-08-26 — lint,
 type check, 1193 Vitest tests, build, 27 Playwright tests with zero skips, and a
@@ -63,6 +67,12 @@ defects that a fully green test suite did not catch:
 The lesson is recorded as Testing Rules in `AGENTS.md`: assert observable
 outcomes rather than the calls you just made, and run the real thing before
 claiming it works.
+
+**It keeps being the right lesson.** Every milestone since has found something
+in the same way — by a person using the application, not by adding assertions to
+a green suite. The most recent, on 2026-09-18, found three defects in one
+sitting while 2,180 tests passed. One of those tests was specifically about the
+defect it failed to see.
 
 ### Manager experience — complete 2026-08-30
 
@@ -151,16 +161,62 @@ none of it failed one.
 - **A filterable chart** — focus on one theme at a time, without ever removing
   a value from the page.
 
-### Next milestone
+### Reaching your health check — 2026-09-19
 
-**Deployment** — Vercel, Turso, and the production cron trigger. Specced in
-`.kiro/specs/deployment/`; phases 1–3 are done.
+`.kiro/specs/reaching-your-health-check/` exists because of a single morning in
+production. On 2026-09-14 a check opened on schedule and **nobody could answer
+it**. Nothing in the signed-in application linked to a session, and the only
+way anyone had ever reached one was a link in a Slack message — so a deployment
+without Slack opened checks on schedule and told nobody they existed.
 
-It was expected to be configuration rather than code, because the production
-database path already had execution coverage. Two assumptions turned out to be
-false and cost real work:
+Four phases, four pull requests.
 
-- **Vercel’s Hobby plan cannot run this scheduler.** Its cron jobs run once a
+- **A member can reach their own check.** The dashboard offers a route while a
+  check is collecting, and `/me/health-check` resolves the signed-in member's
+  own link from anywhere in the application. It is a link rather than a
+  redirect: landing straight in a form having clicked "Health check" gives no
+  moment to see what is about to be asked, and no way back without the browser
+  button.
+- **Email can carry a prompt.** `sendHealthCheckPrompt` is a second method
+  rather than a flag on the first, so the prompt and the sign-in link cannot
+  drift into being the same template. Each channel is attempted independently:
+  a Resend outage that stopped Slack prompts would be worse than having no
+  email at all.
+- **The member chooses.** An **Email prompts** switch on the profile page,
+  defaulting to whatever suits how they are set up — email for a member with no
+  Slack link, Slack alone for a member with one. The stored field is nullable
+  on purpose: null means *has not chosen*, and a stored default would have to be
+  picked before anybody knew whether Slack would be linked.
+- **Proved.** A contributor, not a Delivery Manager, walked both routes in a
+  browser; then the same was done against the deployed application, with the
+  answers read back out of Turso rather than trusted from the confirmation.
+
+**Both proofs found defects the suite could not.** Writing the contributor
+browser test found that the dashboard withheld its whole panel — and so the
+"answer" link inside it — from anybody who could not manage a check. The
+production pass found three more: a confirmation rendered above a five-question
+form and therefore off the top of the screen, a second save that looked exactly
+like nothing happening, and two buttons in a row both reading "Answer the health
+check".
+
+The second of those is worth repeating. A test named *"reports a real change as
+saved rather than as nothing"* was green, because it asserted the message did
+**not** say "no changes" — true of a message box that had not changed at all.
+Asserting an absence is satisfied by a stale screen.
+
+One box stays open, and it needs a domain rather than code: confirming an email
+prompt arrives from a verified sender, carries a working link, and is not
+mistaken for a sign-in email. Until then Slack is the only prompt channel that
+has been proved end to end in production.
+
+### Milestones since deployment
+
+**Deployment** — Vercel, Turso in Dublin, and an external cron trigger.
+Specced in `.kiro/specs/deployment/`. It was expected to be configuration
+rather than code, because the production database path already had execution
+coverage. Two assumptions turned out to be false and cost real work:
+
+- **Vercel's Hobby plan cannot run this scheduler.** Its cron jobs run once a
   day, and a finer expression fails at deployment. The tick is triggered
   externally instead.
 - **`prisma migrate deploy` cannot reach Turso** — and worse, it would have
@@ -170,6 +226,30 @@ false and cost real work:
 Three startup guards were added so a wrong configuration cannot be held
 quietly: no database in production, the CLI aimed at production, and `TEST_MODE`
 in a deployment. Configuration reference: `docs/deployment.md`.
+
+Since then, and each in its own spec:
+
+- **`feeling-responsive/`** — the application was slow for months and nothing in
+  the suite noticed. Query, request and layout-shift budgets are ratchets now,
+  set at what the code does today.
+- **`explaining-itself/`** — four profile controls that never said what they
+  affected, and an answering form that ended in a receipt with nowhere to go.
+- **`knowing-what-happened/`** and **`remembering-what-happened/`** — the
+  scheduler tick returned `200` and nothing else, so "why did no check open on
+  Monday?" could only be answered by reasoning about code that had already run.
+  It now says what it did in a sentence, and keeps a 90-day ledger.
+- **`slack-sign-in/`** — proved in a real workspace on 2026-09-17. It is what
+  lets a team trial the tool without owning a domain, which is otherwise
+  required for email to reach anybody but the Resend account owner.
+- **`reaching-your-health-check/`** — above.
+
+### What is next
+
+Nothing is in flight. The open boxes across the specs are listed under **Spec**
+below; the one blocking a full trial is a verified Resend sending domain, which
+would close the last box of `reaching-your-health-check` and make email a
+proved prompt channel rather than an untested one.
+
 ### Later milestones (not started)
 - **Delivery-manager user guide** in `docs/`, once in-app guidance exists.
 - **Slack Socket Mode:** evaluate as a development-only convenience to remove
@@ -592,7 +672,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (1789 tests across 187 Vitest files)
+npm test            # unit + property tests (2192 tests across 217 Vitest files)
 npm run test:watch  # watch mode for TDD (unit only)
 npm run test:e2e    # Playwright browser tests
 npm run test:a11y   # Playwright axe tests
@@ -717,10 +797,76 @@ Feature specifications at `.kiro/specs/`:
 - Tasks (9 groups, 3 checkpoints), each recording what was done, what was found, and what was mutation-checked
 - `design.md` also carries a **What implementation taught** section — dates crossing JSON as strings, pinning date locales, one tick one clock, and why two test flakes came from tests outgrowing their budget rather than from the code
 
-**`dashboard-refinement/`** — Follow-up spec (**open**, written 2026-08-31):
+**`dashboard-refinement/`** — Follow-up spec (**29 of 30 ticked**, written 2026-08-31):
 - Requirements (9 functional + 2 non-functional), every one traced to a manual pass over the live application rather than to a test failure
 - Technical design (7 decisions, 6 correctness properties), including an open decision on whether removing a session means deletion or exclusion
 - Tasks (9 groups, 3 checkpoints), with session removal explicitly blocked until that decision is made
+
+**`deployment/`** — Putting it somewhere a team can reach (**53 of 62 ticked**):
+- Requirements (9): Vercel, Turso, migrations that cannot silently hit a local
+  file, a scheduler trigger the free tier can actually run, and backups
+- What stays open needs a person, not code: verifying a Resend sending domain,
+  confirming preview deployments carry no production credentials, and writing
+  down how to promote the previous deployment — with the hazard stated plainly,
+  that migrations do not roll back with it
+- `docs/deployment.md` is the working reference: every variable, which file it
+  belongs in, and what happens when each one is wrong
+
+**`feeling-responsive/`** — Speed, after the tool felt slow to its user
+(**complete**, 37 tasks):
+- Written from one sentence — "generally a little slow", with the navigation
+  filling in piecewise — both accurate, neither a rendering bug
+- Query, request and layout-shift budgets are **ratchets**, set at measured
+  values, so the next request added to a page has to be a decision
+
+**`explaining-itself/`** — Saying what things do (**52 of 61 ticked**):
+- From a manual walk of the whole loop on production, where everything worked
+  and almost nothing explained itself
+- Four profile controls that never said what they affected — including a
+  reminders toggle that governed two of the four messages the app sends
+- Criteria 2.6 and 2.7 were added on 2026-09-18, after a production pass found
+  two more ways to satisfy "the page SHALL confirm" while telling nobody
+  anything
+- Its own phase 4 is open: browser coverage for the new states, a walk of the
+  loop on the deployed application, and its reconcile
+
+**`knowing-what-happened/`** — Giving the scheduler a voice (**complete**, 43
+tasks):
+- Eleven `console` calls existed in the whole codebase, and the tick that opens
+  checks, closes them and sends every prompt logged nothing at all
+- A tick now reports what it did *and why it did nothing*, which is the normal
+  case six days a week and was previously indistinguishable from being broken
+
+**`remembering-what-happened/`** — Giving it a memory (**complete**, 59 tasks):
+- A 90-day ledger and a heartbeat, because cron-job.org keeps 50 executions and
+  the dashboard could not tell "the scheduler is idle" from "the scheduler is
+  dead"
+- Two of its requirements came from reading the real cron dashboard rather than
+  from the code: response bodies are not saved unless you ask, and the tick
+  interval was five minutes rather than the "few minutes" everyone assumed
+
+**`slack-sign-in/`** — A way in that needs no domain (**63 of 68 ticked**):
+- Email was the only way into the application, and an unverified Resend sender
+  delivers **only to the account owner**, dropping everyone else silently
+- Proved in a real workspace on 2026-09-17, including automatic matching on the
+  email address Slack has already verified
+- Two open boxes need a second person in the workspace: what an unlinked
+  stranger is told, and what Slack returns for a guest account. The other three
+  are its own reconcile, still to run
+
+**`reaching-your-health-check/`** — Answering a check from inside the app
+(**50 of 51 ticked**):
+- Written the day a check opened in production that nobody could answer
+- Adds a route of the member's own, a second prompt channel, and a member-level
+  choice between them
+- One box left, and it needs a verified sending domain rather than code
+
+**`traceability/`** — Keeping the citations true (**complete**, 22 tasks):
+- Source files cite the requirement they serve, and nobody reads those citations
+  until something is wrong — which is exactly when they must not be lies
+- `npx tsx scripts/check-requirement-references.ts` runs in CI. It catches a
+  citation that leads nowhere; only a person catches one that leads somewhere
+  wrong, which is why `AGENTS.md` leads that section with a rule for people
 
 ## Known Issues & Future Work
 
