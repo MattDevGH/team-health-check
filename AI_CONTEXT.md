@@ -1035,6 +1035,63 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**The session service was writing two of its timestamps from the wall clock**
+while taking every other date from its injected `now()`, and that is fixed
+(`src/lib/services/session.service.ts`, pinned by
+`src/tests/unit/services/session-service-clock.test.ts`).
+
+Both offenders stamped `actualCloseAt`: `close`, and the supersede path in
+`open` that ends whatever session was already running. A service with an
+injected clock that reads `new Date()` anyway is a service whose clock
+injection is a lie — every caller that sets one is being quietly overruled.
+
+It matters beyond tests. The 30-second quiet period before aggregates are
+computed is `tick now − actualCloseAt`, a subtraction between exactly those two
+numbers. Taken from different clocks it is negative on a machine an hour
+behind, and hours too large on one ahead.
+
+**How it was found, and why the first fix was not enough.** Four
+`scheduler-record` tests failed for the first time at 17:00 UTC on 2026-09-18,
+having been green since they were written, and blocked an unrelated merge. The
+fix that evening injected a clock into the service the test builds and stopped
+there — the symptom. Three of the four failed again the next morning, for the
+same underlying reason wearing a different date, because the writes still
+ignored the clock they had been given.
+
+Production behaviour is unchanged: `now` defaults to `() => new Date()`.
+
+**`reaching-your-health-check` is reconciled and closed except for one box**
+(2026-09-19). 50 of its 51 tasks are ticked, each against the behaviour and the
+test that exercises it. The remaining one is 4.2's third: confirming an email
+prompt arrives from a verified sender, carries a working link, and is not
+mistaken for a sign-in email. It needs a domain, not code, and it is the same
+blocker as `deployment`'s open Resend items — one purchase closes both.
+
+Until then Slack is the only prompt channel proved end to end in production.
+Email is proved at every tier below that: the payload, the gates, the
+idempotency claim, and the member's choice. What is unproved is Resend actually
+delivering it to somebody who is not the account owner, which is precisely the
+failure this project has already been bitten by once, silently.
+
+**What the two proofs cost, and what they bought.** Phase 4 was written as
+"prove it" and was expected to be paperwork. It found four defects:
+
+| Found by | Defect |
+|---|---|
+| Writing the contributor browser test | The dashboard withheld the whole lifecycle panel — and the answer link inside it — from anybody who could not manage a check |
+| The production pass | The confirmation rendered above a five-question form, so it was off the top of the screen at the moment it appeared |
+| The production pass | A second save was indistinguishable from nothing happening |
+| The production pass | Two buttons in a row both read "Answer the health check" |
+
+None of them failed a test. One of them had a test *about it* that was green,
+because it asserted an absence — that the message did not say "no changes" —
+which a message box that had not changed at all satisfies perfectly.
+
+A fifth came out of the same afternoon and belonged to nobody's milestone: four
+scheduler tests were reading the wall clock and failed for the first time at
+17:00 UTC on a Friday, having been green since they were written. They would
+have gone green again by themselves the next morning.
+
 **Production can be read back with a command** (`scripts/verify-production.ts`,
 `src/lib/production-check/verification.ts`). Deployment 3.6 asks for a migrated
 schema to be verified by reading it back rather than inferred from an exit code,
@@ -1513,6 +1570,13 @@ Two task lists were reconciled box by box, never in bulk:
 
 What stays open is genuinely undone: Resend’s domain, Slack’s production
 URLs, a rollback note, and browser coverage for a contributor.
+
+*Read on 2026-09-19: two of those four are closed. Slack’s production URLs
+were set on 2026-09-17 and proved in a real workspace, and browser coverage for
+a contributor landed with phase 4.1 — which found a defect while being written.
+The `deployment` task list has not been re-ticked for the Slack URLs; that is a
+box owed, recorded here rather than ticked in passing by somebody reconciling a
+different spec.*
 
 **Four things the reconciliation found that ticking in bulk would have
 buried:**

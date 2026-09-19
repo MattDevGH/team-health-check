@@ -82,7 +82,10 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     if (existing) {
       await sessionRepo.update(existing.id, {
         status: 'closed',
-        actualCloseAt: new Date(),
+        // The injected clock, like every other time this service writes. It read
+        // `new Date()` here while the session replacing it took its dates from
+        // `now()`, so the two disagreed whenever a caller set one
+        actualCloseAt: now(),
       });
     }
 
@@ -140,7 +143,7 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     }
     await sessionRepo.update(sessionId, {
       status: 'closed',
-      actualCloseAt: new Date(),
+      actualCloseAt: now(),
     });
   }
 
