@@ -124,6 +124,35 @@ down separately rather than folded into 1.*
 4. Cancelling SHALL take effect immediately for prompt eligibility.
 5. A member SHALL only see and cancel their own away periods.
 
+### Requirement 6: Pages And Sections Say What They Are For
+
+**User Story:** As a delivery manager using the tool for the first time, I want each part of it to say what it is and what will happen, so that I can act without guessing what a control does.
+
+*Added 2026-09-20, from the production pass for phase 5.2. Everything this
+milestone touched now explains itself, and the effect was to make the parts it
+did not touch louder: "Question Themes" sits under an explained chart, beside an
+explained panel, saying nothing about what it lists.*
+
+*His words on the control that opens a check: "a one-liner explanation would be
+good alongside 'open a health check' just for absolute clarity about what it
+does and what happens next, for new Delivery Managers using the app." That is
+Requirement 4's first-run reasoning applied to the one control whose
+consequences reach other people — opening a check prompts a team.*
+
+#### Acceptance Criteria
+
+1. THE Question Themes section SHALL say what it lists and what expanding a theme shows.
+2. THE control that opens a health check SHALL say what opening one does before it is pressed — who is prompted, and when it closes.
+3. THE health check route SHALL explain what a health check is, why answering is worth doing, and what will be asked, rather than presenting a single button and nothing else.
+4. Each explanation SHALL sit with the thing it describes, as Requirement 4.5 already asks of settings.
+
+*Criterion 3 was reached the long way. The route was built as a deliberate pause
+before the form — a moment to see what is about to be asked, rather than landing
+in it. Twice in production it read instead as a step that achieved nothing,
+because the pause had nothing in it: two buttons in a row, the second repeating
+the first. The decision on 2026-09-20 was to give the pause its content rather
+than remove it, and to revisit removing it if content does not fix it.*
+
 ## Non-Functional Requirements
 
 ### NFR 1: Explanations Are Part Of The Control
