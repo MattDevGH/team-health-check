@@ -50,6 +50,23 @@ interface PageProps {
   params: Promise<{ token: string }>;
 }
 
+/**
+ * The time of day a save landed, as a person reads a clock.
+ *
+ * Requirements: Explaining Itself 2.7
+ *
+ * The locale is pinned, as everywhere else this project shows a date. Leaving
+ * it to the runtime once meant the same close time read as "28 August 2026" on
+ * a British machine and "August 28, 2026" on CI, which is how a formatting
+ * difference reached a pull request.
+ *
+ * A time of day rather than a full date: everything here happened in the last
+ * few seconds, and a date would be noise around the one part that changes.
+ */
+function formatTimeOfDay(at: Date): string {
+  return at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+
 export default function SessionLinkPage({ params }: PageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +94,21 @@ export default function SessionLinkPage({ params }: PageProps) {
    * did *not* say "no changes", which was true of a box that had not changed.
    */
   const [lastOutcome, setLastOutcome] = useState<'saved' | 'updated' | 'unchanged'>('saved');
+  /**
+   * When the last press landed.
+   *
+   * Requirements: Explaining Itself 2.7
+   *
+   * Naming the outcome was not enough. Two updates in a row are both updates,
+   * so the second rendered the sentence already on screen and a member pressing
+   * the button again had no way to tell it had been received — the defect
+   * 2.7 describes, one press further along than the version that was fixed.
+   *
+   * A time rather than a message on a timer: one that disappears is gone
+   * before a slow reader or a screen-reader user reaches it, and "it vanished"
+   * is a worse answer to "did that work?" than no message at all.
+   */
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
   /**
    * Whether the reader has an application to return to.
    *
@@ -201,6 +233,7 @@ export default function SessionLinkPage({ params }: PageProps) {
         setLastOutcome(answersMatch(savedAnswers, responses) ? 'unchanged' : 'updated');
       }
       setSavedAnswers(responses);
+      setSavedAt(new Date());
       setSubmitted(true);
       setIsSubmitting(false);
     } catch {
@@ -376,6 +409,14 @@ export default function SessionLinkPage({ params }: PageProps) {
               {/* Named as an update, so a second save is visibly not the first */}
               {lastOutcome === 'updated' && 'Your answers are updated.'}
               {lastOutcome === 'saved' && 'Thank you — your answers are saved.'}
+              {/*
+                And the time, because the wording alone repeats itself. Two
+                updates in a row say the same sentence; the clock is what makes
+                the second press visibly a second press.
+              */}
+              {savedAt && (
+                <span className="font-normal">{' '}at {formatTimeOfDay(savedAt)}.</span>
+              )}
             </p>
             <p className="mt-1 text-sm text-green-900">
               You can change them until this health check closes; just pick a different
