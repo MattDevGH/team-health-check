@@ -232,7 +232,19 @@ describe('QuestionDetailView', () => {
       expect(screen.queryByText('5 responses')).not.toBeInTheDocument();
     });
 
-    it('switches detail panel when clicking a different question', async () => {
+    it('opens a second question without closing the first', async () => {
+      /*
+       * Requirements: Manager Experience 3.10
+       *
+       * This asserted the opposite until 2026-09-20 — that opening one theme
+       * closed the other, which is what the component did. Nothing ever asked
+       * for an accordion, and comparing two themes is the thing this section is
+       * for, so the arrangement forbade the use it exists to serve.
+       *
+       * Raised from the deployed application: "each question theme should be
+       * independently expandable/collapsible, rather than only 1 being able to
+       * be open at a time".
+       */
       const user = userEvent.setup();
       render(<QuestionDetailView sessions={SESSIONS} anonymousMode={false} />);
 
@@ -240,10 +252,9 @@ describe('QuestionDetailView', () => {
       expect(screen.getByText('3.5')).toBeInTheDocument();
 
       await user.click(screen.getByRole('button', { name: /team collaboration/i }));
-      // Now should show team collaboration data
+
       expect(screen.getByText('4.5')).toBeInTheDocument();
-      // delivering value data should be gone
-      expect(screen.queryByText('3.5')).not.toBeInTheDocument();
+      expect(screen.getByText('3.5'), 'the first theme should still be open').toBeInTheDocument();
     });
   });
 
