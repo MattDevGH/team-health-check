@@ -230,7 +230,10 @@ it fails one unit test and two browser tests.
       the whole way through — "Results are being prepared / Results are
       hidden… message shows correctly throughout the dashboard". What the pass
       found instead is below.*
-- [ ] Set an away period, see it, cancel it
+- [x] Set an away period, see it, cancel it. *Done 2026-09-20 on the deployed
+      application: "away periods working and displaying as expected". All five
+      criteria of Requirement 5 read correctly — the sentence when nothing is
+      set, the period with its dates, and cancelling it.*
 - _Requirements: 1.1, 1.3, 5.1, 5.2_
 
 **What the walk found, and none of it failed a test.**
@@ -259,10 +262,17 @@ now" is a link styled as a button, which is exactly this element.*
 
 - [x] Update README and AI_CONTEXT
 - [x] Record what the production pass found that no test could
-- [ ] Full gate set, then merge
+- [x] Full gate set, then merge
 
-*The second box waits on the away-period half of 5.2. The third belongs to the
-milestone's own final merge.*
+*Ticked on the gate set having run — 2222 Vitest tests across 222 files, 98
+Playwright with zero skips, `tsc`, ESLint, `next build`, requirement references —
+and on this pull request being the merge it names.*
+
+**The spec is closed.** 61 of 61, across five phases and three production
+passes. Worth keeping about how it ended: the phase called "prove it" found
+seven defects, one while its browser tests were being written and six while a
+person used the deployed application. None of them failed a test, and one of
+them had a green test about it.
 
 ---
 

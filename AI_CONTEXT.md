@@ -1035,6 +1035,17 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**`explaining-itself` is closed** (2026-09-20), 61 of 61 across five phases and
+three production passes. The away-period half of 5.2 came back clean: "away
+periods working and displaying as expected", which is all five criteria of
+Requirement 5 — the sentence when nothing is set, the period with its dates,
+and cancelling it.
+
+The number worth carrying forward from this spec is **seven**: the phase called
+"prove it" found seven defects. One while its browser tests were being written,
+six while a person used the deployed application. None failed a test, and one
+had a green test written specifically about it.
+
 **The `explaining-itself` production pass on 2026-09-19 found six things, and
 none of them failed a test.** The panels the milestone built read correctly the
 whole way through — which is the box passing. What it found is what that success
