@@ -78,7 +78,7 @@ test('says results are coming, then shows them, and stops saying it', async ({ p
   await page.goto(`/teams/${teamId}/dashboard`);
   await page
     .getByRole('region', { name: 'Health check' })
-    .getByRole('link', { name: /your health check/i })
+    .getByRole('link', { name: /go to your health check/i })
     .click();
   await page.getByRole('link', { name: /answer the health check/i }).click();
 

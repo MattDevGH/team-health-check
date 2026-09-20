@@ -132,7 +132,7 @@ test.describe('a contributor, from the dashboard', () => {
 
     const panel = page.getByRole('region', { name: 'Health check' });
     await expect(panel).toContainText(/collecting responses/i);
-    await expect(panel.getByRole('link', { name: /your health check/i })).toBeVisible();
+    await expect(panel.getByRole('link', { name: /go to your health check/i })).toBeVisible();
 
     await expect(panel.getByRole('button', { name: /open a health check/i })).toHaveCount(0);
     await expect(panel.getByRole('button', { name: /close the health check/i })).toHaveCount(0);
@@ -144,7 +144,7 @@ test.describe('a contributor, from the dashboard', () => {
 
     await page
       .getByRole('region', { name: 'Health check' })
-      .getByRole('link', { name: /your health check/i })
+      .getByRole('link', { name: /go to your health check/i })
       .click();
     await expect(page).toHaveURL(/\/me\/health-check$/);
 
@@ -306,7 +306,7 @@ test.describe('a contributor with nothing open', () => {
 
     const panel = page.getByRole('region', { name: 'Health check' });
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole('link', { name: /your health check/i })).toHaveCount(0);
+    await expect(panel.getByRole('link', { name: /go to your health check/i })).toHaveCount(0);
     await expect(panel.getByRole('button', { name: /open a health check/i })).toHaveCount(0);
   });
 });
