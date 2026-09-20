@@ -17,6 +17,28 @@
 
 import { useEffect, useState } from 'react';
 
+const ABOUT_HEADING_ID = 'about-the-health-check';
+const THEMES_HEADING_ID = 'health-check-themes';
+
+/**
+ * The five themes, in the order they are asked.
+ *
+ * Requirements: Explaining Itself 6.3
+ *
+ * Written for somebody who has not seen the form, rather than copied from the
+ * catalogue: the stored descriptions are the questions themselves, and reading
+ * five questions here would make this page the form rather than a look ahead
+ * at it. They are duplicated deliberately and a test names both, so a change to
+ * the catalogue that leaves this behind is visible.
+ */
+const HEALTH_CHECK_THEMES = [
+  { title: 'Delivering Value', description: 'whether the work is reaching the people it is for' },
+  { title: 'Team Collaboration', description: 'how well the team works together and supports each other' },
+  { title: 'Ease of Delivery', description: 'how much friction stands between an idea and it being done' },
+  { title: 'Learning and Improving', description: 'whether the team gets better at what it does' },
+  { title: 'Psychological Safety', description: 'whether it feels safe to speak up, disagree, or be wrong' },
+];
+
 type CheckState =
   | { phase: 'loading' }
   | { phase: 'open'; token: string }
@@ -128,6 +150,67 @@ export default function MyHealthCheckPage() {
             </p>
           )}
         </div>
+        {/*
+          What a health check is, before being asked to answer one.
+
+          Requirements: Explaining Itself 6.3, 6.4
+
+          This route was built as a deliberate pause before the form — a moment
+          to see what is about to be asked, rather than landing in it having
+          clicked "Health check". Twice in production it read instead as a step
+          that achieved nothing, because the pause had nothing in it: a button,
+          and then the same button again.
+
+          So the pause has its content now. That is the whole justification for
+          the extra click, and a page that loses this goes back to being a step
+          that achieved nothing.
+
+          Rendered whether or not a check is open. Most visits from the
+          navigation find nothing collecting, and explaining only when there is
+          something to do would put the explanation on exactly the visits where
+          nobody has time to read it.
+        */}
+        <section
+          aria-labelledby={ABOUT_HEADING_ID}
+          className="bg-white rounded-lg shadow p-6 mt-4"
+        >
+          <h2 id={ABOUT_HEADING_ID} className="text-lg font-semibold text-gray-800">
+            About the health check
+          </h2>
+          <p className="mt-2 text-gray-700">
+            The same five short questions, every time. You score each one from 1 to 5
+            and can say whether you think it is improving, stable or declining. It
+            takes a couple of minutes.
+          </p>
+          <p className="mt-2 text-gray-700">
+            Answering the same questions repeatedly is what makes the answers worth
+            anything: one check is a snapshot, and several show your team which way
+            things are moving. Your delivery manager reads the team&rsquo;s pattern over
+            time rather than any single answer.
+          </p>
+
+          <h3 id={THEMES_HEADING_ID} className="mt-4 font-medium text-gray-800">
+            What you will be asked about
+          </h3>
+          {/*
+            A list rather than a paragraph of commas: five named things are a
+            list, and a screen reader announces how many there are, which is the
+            number somebody deciding whether to start actually wants.
+          */}
+          <ul aria-labelledby={THEMES_HEADING_ID} className="mt-2 space-y-2">
+            {HEALTH_CHECK_THEMES.map(theme => (
+              <li key={theme.title} className="text-sm text-gray-700">
+                <span className="font-medium text-gray-800">{theme.title}</span> —{' '}
+                {theme.description}
+              </li>
+            ))}
+          </ul>
+
+          <p className="mt-4 text-sm text-gray-600">
+            You can change your answers as often as you like until the check closes, so
+            a first thought is not a final one.
+          </p>
+        </section>
       </div>
     </div>
   );
