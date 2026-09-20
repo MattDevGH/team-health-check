@@ -224,26 +224,55 @@ it fails one unit test and two browser tests.
 
 ### 5.2 Against production
 
-- [ ] Walk the loop again on the deployed application: open, answer, close,
+- [x] Walk the loop again on the deployed application: open, answer, close,
       read — and confirm that at no point does a blank panel leave the reader
-      guessing
-- [ ] Set an away period, see it, cancel it
+      guessing. *Done 2026-09-19. The panels this milestone built read correctly
+      the whole way through — "Results are being prepared / Results are
+      hidden… message shows correctly throughout the dashboard". What the pass
+      found instead is below.*
+- [x] Set an away period, see it, cancel it. *Done 2026-09-20 on the deployed
+      application: "away periods working and displaying as expected". All five
+      criteria of Requirement 5 read correctly — the sentence when nothing is
+      set, the period with its dates, and cancelling it.*
 - _Requirements: 1.1, 1.3, 5.1, 5.2_
 
-*Needs a person at the deployed application. Everything 5.1 covers is proved in
-a browser against a disposable database; what these two ask is whether the same
-states read correctly against real data, which is how every previous production
-pass has found something a test could not.*
+**What the walk found, and none of it failed a test.**
+
+| Finding | Outcome |
+|---|---|
+| Updating an answer a second time still looked like nothing had happened | **Fixed.** Criterion 2.7 was unmet one press further along than the version repaired on the 18th: two updates in a row are both updates, so the second rendered the sentence already on screen. The confirmation carries the time now |
+| Question Themes explained nothing, now that everything around it does | **Fixed.** New criterion 6.1 |
+| "Open a health check" did not say what opening one does | **Fixed.** New criterion 6.2 — the only control here whose consequences reach other people |
+| The mid-step before the form still read as a step that achieved nothing | **Fixed by giving it content.** New criterion 6.3, and the decision recorded there: content first, re-architecting only if that does not fix it |
+| The theme rows opened one at a time | **Fixed.** Manager Experience 3.10, new — nothing had ever asked for an accordion |
+| The confirmation's link led back to the mid-step | **Answered by 6.3.** It lands on something worth landing on now. If it still reads as redundant, the destination is the next lever |
+| Noticeable load on first visit | Known, `feeling-responsive`, accepted |
+
+*Two of those cost more than they looked. Adding the "what opening a check
+does" line took the dashboard's cumulative layout shift from 0.016 to 0.0327,
+past the 0.03 ratchet — the panel had always grown as its fetches landed, and
+the new text made an existing instability breach the budget. It has a height
+floor now, measured back to passing.*
+
+*And the "Go to your health check" rename came out of asking what the GOV.UK
+Design System would say: button text describes an action, and their own "Start
+now" is a link styled as a button, which is exactly this element.*
 
 ### 5.3 Reconcile
 
 - [x] Update README and AI_CONTEXT
-- [ ] Record what the production pass found that no test could
-- [ ] Full gate set, then merge
+- [x] Record what the production pass found that no test could
+- [x] Full gate set, then merge
 
-*The second box cannot be ticked before 5.2 happens, and the third belongs to
-the milestone's own final merge rather than to the pull request that closed
-5.1.*
+*Ticked on the gate set having run — 2222 Vitest tests across 222 files, 98
+Playwright with zero skips, `tsc`, ESLint, `next build`, requirement references —
+and on this pull request being the merge it names.*
+
+**The spec is closed.** 61 of 61, across five phases and three production
+passes. Worth keeping about how it ended: the phase called "prove it" found
+seven defects, one while its browser tests were being written and six while a
+person used the deployed application. None of them failed a test, and one of
+them had a green test about it.
 
 ---
 

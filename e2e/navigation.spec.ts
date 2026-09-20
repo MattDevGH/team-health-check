@@ -360,9 +360,9 @@ test.describe('reaching your own health check', () => {
     // The dashboard says where the link goes; the page it lands on says what
     // to do there. Two buttons reading "Answer the health check" made the
     // second click read as a step that achieved nothing
-    await expect(page.getByRole('link', { name: /your health check/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /go to your health check/i })).toBeVisible();
 
-    await page.getByRole('link', { name: /your health check/i }).click();
+    await page.getByRole('link', { name: /go to your health check/i }).click();
     await expect(page).toHaveURL(/\/me\/health-check$/);
 
     await page.getByRole('link', { name: /answer the health check/i }).click();

@@ -76,6 +76,8 @@ const DEFAULT_ANONYMITY_THRESHOLD = 3;
 /** Names the drill-down region, so its triggers are distinguishable from the
  * chart legend's toggles, which carry the same question theme names. */
 const THEMES_HEADING_ID = 'question-themes-heading';
+/** Requirements: Explaining Itself 6.1, 6.4 */
+const THEMES_EXPLANATION_ID = 'question-themes-explanation';
 
 export function QuestionDetailView({
   sessions,
@@ -86,7 +88,17 @@ export function QuestionDetailView({
   now = new Date(),
 }: QuestionDetailViewProps) {
   const schedulerRanAt = schedulerLastRanFrom(schedulerLastRanAt);
-  const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
+  /**
+   * Which themes are open, as a set rather than one id.
+   *
+   * Requirements: Manager Experience 3.10
+   *
+   * This was a single id — an accordion, one row at a time — and no
+   * requirement ever asked for that. Comparing two themes is the thing a
+   * manager does with this section, and an accordion is the one arrangement
+   * that forbids it. Raised from the deployed application on 2026-09-19.
+   */
+  const [openThemeIds, setOpenThemeIds] = useState<ReadonlySet<string>>(new Set());
 
   /**
    * Every theme the team is asked about, from the catalogue where it is
@@ -100,18 +112,44 @@ export function QuestionDetailView({
     );
 
   function handleQuestionClick(questionId: string) {
-    setSelectedQuestionId((prev) => (prev === questionId ? null : questionId));
+    setOpenThemeIds((open) => {
+      const next = new Set(open);
+      if (!next.delete(questionId)) next.add(questionId);
+      return next;
+    });
   }
 
   return (
-    <section aria-labelledby={THEMES_HEADING_ID} className="space-y-2">
-      <h2 id={THEMES_HEADING_ID} className="text-lg font-semibold text-gray-700 mb-3">
+    <section
+      aria-labelledby={THEMES_HEADING_ID}
+      aria-describedby={THEMES_EXPLANATION_ID}
+      className="space-y-2"
+    >
+      <h2 id={THEMES_HEADING_ID} className="text-lg font-semibold text-gray-700">
         Question themes
       </h2>
+      {/*
+        Requirements: Explaining Itself 6.1, 6.4
+
+        This section sat under an explained chart and beside an explained panel,
+        saying nothing about what it listed — which only became obvious once
+        everything around it explained itself. Raised from the deployed
+        application on 2026-09-19.
+
+        Described through `aria-describedby` on the section rather than left as
+        a paragraph that happens to sit above it, so the explanation reaches a
+        screen reader with the thing it explains. That is 4.5 applied outside
+        settings, which is what 6.4 says.
+      */}
+      <p id={THEMES_EXPLANATION_ID} className="text-sm text-gray-600 mb-3">
+        The five questions every check asks, and how this team has answered each one.
+        Open a theme to see its score for each check, how many people answered, and
+        which way they said things were moving.
+      </p>
       <div className="space-y-1">
         {themes.map((theme) => {
           const qId = theme.id;
-          const expanded = selectedQuestionId === qId;
+          const expanded = openThemeIds.has(qId);
           const panelId = `question-detail-${qId}`;
 
           return (

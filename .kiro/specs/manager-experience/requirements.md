@@ -85,6 +85,13 @@ Slack linking, and every team-scoped query.
 7. WHERE a count is displayed with a noun, THE Web_Interface SHALL use grammatically correct singular and plural forms.
 8. THE question rows on the dashboard SHALL indicate that they expand, SHALL convey their expanded or collapsed state through `aria-expanded`, and SHALL associate the disclosure with its content through `aria-controls`.
 9. THE question disclosure SHALL be operable by keyboard.
+10. EACH question disclosure SHALL open and close independently of the others, so that two themes can be read side by side.
+
+*10 was added on 2026-09-20, from the `explaining-itself` production pass. The
+rows were built as an accordion — one open at a time — and nothing in this
+requirement ever asked for that. Comparing two themes is the thing a manager
+does with this section, and an accordion is the one arrangement that forbids
+it.*
 
 ### Requirement 4: First-Run Guidance
 

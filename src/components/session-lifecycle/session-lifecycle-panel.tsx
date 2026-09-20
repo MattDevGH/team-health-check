@@ -208,6 +208,7 @@ export function SessionLifecyclePanel({
 }: SessionLifecyclePanelProps) {
   const headingId = useId();
   const confirmHeadingId = useId();
+  const openExplanationId = useId();
   const closeTriggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [confirming, setConfirming] = useState(false);
@@ -353,8 +354,24 @@ export function SessionLifecyclePanel({
   const currentParticipation =
     openSessionId && participation?.sessionId === openSessionId ? participation.data : null;
 
+  /*
+   * The panel has a floor on its height, because everything in it arrives
+   * after a fetch.
+   *
+   * It renders "Checking…" and then grows into whatever state the sessions
+   * endpoint reports, pushing the whole dashboard down as it does. That growth
+   * was already most of the page’s measured layout shift, and adding two lines
+   * of explanation to the idle state took it from 0.016 to 0.0327 — past the
+   * 0.03 ratchet, which is exactly the job that ratchet has.
+   *
+   * Reserving the space costs some whitespace in the shortest state and buys a
+   * page that does not move under a reader’s cursor.
+   */
   return (
-    <section aria-labelledby={headingId} className="bg-white rounded-lg shadow p-4">
+    <section
+      aria-labelledby={headingId}
+      className="bg-white rounded-lg shadow p-4 min-h-[11.5rem]"
+    >
       <h2 id={headingId} className="text-lg font-semibold text-gray-800 mb-2">
         Health check
       </h2>
@@ -390,14 +407,34 @@ export function SessionLifecyclePanel({
           )}
 
           {state.control === 'open' && canManage && (
-            <button
-              type="button"
-              onClick={openSession}
-              disabled={opening}
-              className="mt-3 rounded bg-blue-700 px-4 py-2 text-white hover:bg-blue-800 disabled:opacity-60"
-            >
-              {opening ? 'Opening…' : 'Open a health check'}
-            </button>
+            <>
+              {/*
+                Requirements: Explaining Itself 6.2, 6.4
+
+                The one control here whose consequences reach other people:
+                opening a check prompts the team. A manager doing it for the
+                first time had no way to know whether pressing it would message
+                anybody, or whether the check would have to be ended by hand.
+
+                Rendered only in this state, so guidance cannot outlive the
+                condition it describes, and tied to the button through
+                `aria-describedby` rather than by sitting near it.
+              */}
+              <p id={openExplanationId} className="mt-3 text-sm text-gray-600">
+                Opening a check prompts everybody on the team — in Slack, by email, or
+                both, depending on how each of them is set up. It closes on the
+                team’s schedule, and you can close it earlier from here.
+              </p>
+              <button
+                type="button"
+                onClick={openSession}
+                disabled={opening}
+                aria-describedby={openExplanationId}
+                className="mt-3 rounded bg-blue-700 px-4 py-2 text-white hover:bg-blue-800 disabled:opacity-60"
+              >
+                {opening ? 'Opening…' : 'Open a health check'}
+              </button>
+            </>
           )}
 
           {state.status === 'collecting' && (
@@ -420,7 +457,7 @@ export function SessionLifecyclePanel({
                 can make an existing one ambiguous.
               */}
               {/*
-                "Your health check", not "Answer the health check".
+                "Go to your health check", not "Answer the health check".
 
                 Requirements: Reaching Your Health Check 1.1
 
@@ -438,7 +475,7 @@ export function SessionLifecyclePanel({
                 href="/me/health-check"
                 className="mt-3 mr-2 inline-block rounded bg-blue-700 px-4 py-2 text-white hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
-                Your health check
+                Go to your health check
               </a>
 
               {/* Closing is a manager's decision, so a contributor is not
