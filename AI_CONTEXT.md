@@ -1035,6 +1035,47 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**The `explaining-itself` production pass on 2026-09-19 found six things, and
+none of them failed a test.** The panels the milestone built read correctly the
+whole way through — which is the box passing. What it found is what that success
+made visible: everything the milestone touched now explains itself, and the
+parts it did not touch became audible.
+
+- **A second update still looked like nothing had happened.** Criterion 2.7 was
+  unmet one press further along than the version repaired on the 18th: two
+  updates in a row are both updates, so the second rendered the sentence already
+  on screen. The confirmation carries the time now — not a message on a timer,
+  which is gone before a slow reader reaches it.
+- **Question Themes explained nothing**, sitting under an explained chart and
+  beside an explained panel. New criterion 6.1.
+- **"Open a health check" did not say what opening one does** — the only control
+  here whose consequences reach other people. New criterion 6.2.
+- **The mid-step before the form still read as a step that achieved nothing.**
+  Given content rather than removed: what a health check is, why answering
+  repeatedly is what makes the answers worth anything, the five themes, and that
+  answers can be changed until close. New criterion 6.3, with the decision
+  recorded — content first, re-architecting only if that does not fix it.
+- **The theme rows were an accordion.** Nothing had ever asked for one, and
+  comparing two themes is what that section is for. Manager Experience 3.10.
+- **The confirmation's link led back to the mid-step**, which 6.3 answers by
+  making the destination worth landing on.
+
+**Two of them cost more than they looked.**
+
+Adding the "what opening a check does" line took the dashboard's cumulative
+layout shift from 0.016 to **0.0327**, past the 0.03 ratchet. The panel had
+always grown as its fetches landed — it renders "Checking…" and then becomes
+whatever the sessions endpoint reports, pushing the page down — and two lines of
+new text made an existing instability breach the budget. The panel has a height
+floor now, measured back to passing rather than assumed. This is the ratchet
+doing exactly the job it was set below the industry 0.1 to do.
+
+The "Go to your health check" rename came from asking what the GOV.UK Design
+System would say. Button text describes an action, and their own "Start now" is
+a link styled as a button — which is exactly this element, so a bare destination
+under button styling reads as a label rather than something to press. The page
+it lands on keeps "Answer the health check", which is the action.
+
 **`explaining-itself` phase 5.1 is done, and closing it found the defect it was
 looking for** (2026-09-19). The spec is at 57 of 61; what remains needs a person
 at the deployed application.

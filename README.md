@@ -672,7 +672,7 @@ Browser → Route Handler → Auth (cookie validation) → Service → Repositor
 TDD approach using Vitest, React Testing Library, msw, jest-axe, fast-check, and Playwright.
 
 ```bash
-npm test            # unit + property tests (2197 tests across 218 Vitest files)
+npm test            # unit + property tests (2222 tests across 222 Vitest files)
 npm run test:watch  # watch mode for TDD (unit only)
 npm run test:e2e    # Playwright browser tests
 npm run test:a11y   # Playwright axe tests
@@ -819,7 +819,7 @@ Feature specifications at `.kiro/specs/`:
 - Query, request and layout-shift budgets are **ratchets**, set at measured
   values, so the next request added to a page has to be a decision
 
-**`explaining-itself/`** — Saying what things do (**57 of 61 ticked**):
+**`explaining-itself/`** — Saying what things do (**59 of 61 ticked**):
 - From a manual walk of the whole loop on production, where everything worked
   and almost nothing explained itself
 - Four profile controls that never said what they affected — including a
