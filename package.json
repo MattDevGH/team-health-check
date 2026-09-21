@@ -54,7 +54,7 @@
         "tsx": "^4.23.13",
         "typescript": "^5",
         "vite-tsconfig-paths": "^6.1.1",
-        "vitest": "^4.1.8"
+        "vitest": "^5.0.1"
     },
     "_overrides_note": "Transitive pins for advisories with no non-breaking upstream fix; npm offered only a major Prisma downgrade for each. deepmerge-ts: @prisma/config pins 7.1.5, stack exhaustion on recursive graphs (GHSA-ggr8-5vv4-36mx). mysql2: reached through @prisma/client -> prisma and never loaded here, since this app uses SQLite and Turso (GHSA-3f6p-5ww8-9rcr, GHSA-rgwj-5xj2-c3m3). baseline-browser-mapping: browserslist data pulled in by next (GHSA-w5vr-8v7q-w6rv). All three are exercised by the gates -- the E2E suite runs prisma migrate through @prisma/config, and the build resolves browserslist data. Drop each one once its parent depends on a patched version itself.",
     "overrides": {
