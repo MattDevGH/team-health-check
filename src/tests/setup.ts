@@ -1,23 +1,21 @@
-import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
-import { afterAll, afterEach, beforeAll, vi } from "vitest";
-import { server } from "./mocks/server";
-
 /**
- * Auto-mock the production container module so all route handler tests
- * use in-memory repositories instead of the real Prisma/SQLite backend.
- * The mock is defined in src/lib/__mocks__/container-production.ts
+ * Setup for tests that render something.
+ *
+ * Requirements: Feeling Responsive 5.x
+ *
+ * The node half is imported rather than repeated: this file is the DOM
+ * additions and nothing else, so the two setups cannot drift into disagreeing
+ * about how requests are mocked.
  */
-vi.mock('@/lib/container-production');
 
-// Start the mock server before all tests in a file
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+import './setup-node';
 
-// Reset handlers and clean up the DOM after each test
+import '@testing-library/jest-dom/vitest';
+import { cleanup } from '@testing-library/react';
+import { afterEach } from 'vitest';
+
+// Unmounting between tests, so a component left on the page cannot be found by
+// the next test and pass it
 afterEach(() => {
-  server.resetHandlers();
   cleanup();
 });
-
-// Shut down the mock server after all tests in a file
-afterAll(() => server.close());

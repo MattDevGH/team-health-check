@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 /**
  * One claim wins, against a real database.
  *

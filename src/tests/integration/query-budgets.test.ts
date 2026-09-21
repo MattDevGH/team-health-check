@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 /**
  * How many queries a request is allowed to make.
  *

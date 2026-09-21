@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 /**
  * Reading production back, rather than believing an exit code.
  *

@@ -1035,6 +1035,37 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**Tests build a DOM only when they need one** (2026-09-21). `vitest.config.mts`
+splits the suite into two projects: `.test.tsx` in jsdom, `.test.ts` in node.
+
+Vitest 5 reports environment cost, and the answer was uncomfortable — jsdom was
+built **once per test file**, 223 times, for more than half the wall-clock time,
+while only 36 files render anything. The full suite went from about 200 seconds
+to **50**, running the same 2,222 tests.
+
+- **The split holds exactly, and that was checked rather than assumed.** A
+  search for `document.`, `window.` and `@testing-library/react` across the 186
+  `.test.ts` files returned six hits, every one of them a local variable called
+  `window` or the word "window" in a sentence about delivery windows.
+- **Chosen over `isolate: false`**, which Vitest also suggests. That shares one
+  environment across files and would trade a slow suite for one where a test can
+  leave state behind for the next file — the failure this project is least
+  equipped to notice, because the symptom is a test that passes.
+- **The first version ran 22 fewer tests and said nothing.** Both projects were
+  scoped to `src/**`, and `scripts/check-requirement-coverage.test.ts` lives
+  outside it. Caught only by comparing the totals before and after, which is now
+  the reason the excludes are written out rather than the includes narrowed.
+- `src/tests/setup.ts` imports `setup-node.ts` and adds the DOM half, so the
+  node setup is a strict subset by construction rather than by two lists staying
+  in step.
+- The 13 `// @vitest-environment node` pragmas are gone. Every `.test.ts` gets
+  node now, and leaving 13 of 186 declaring it would have read as though only
+  those did.
+
+**This also closes the parked `magic-link/verify` timeouts.** They had looked
+like worker contention for a week with nothing measuring them; five consecutive
+full runs at default workers now pass. The fix was never in that test.
+
 **Vitest 5, and why ESLint 10 could not come with it** (2026-09-20).
 
 Vitest 4.1.8 → 5.0.1 needed one change and offered one simplification.

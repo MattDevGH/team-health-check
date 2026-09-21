@@ -693,7 +693,7 @@ npm run test:a11y   # Playwright axe tests
 ### When each runs
 
 The tiers are separated by speed and external dependencies, not ceremony. The
-whole Vitest suite runs in under a minute, so there is no reason to defer any of
+whole Vitest suite runs in about 50 seconds, so there is no reason to defer any of
 it.
 
 | Cadence | What runs |

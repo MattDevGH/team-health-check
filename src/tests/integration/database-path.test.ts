@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 /**
  * Execution evidence that the runtime opens the configured database.
  *

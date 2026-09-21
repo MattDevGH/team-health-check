@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 /**
  * The ledger stops growing on its own.
  *

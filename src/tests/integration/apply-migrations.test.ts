@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 /**
  * Applying the committed migrations to a libSQL database.
  *
