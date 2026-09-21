@@ -1035,6 +1035,39 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**Vitest 5, and why ESLint 10 could not come with it** (2026-09-20).
+
+Vitest 4.1.8 → 5.0.1 needed one change and offered one simplification.
+
+- **`toHaveNoViolations` stopped type-checking, in 21 places at once.**
+  `@types/jest-axe` augments `jest` and `@jest/expect` and has never known about
+  Vitest; until 5 its `Assertion` type was loose enough for the ambient `jest`
+  namespace to fill the gap. `src/types/jest-axe-matchers.d.ts` declares the
+  matcher against Vitest's own interface. Types only — the matcher is still
+  registered at runtime by each file's `expect.extend(toHaveNoViolations)`, and
+  a declaration without a registration would be the worst of both.
+- **`vite-tsconfig-paths` is gone.** Vite 8 resolves tsconfig paths natively and
+  every run printed a notice saying so; `resolve: { tsconfigPaths: true }`
+  replaces the plugin. One fewer dependency in the path that resolves `@/` for
+  2,222 tests.
+
+**ESLint 10 is blocked, and not by anything here.** `eslint-config-next` depends
+on `eslint-plugin-react`, whose latest release (7.37.5) declares
+`eslint: ^3 || … || ^9.7` and calls `context.getFilename()` — removed in ESLint
+10. The failure is immediate and total: `TypeError: contextOrFilename.getFilename
+is not a function` while loading `react/display-name`, before a single file is
+linted. Nothing short of dropping the React rules gets around it, so PR #37
+waits for an upstream release rather than for us.
+
+**What the upgrade said about the suite, which is worth acting on separately.**
+Vitest 5 reports environment cost, and it reports that jsdom is created once per
+test file — 223 times, well over half the wall-clock time. That is the likely
+cause of the parked `magic-link/verify` hook timeouts, which have always looked
+like worker contention. Roughly 100 test files under `src/lib` and
+`src/tests/unit` touch no DOM at all and pay for a jsdom anyway. Giving those
+files a node environment would cut it without weakening isolation, which is the
+option to take before reaching for `isolate: false`.
+
 **`explaining-itself` is closed** (2026-09-20), 61 of 61 across five phases and
 three production passes. The away-period half of 5.2 came back clean: "away
 periods working and displaying as expected", which is all five criteria of
