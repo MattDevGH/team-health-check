@@ -865,14 +865,23 @@ tasks):
   from the code: response bodies are not saved unless you ask, and the tick
   interval was five minutes rather than the "few minutes" everyone assumed
 
-**`slack-sign-in/`** — A way in that needs no domain (**63 of 68 ticked**):
+**`slack-sign-in/`** — A way in that needs no domain (**66 of 68 ticked**):
 - Email was the only way into the application, and an unverified Resend sender
   delivers **only to the account owner**, dropping everyone else silently
 - Proved in a real workspace on 2026-09-17, including automatic matching on the
-  email address Slack has already verified
-- Two open boxes need a second person in the workspace: what an unlinked
-  stranger is told, and what Slack returns for a guest account. The other three
-  are its own reconcile, still to run
+  email address Slack has already verified. The single-use claim on a sign-in
+  link had until then been proved against a JavaScript `Map` and a temporary
+  file; that run proved it against Turso, through Slack
+- **The pass found two defects, both by a person reading output.** The audit log
+  showed an account linked twice with nothing saying how it came to be unlinked
+  in between — three of the four ways a binding changes were recorded, and the
+  two a member does for themselves were not. And an automatic link rendered as
+  "Slack binding matched", because a third change type had been added without a
+  label
+- Two boxes stay open and need a second person in the workspace: what an
+  unlinked stranger is told, and what Slack returns for a guest account. Every
+  account in a one-person workspace matches a member, so the fallback path
+  cannot be reached from inside it
 
 **`reaching-your-health-check/`** — Answering a check from inside the app
 (**50 of 51 ticked**):
