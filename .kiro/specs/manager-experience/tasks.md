@@ -217,7 +217,12 @@ Two defects found by using the app, both fixed outside the plan:
       checked instead.
     - Whether to merge phase 1 to `master` now or continue on this branch.
 
-- [ ] 3. Session lifecycle control
+- [x] 3. Session lifecycle control
+  - **Ticked 2026-09-23**, on 3.1 to 3.8 all being complete and on the behaviour
+    being exercised daily since: the panel, its four states, the confirmation
+    dialog, the role gate, five browser tests in `e2e/session-lifecycle.spec.ts`
+    and an axe pass. Left unticked when its children were done, which made this
+    milestone read as though its central feature were unfinished.
 
   - [x] 3.1 Derive Session_State
     - Write failing unit tests for a pure `deriveSessionState(sessions, aggregatedSessionIds)` covering all four states from the design table
@@ -339,9 +344,11 @@ Two defects found by using the app, both fixed outside the plan:
       close control back to retry.
 
   - [x] 3.6 Hide controls from non-managers — **done as part of 3.3, see above**
-    - A contributor sees no panel at all rather than the state without controls:
-      the panel exists to act, and the dashboard already shows the trend data
-      that is a contributor's stake in the check.
+    - A contributor saw no panel at all rather than the state without controls,
+      until 2026-09-19. Reversed by `reaching-your-health-check` 4.1: the panel
+      is also where a collecting check offers the route to answer it, so
+      withholding the panel withheld that route. The controls are still gated;
+      the panel around them is not.
 
   - [x] 3.7 Drive open and close through the UI in the E2E journey
     - Replace the `page.request.post` / `page.request.patch` calls in `e2e/journey.spec.ts` with UI interactions, and delete the comments explaining their absence
@@ -404,7 +411,11 @@ Two defects found by using the app, both fixed outside the plan:
     side of midnight. The team already stores a timezone; using it here needs it
     plumbed to the panel and belongs in its own change.
 
-- [ ] 5. Dashboard comprehension
+- [x] 5. Dashboard comprehension
+  - **Ticked 2026-09-23**, on 5.1 to 5.6 all being complete. Since then the
+    section has gained an explanation of its own and rows that open
+    independently (`explaining-itself` 6.1, Manager Experience 3.10), which is
+    the opposite of unfinished.
 
   - [x] 5.1 Pluralisation helper
     - Write failing tests for `pluralise` in `src/lib/format.ts`
@@ -591,8 +602,12 @@ Two defects found by using the app, both fixed outside the plan:
     - **Done.** README carries the constraint, both guards, the exemption for
       members without an email, and the SQL to find a pre-existing conflict.
 
-- [ ] 8. Checkpoint — identity guard
+- [x] 8. Checkpoint — identity guard
   - Full suite, `tsc --noEmit`, lint, build, E2E. Ask the user if questions arise.
+  - **Ticked 2026-09-23.** Task 9 below reconciles and merges, and is ticked —
+    which cannot have happened without this gate passing, since the merge went
+    through a green pull request. The gate set has run many times since, most
+    recently today.
 
 - [x] 9. Reconcile and merge
   - Update requirements/design/tasks to match what was built, including any decision that changed during implementation

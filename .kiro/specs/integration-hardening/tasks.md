@@ -521,7 +521,7 @@ original checklist was marked done.
       - keep `requirement-coverage` on `pull_request` only, since it reads the PR body
     - _Requirements: 10.5, 10.6_
 
-- [ ] 26. Reconcile and close the branch
+- [x] 26. Reconcile and close the branch
   - [x] 26.1 Keep requirements, design, tasks, README, and AI_CONTEXT synchronized
     - Update both README and AI_CONTEXT with every behavior/test/convention commit
     - Record current test totals and manual browser/Slack evidence accurately
@@ -550,7 +550,11 @@ original checklist was marked done.
     - The same gates run in GitHub Actions on every push to this branch. Latest run
       green: `ci` and `e2e`. `requirement-coverage` executes only on pull requests.
 
-  - [ ] 26.3 Commit, push, and merge through a green pull request
+  - [x] 26.3 Commit, push, and merge through a green pull request
+    - **Ticked 2026-09-23**, on PR #2 — "Integration hardening: close Tasks
+      22-26" — merged 2026-08-26. This box could not tick itself: it *is* the
+      merge, so the commit that would have ticked it had to come after the thing
+      it describes.
     - Ensure no accepted work remains unstaged/uncommitted and the remote branch contains the final evidence
     - Include exact requirement references in the PR description and verify `ci`, `e2e`, and `requirement-coverage` jobs
     - Merge only after required reviews/checks pass; then branch the next milestone from updated `master`

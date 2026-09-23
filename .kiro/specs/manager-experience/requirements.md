@@ -66,7 +66,9 @@ Slack linking, and every team-scoped query.
 5. IF a lifecycle operation fails, THEN THE Web_Interface SHALL display the server's error message and leave the displayed Session_State unchanged.
 6. IF the authenticated member is not a Delivery Manager, THEN THE Web_Interface SHALL NOT render Lifecycle_Controls.
 
-*As built: a contributor sees no lifecycle panel at all, rather than the Session_State without its controls. The panel exists to act on; the trend data a contributor has a stake in is already on the same page. Verified in `e2e/session-lifecycle.spec.ts`.*
+*As built, and then rebuilt. Until 2026-09-19 a contributor saw no lifecycle panel at all, on the reasoning that the panel exists to act on. That was wrong, and `reaching-your-health-check` found out how: the panel is also where a collecting check offers the route to answer it, so withholding the whole panel withheld that route — and a contributor who came to read their team's results while a check was collecting was shown no way to take part.*
+
+*The criterion itself never changed. It forbids rendering Lifecycle_Controls to a contributor, which is still exactly what happens; what changed is that the panel around them is rendered for everybody. Verified in `e2e/session-lifecycle.spec.ts` for the absence of the controls, and in `e2e/contributor-health-check.spec.ts` for what a contributor is offered instead.*
 7. WHEN a session has closed but its aggregates have not yet been materialised, THE Web_Interface SHALL say so explicitly rather than presenting the session as though it has no data.
 8. WHEN a Delivery Manager closes a Health_Check_Session that nobody has answered, THE confirmation SHALL say what closing it will record. *(Added 2026-09-15. The behaviour was built and tested first and cited a criterion that had never been written — `Dashboard Refinement 4.5`, in a requirement about the dashboard panel rather than the close confirmation. A check nobody answered is real information, so the tool records it rather than refusing; what this guards against is the accident, which is how both empty checks in the live database were created.)*
 
