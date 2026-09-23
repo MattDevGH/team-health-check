@@ -1035,6 +1035,31 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**Six boxes are open across twelve specs** (2026-09-23), and every one waits on
+something outside the code: four on a verified Resend sending domain, two on a
+second account in the Slack workspace.
+
+Getting there meant ticking six parent headings whose children were all done —
+three in `manager-experience`, one in `dashboard-refinement`, two in
+`integration-hardening`. Checked one at a time rather than in bulk, which is the
+rule, and the rule earned itself twice over:
+
+- **Requirement 2.6's *As built* note was wrong.** It said a contributor sees no
+  lifecycle panel at all, which stopped being true on 2026-09-19 when
+  `reaching-your-health-check` found that withholding the panel also withheld the
+  route to answer a collecting check. The criterion never changed — it forbids
+  rendering the *controls*, which is still exactly what happens — but the note
+  under it had been describing a reversed decision for four days.
+- **The same claim sat in the task list**, under a cross-reference to 3.6, and is
+  corrected there too.
+- **Integration hardening's 26.3 could not have ticked itself.** It reads "commit,
+  push, and merge through a green pull request" — it *is* the merge, so the
+  commit that would tick it has to come after the thing it describes. PR #2,
+  2026-08-26.
+
+That is the case for the rule stated plainly: a bulk tick would have closed six
+boxes and left two documents asserting the opposite of what the application does.
+
 **`slack-sign-in` is reconciled** (2026-09-23), 66 of 68. The two that stay
 open need a second Slack account: every account in a one-person workspace matches
 a member, so the automatic path always succeeds and the guidance a stranger

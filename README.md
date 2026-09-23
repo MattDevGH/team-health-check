@@ -247,10 +247,27 @@ Since then, and each in its own spec:
 
 ### What is next
 
-Nothing is in flight. The open boxes across the specs are listed under **Spec**
-below; the one blocking a full trial is a verified Resend sending domain, which
-would close the last box of `reaching-your-health-check` and make email a
-proved prompt channel rather than an untested one.
+Nothing is in flight, and **six boxes are open across twelve specs** — every one
+of them waiting on something outside the code:
+
+| Blocked on | Boxes |
+|---|---|
+| A verified Resend sending domain | 3 in `deployment`, 1 in `reaching-your-health-check` |
+| A second account in the Slack workspace | 2 in `slack-sign-in` |
+
+The domain is the one that matters. Until an email reaches somebody who is not
+the Resend account owner, email is an untested prompt channel rather than a
+proved one — and that is the failure this project has already been bitten by,
+silently.
+
+The Slack pair cannot be closed from inside a one-person workspace at all: every
+account there matches a member, so the path where somebody is *not* recognised
+never runs.
+
+One dependency upgrade is also parked, and it is blocked upstream rather than
+undone: ESLint 10 cannot be adopted while `eslint-config-next` depends on
+`eslint-plugin-react`, whose latest release declares `eslint: ^3 || … || ^9.7`
+and calls a method ESLint 10 removed.
 
 ### Later milestones (not started)
 - **Delivery-manager user guide** in `docs/`, once in-app guidance exists.
@@ -808,7 +825,7 @@ Feature specifications at `.kiro/specs/`:
 - Tasks (9 groups, 3 checkpoints), each recording what was done, what was found, and what was mutation-checked
 - `design.md` also carries a **What implementation taught** section — dates crossing JSON as strings, pinning date locales, one tick one clock, and why two test flakes came from tests outgrowing their budget rather than from the code
 
-**`dashboard-refinement/`** — Follow-up spec (**29 of 30 ticked**, written 2026-08-31):
+**`dashboard-refinement/`** — Follow-up spec (**complete**, written 2026-08-31):
 - Requirements (9 functional + 2 non-functional), every one traced to a manual pass over the live application rather than to a test failure
 - Technical design (7 decisions, 6 correctness properties), including an open decision on whether removing a session means deletion or exclusion
 - Tasks (9 groups, 3 checkpoints), with session removal explicitly blocked until that decision is made

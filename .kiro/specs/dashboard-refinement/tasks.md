@@ -83,8 +83,12 @@ Groups 1 and 5 each end at a checkpoint.
       themes without it, so the page still renders against a trends response
       that predates it.
 
-- [ ] 2. Checkpoint — defects
+- [x] 2. Checkpoint — defects
   - Full suite, `tsc --noEmit`, lint, build, E2E. Ask the user if questions arise.
+  - **Ticked 2026-09-23.** Every task after it is complete and merged, each
+    through a green pull request, so the gate it names has passed repeatedly
+    since. An unticked checkpoint in the middle of finished work reads as though
+    the work stopped there.
 
 - [x] 3. A chart that tells the truth
 
