@@ -171,8 +171,13 @@ repository.
 - [x] Connect the repository; confirm production builds from `master`
 - [x] Set every production environment variable from `docs/deployment.md`
 - [x] Generate a fresh `CRON_SECRET` for production — not the development value
-- [ ] Confirm preview deployments do not carry production database credentials
-      — needs the Vercel dashboard, so it cannot be verified from here
+- [x] Confirm preview deployments do not carry production database credentials.
+      *Checked in the Vercel dashboard on 2026-09-23: every variable is scoped to
+      Production only. A preview therefore starts with no database, hits the
+      `TURSO_DATABASE_URL` guard and answers 500 to everything — unusable, and
+      deliberately so. Previews are behind Vercel deployment protection as well:
+      a request returns 302 to `vercel.com/sso-api`, measured against the preview
+      for 325834d while production answered 401 on the same path.*
 - [x] Deploy
 - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 4.6, NFR 2.1_
 
@@ -193,10 +198,22 @@ repository.
 
 ### 4.6 Slack
 
-- [ ] Point the app's request URLs at the production domain
-- [ ] Set the production signing secret and bot token
-- [ ] Confirm signature verification works against production
+- [x] Point the app's request URLs at the production domain
+- [x] Set the production signing secret and bot token
+- [x] Confirm signature verification works against production
 - _Requirements: 7.1, 7.2_
+
+*All three done on 2026-09-17 and ticked on 2026-09-23, late. The slash command
+and interactivity URLs were repointed from the ngrok tunnel to the Vercel one
+and a fresh bot token set, and the workspace pass recorded in `slack-sign-in`
+exercised `/healthcheck signin` against the hosted application — which is what
+proves signature verification, since an unverified request never reaches a
+handler.*
+
+*Left unticked for six days because the pass was recorded against the spec that
+needed it rather than the one that asked for it. An unticked box that is done is
+a small lie, and this list read as though production Slack had never been set
+up.*
 
 ---
 
@@ -220,9 +237,15 @@ in this project.
 
 ### 5.2 Rollback
 
-- [ ] Document how to promote the previous deployment
-- [ ] State the hazard plainly: migrations do not roll back with the
-      deployment, so a rollback can leave the schema ahead of the code
+- [x] Document how to promote the previous deployment
+- [x] State the hazard plainly: migrations do not roll back with the
+      deployment, so a rollback can leave the schema ahead of the code.
+      *`docs/deployment.md`, "Rolling back". It says why a rollback is safe
+      **today** rather than that it is: every migration so far is additive, and
+      Prisma asks for columns by name, so older code ignores what it does not
+      know about. That is a property to keep, not a guarantee the platform
+      offers — the first destructive migration ends it, and there is no
+      point-in-time restore to undo one with.*
 - _Requirements: 8.2, 8.3_
 
 ### 5.3 Reconcile

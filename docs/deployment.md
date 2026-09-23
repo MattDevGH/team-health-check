@@ -210,9 +210,27 @@ Verified live after the first deploy: `/` and `/auth/login` return 200, and
 request would be 500, because the guard runs at server start rather than at
 build. A clean refusal means the app is running and reached its configuration.
 
-**Environment variables are scoped to Production only**, deliberately. A
+**Environment variables are scoped to Production only**, deliberately —
+confirmed in the Vercel dashboard on 2026-09-23, variable by variable. A
 preview deployment therefore starts with none of them, hits the
 `TURSO_DATABASE_URL` guard, and answers every request with 500.
+
+That is the safe direction of a real trade, and it is worth naming as a trade.
+`TURSO_DATABASE_URL`'s **presence** is what selects the libSQL adapter, so
+scoping it to Preview would not merely make previews work — it would point every
+preview build of every pull request at the live team's answers, with a
+`CRON_SECRET` that lets the preview's tick endpoint open and close their checks.
+A preview nobody can click through is worth more than that.
+
+Previews are also behind Vercel's deployment protection: requesting one returns
+`302` to `vercel.com/sso-api`, so only an authenticated member of the Vercel team
+reaches them at all. Measured on 2026-09-23 against the preview for commit
+`325834d`; production answers `401` on the same path, which is the application
+running and refusing an anonymous caller.
+
+**If working previews are ever wanted**, give them a Turso database of their own
+and scope those credentials to Preview. Never the production ones. The whole
+value of a preview is that you can do anything to it.
 
 That is the correct posture — Requirement 1.3 says a preview must never write
 to the production database, and the surest way to guarantee that is to give it
@@ -274,6 +292,83 @@ already holds responses, and before any manual `DELETE` or `UPDATE`.
 
 Revisit if the tool is adopted beyond a trial. A team’s candid feedback is not
 data you can ask them to re-enter.
+
+---
+
+## Rolling back
+
+**Requirements: Deployment 8.2, 8.3**
+
+A deploy is one thing and a migration is another, and rolling back moves only
+one of them.
+
+### Putting the previous deployment back
+
+Vercel keeps every deployment it has built. In the project's **Deployments**
+list, open the one you want and promote it to production — Vercel calls this an
+instant rollback, and it reassigns the production domain to a build that already
+exists rather than building anything. There is a `vercel rollback` command that
+does the same thing if the dashboard is inconvenient.
+
+It takes seconds, because nothing is compiled. That is the point: a bad release
+should be a short incident.
+
+### What does not come back with it
+
+**Migrations do not roll back.** `scripts/migrate-production.ts` is a command
+somebody runs, deliberately separate from deploying, so the schema stays exactly
+where it was. After a rollback the database may be **ahead of the code**.
+
+Today that is safe, and it is worth being precise about why, because the reason
+is a property somebody has to keep rather than a guarantee the platform offers.
+Every migration in this repository so far is **additive**: columns and tables
+added, nothing removed. The one migration containing a `DROP`
+(`20260621182618_add_pre_session_recipient`) is Prisma's SQLite table-rebuild
+for adding a column with a default, and it copies every existing row across.
+Prisma generates explicit column lists, so older code simply never asks for a
+column it does not know about.
+
+**A destructive migration would end that.** Drop or rename a column and the
+previous deployment stops working the moment it queries that table — and there
+is no point-in-time restore on this Turso plan to undo it with. See *Backups*:
+the only way back is an export taken beforehand.
+
+### The rule
+
+> Migrate forward **before** deploying forward. Never migrate backward.
+
+The first half has been tested the hard way. On 2026-09-18 the code adding
+`emailPromptsEnabled` merged before the migration ran, and production could not
+read a `TeamMember` row at all — no sign-in, no profile, no dashboard — because
+Prisma selects every column by name. The window between merging and migrating is
+the risk, which is why the migration is run the moment a schema change lands
+rather than at leisure.
+
+The second half has not been tested and should not be. Reverting a migration
+against a database holding a team's answers is a data-loss operation wearing the
+clothes of an undo.
+
+### Before a destructive migration
+
+1. Take an export from the Turso dashboard. It is the only way back.
+2. Deploy the code that tolerates both shapes first, if there is one.
+3. Then migrate, then remove the tolerance in a later deploy.
+
+That sequence keeps every intermediate state rollback-safe. It is more work than
+one migration and it is the difference between a short incident and an
+unrecoverable one.
+
+### After any rollback
+
+Read the database back rather than trusting the deployment's status:
+
+```bash
+npx tsx scripts/verify-production.ts
+```
+
+It reports which migrations the ledger records and whether the columns recent
+milestones added actually exist — which is how you tell "the schema is ahead of
+the code" from "the schema is fine and something else is wrong".
 
 ---
 
