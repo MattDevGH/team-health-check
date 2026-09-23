@@ -749,11 +749,14 @@ and safe rendering of structured or malformed API errors.
 
 ## CI/CD
 
-GitHub Actions defines three PR gates:
+GitHub Actions defines four PR gates:
 
 1. **`ci`** — Install → Prisma generate/schema push → Lint → Type Check → Vitest → Build
 2. **`e2e`** — Install → Prisma setup → Build → Chromium install → Playwright, after `ci`
 3. **`requirement-coverage`** — Require requirement references in the PR body
+4. **`requirement-references`** — Every citation in the source resolves to a
+   criterion that exists, and **no section appears twice** in the narrative
+   documents
 
 Jobs run on pushes to **any** branch as well as pull requests targeting
 `master`, so a feature branch is validated before review rather than only once a
@@ -770,8 +773,14 @@ passing result if any test skipped, because Playwright treats a skip as a pass �
 which is how the old happy path reported green for months while proving nothing.
 Traces, screenshots, and the seeded database are uploaded on failure.
 
-All three jobs and the uploaded Playwright evidence must pass before merge to
+All four jobs and the uploaded Playwright evidence must pass before merge to
 `master`.
+
+The structural check is shape, not truth. It cannot tell whether a paragraph is
+still accurate — only that a section is not there twice, which is the shape one
+particular accident takes: 602 duplicated lines shipped in this file on
+2026-09-20 through a pipeline that was entirely green, because nothing read it
+for structure. A person still has to read the words.
 
 ## Working with AI assistants
 

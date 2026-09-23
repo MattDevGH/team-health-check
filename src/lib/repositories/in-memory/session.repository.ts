@@ -13,10 +13,13 @@ export class InMemorySessionRepository implements SessionRepository {
   async create(data: {
     teamId: string;
     status: string;
+    actualOpenAt?: Date;
     scheduledOpenAt?: Date;
     scheduledCloseAt?: Date;
   }): Promise<HealthCheckSession> {
-    const now = new Date();
+    // The caller’s clock where it has one. Inventing a second time here is how
+    // a service with an injected clock ended up writing rows dated today
+    const now = data.actualOpenAt ?? new Date();
     const session: HealthCheckSession = {
       id: `session-${this.nextId++}`,
       teamId: data.teamId,

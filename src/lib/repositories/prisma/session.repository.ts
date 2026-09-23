@@ -13,6 +13,7 @@ export class PrismaSessionRepository implements SessionRepository {
   async create(data: {
     teamId: string;
     status: string;
+    actualOpenAt?: Date;
     scheduledOpenAt?: Date;
     scheduledCloseAt?: Date;
   }): Promise<HealthCheckSession> {
@@ -20,6 +21,14 @@ export class PrismaSessionRepository implements SessionRepository {
       data: {
         teamId: data.teamId,
         status: data.status,
+        /*
+         * Passed through when the caller has a clock. The column defaults to
+         * now() in the schema, so omitting it keeps the previous behaviour —
+         * but a caller that was given a clock should not be overruled by the
+         * database, and the scheduler reads this field to decide whether a
+         * cycle has already been served.
+         */
+        ...(data.actualOpenAt ? { actualOpenAt: data.actualOpenAt } : {}),
         scheduledOpenAt: data.scheduledOpenAt ?? null,
         scheduledCloseAt: data.scheduledCloseAt ?? null,
       },

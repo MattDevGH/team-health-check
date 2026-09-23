@@ -27,6 +27,8 @@ const WEDNESDAY = new Date('2026-09-16T09:00:00.000Z');
 const FRIDAY_AFTER_CLOSE = new Date('2026-09-18T18:00:00.000Z');
 /** Outside the Monday-to-Friday window entirely. */
 const SATURDAY = new Date('2026-09-19T12:00:00.000Z');
+/** One tick later, past the thirty-second quiet period after a close. */
+const AFTER_QUIET_PERIOD = new Date('2026-09-18T18:01:00.000Z');
 
 let repos: Repositories;
 let sessionService: SessionService;
@@ -57,15 +59,20 @@ let scheduler: ReturnType<typeof createSchedulerService>;
 let serviceClock = new Date(0);
 
 /**
- * Runs a tick with the service clock set a minute behind it.
+ * Runs a tick with the service clock set to the tick itself.
  *
- * A minute rather than zero because the rows a tick reads were written before
- * it started: closing stamps `actualCloseAt`, and materialising asks whether
- * the quiet period since that stamp has elapsed. With both taken from the same
- * instant the answer is always "no", which is true of no real deployment.
+ * It used to be set a minute *behind*, so that a close stamped in one tick
+ * looked old enough to materialise in the same tick. That worked until the
+ * session service started taking `actualOpenAt` from its clock too — and a
+ * session that claims to have opened a minute before its own cycle began is
+ * not one the scheduler recognises as having served that cycle.
+ *
+ * Materialisation is a tick later now, which is what a real deployment does:
+ * closing and computing results are different ticks, thirty seconds apart at
+ * the least.
  */
 async function tickAt(when: Date) {
-  serviceClock = new Date(when.getTime() - 60_000);
+  serviceClock = when;
   return scheduler.tick(when);
 }
 
@@ -145,20 +152,22 @@ describe('what a tick records', () => {
 
   it('names the session it materialised', async () => {
     /*
-     * In the same tick as the close, because `tickAt` puts the service clock a
-     * minute behind the tick: the close stamps `actualCloseAt` a minute ago and
-     * the quiet period has therefore elapsed by the time materialisation is
-     * considered. Against a real database this would be the following tick,
-     * and the record is the same either way.
+     * The tick after the close, which is what a real deployment does: closing
+     * and computing results are separate ticks, at least the thirty-second
+     * quiet period apart.
      *
-     * It used to rely on the wall clock being years from the fixture dates,
-     * which stopped being true on 2026-09-18.
+     * This used to happen in the closing tick, on a fixture that set the
+     * service clock a minute behind the tick it was running. That stopped
+     * working when the session service began taking `actualOpenAt` from its
+     * clock as well — a session cannot have opened a minute before its own
+     * cycle began.
      */
     await teamWithSchedule();
     await tickAt(MONDAY_0900);
+    await tickAt(FRIDAY_AFTER_CLOSE);
     events.length = 0;
 
-    await tickAt(FRIDAY_AFTER_CLOSE);
+    await tickAt(AFTER_QUIET_PERIOD);
 
     expect(named('session.materialised')[0].sessionId).toEqual(expect.any(String));
   });
@@ -298,14 +307,24 @@ describe('what a tick returns', () => {
     expect(summary.tickId).toBe(events[0].tickId);
   });
 
-  it('counts a close and a materialisation', async () => {
+  it('counts a close, and the materialisation on the tick after it', async () => {
+    /*
+     * Two ticks, because that is what a deployment does — the quiet period
+     * before results are computed is thirty seconds, so the tick that closes a
+     * check is never the tick that materialises it.
+     *
+     * Counting them separately also says something worth saying: a tick that
+     * closed something and computed nothing is not a tick that failed.
+     */
     await teamWithSchedule();
     await tickAt(MONDAY_0900);
 
     const closing = await tickAt(FRIDAY_AFTER_CLOSE);
+    const computing = await tickAt(AFTER_QUIET_PERIOD);
 
     expect(closing.closed).toBe(1);
-    expect(closing.materialised).toBe(1);
+    expect(closing.materialised).toBe(0);
+    expect(computing.materialised).toBe(1);
   });
 
   it('reports zeroes for a quiet tick rather than nothing at all', async () => {

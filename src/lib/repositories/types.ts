@@ -83,7 +83,15 @@ export interface TeamMemberRepository {
 
 /** Requirement 3.2: Session lifecycle */
 export interface SessionRepository {
-  create(data: { teamId: string; status: string; scheduledOpenAt?: Date; scheduledCloseAt?: Date }): Promise<HealthCheckSession>;
+  /**
+   * Creates a session.
+   *
+   * `actualOpenAt` is optional and supplied by the caller where the caller has
+   * a clock — which the session service does. Left out, each implementation
+   * stamps its own, and a service given an injected clock was silently
+   * overruled by the row it had just written.
+   */
+  create(data: { teamId: string; status: string; actualOpenAt?: Date; scheduledOpenAt?: Date; scheduledCloseAt?: Date }): Promise<HealthCheckSession>;
   findById(id: string): Promise<HealthCheckSession | null>;
   findOpenByTeamId(teamId: string): Promise<HealthCheckSession | null>;
   findByTeamId(teamId: string): Promise<HealthCheckSession[]>;

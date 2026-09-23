@@ -197,3 +197,14 @@ jobs:
 
       - name: Check requirement references resolve
         run: npx tsx scripts/check-requirement-references.ts
+
+      # Shape, not truth. 602 duplicated lines shipped in the README on
+      # 2026-09-20 — everything from "## Architecture" to "## Spec", twice —
+      # through a pipeline that was entirely green, because nothing read that
+      # file for structure. A 65% size increase in the project’s front door
+      # passed every gate.
+      #
+      # It cannot tell whether a paragraph is still accurate. It can tell that a
+      # section is not there twice, which is the shape that accident takes.
+      - name: Check no section appears twice
+        run: npx tsx scripts/check-doc-structure.ts

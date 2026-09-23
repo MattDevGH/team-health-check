@@ -53,6 +53,26 @@ beforeEach(async () => {
   await repos.teamMember.create({ teamId, name: 'M', email: 'm@clock.test' });
 });
 
+describe('opening a check', () => {
+  it('stamps when it opened from the injected clock', async () => {
+    /*
+     * The third place the wall clock leaked in, found on 2026-09-23 when a
+     * scheduler test that had been green for weeks failed on a date rather than
+     * on a change. `actualOpenAt` was stamped by the repository with
+     * `new Date()`, so a tick given a date in the past created a session that
+     * claimed to have opened today — and the scheduler reads exactly that field
+     * to decide whether the current cycle has already been served.
+     *
+     * Two previous attempts at this defect fixed the fields in front of them.
+     * This one asserts the whole row.
+     */
+    const opened = await sessions.open(teamId, 'system');
+
+    expect(opened.actualOpenAt).toEqual(FIXED);
+    expect((await repos.session.findById(opened.id))?.actualOpenAt).toEqual(FIXED);
+  });
+});
+
 describe('closing a check', () => {
   it('stamps the close from the injected clock', async () => {
     const opened = await sessions.open(teamId, 'system');
@@ -109,7 +129,12 @@ describe('every time the service writes', () => {
     await sessions.materializeAggregates(opened.id);
 
     const session = await repos.session.findById(opened.id);
-    const written = [session?.scheduledOpenAt, session?.actualCloseAt, session?.materialisedAt];
+    const written = [
+      session?.scheduledOpenAt,
+      session?.actualOpenAt,
+      session?.actualCloseAt,
+      session?.materialisedAt,
+    ];
 
     for (const stamp of written.filter(Boolean)) {
       expect(stamp, 'a timestamp the service wrote from some other clock').toEqual(FIXED);
