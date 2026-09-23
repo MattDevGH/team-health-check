@@ -813,13 +813,18 @@ Feature specifications at `.kiro/specs/`:
 - Technical design (7 decisions, 6 correctness properties), including an open decision on whether removing a session means deletion or exclusion
 - Tasks (9 groups, 3 checkpoints), with session removal explicitly blocked until that decision is made
 
-**`deployment/`** — Putting it somewhere a team can reach (**53 of 62 ticked**):
+**`deployment/`** — Putting it somewhere a team can reach (**59 of 62 ticked**):
 - Requirements (9): Vercel, Turso, migrations that cannot silently hit a local
   file, a scheduler trigger the free tier can actually run, and backups
-- What stays open needs a person, not code: verifying a Resend sending domain,
-  confirming preview deployments carry no production credentials, and writing
-  down how to promote the previous deployment — with the hazard stated plainly,
-  that migrations do not roll back with it
+- What stays open is one thing in three parts: a verified Resend sending
+  domain, and proof that an email reaches somebody who is not the account owner
+- Rolling back is written down now, including the hazard — migrations do not
+  roll back with a deployment, so the schema can end up ahead of the code. It is
+  safe today because every migration so far is additive, which is a property to
+  keep rather than a guarantee
+- Preview deployments carry no production credentials, confirmed 2026-09-23.
+  They are therefore unusable, deliberately: a preview nobody can click through
+  beats one pointed at the live team’s answers
 - `docs/deployment.md` is the working reference: every variable, which file it
   belongs in, and what happens when each one is wrong
 

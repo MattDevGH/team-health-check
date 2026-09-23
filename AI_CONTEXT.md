@@ -1035,6 +1035,39 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**Rolling back is written down, and previews are confirmed empty** (2026-09-23).
+`deployment` goes to 59 of 62; the three left are the Resend domain.
+
+- **`docs/deployment.md` gains "Rolling back".** Promoting a previous
+  deployment on Vercel takes seconds because nothing is compiled — and moves
+  only the code. `scripts/migrate-production.ts` is deliberately not part of a
+  deploy, so the schema stays where it is and a rollback can leave the database
+  **ahead of the code**.
+- **It says why that is safe today rather than that it is.** Every migration so
+  far is additive, and Prisma asks for columns by name, so older code ignores
+  what it does not know about. The one migration containing a `DROP` is
+  Prisma’s SQLite table-rebuild for adding a column with a default. That is a
+  property somebody has to keep — the first destructive migration ends it, and
+  there is no point-in-time restore to undo one with.
+- **The rule: migrate forward before deploying forward, never migrate
+  backward.** The first half was tested the hard way on 2026-09-18, when the
+  code adding `emailPromptsEnabled` merged before the migration ran and
+  production could not read a `TeamMember` row at all. The second half should
+  not be tested: reverting a migration against a team’s answers is data loss
+  wearing the clothes of an undo.
+- **Preview deployments carry nothing**, confirmed variable by variable in the
+  Vercel dashboard. They therefore hit the `TURSO_DATABASE_URL` guard and answer
+  500 to everything — unusable, and the right direction: scoping that variable
+  to Preview would point every pull request build at the live team’s answers,
+  with a `CRON_SECRET` that lets it open and close their checks. Previews are
+  behind Vercel deployment protection too (302 to `vercel.com/sso-api`,
+  measured). If working previews are ever wanted, give them their own Turso
+  database.
+- **Three Slack boxes were ticked six days late.** The production URLs, token
+  and signature verification were all done on 2026-09-17, and the evidence was
+  filed against `slack-sign-in` rather than the spec that asked for it — so
+  `deployment` read as though production Slack had never been set up.
+
 **The wall clock leaked into the session row in three places, and it took three
 goes to stop chasing fields.** `actualCloseAt` on 2026-09-19 (two writes),
 `actualOpenAt` on 2026-09-23 — each found by the suite failing on a *date*
