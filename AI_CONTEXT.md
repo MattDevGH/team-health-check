@@ -693,9 +693,9 @@ setting to revisit first if anyone else gains write access.
 
 ---
 
-## Outstanding Work
+## Milestone record — Explaining Itself
 
-### Explaining itself — phase 1 in progress (2026-09-14)
+### Explaining itself — complete 2026-09-20 *(written up while phase 1 was in progress, 2026-09-14)*
 
 `.kiro/specs/explaining-itself/`. Five findings from Matt walking the whole
 loop on production. Everything worked; almost nothing explained itself.
@@ -864,7 +864,7 @@ that changes behaviour invisibly and, from the member’s view, permanently.
 The privacy defect found in the same session — trend indicators bypassing the
 anonymity threshold — was fixed immediately and is out of scope here.
 
-## Outstanding Work
+## Milestone record — Knowing What Happened
 
 ### Knowing what happened — built 2026-09-16
 
@@ -1034,6 +1034,54 @@ linked — email for a member without it, Slack alone for a member with it.
   Property 6 exists because the design stated the default and never stated that
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
+
+**The wall clock leaked into the session row in three places, and it took three
+goes to stop chasing fields.** `actualCloseAt` on 2026-09-19 (two writes),
+`actualOpenAt` on 2026-09-23 — each found by the suite failing on a *date*
+rather than on a change, and each fix narrower than the rule it was serving.
+
+The rule: **one clock writes the whole row.** `createSessionService` takes an
+injectable `now`, and a repository that stamps its own time silently overrules
+every caller that sets one. The scheduler reads `actualOpenAt` to decide whether
+a cycle has been served and subtracts `actualCloseAt` to decide whether the
+quiet period has elapsed; both comparisons are meaningless across two clocks.
+
+`session-service-clock.test.ts` asserts the whole row now rather than the field
+that happened to break. Production behaviour is unchanged — `now` defaults to
+`() => new Date()` and the column keeps its `now()` default for callers with no
+clock.
+
+A consequence worth keeping: `scheduler-record.test.ts` used to set its clock a
+minute behind the tick it ran, so a close looked old enough to materialise in
+the same tick. A session cannot have opened a minute before its own cycle began,
+so that had to go — and materialisation is a tick later now, which is what a
+real deployment does anyway.
+
+**A gate reads the documents for shape now** (`scripts/check-doc-structure.ts`,
+wired into the `requirement-references` job). It refuses a narrative document
+that contains the same section twice.
+
+Written after 602 duplicated lines shipped in the README — everything from
+"## Architecture" to "## Spec", twice — through a pipeline that was entirely
+green. A 65% size increase in the project’s front door passed every gate,
+because the requirement checker reads citations and nothing else read that file
+at all.
+
+- **Shape, not truth.** It cannot tell whether a paragraph is still accurate;
+  only that a section is not there twice, which is the shape that accident
+  takes. The rule for people in AGENTS.md still stands.
+- **A heading may repeat under a different parent**, so two setup guides can
+  each have a "### Setup". Forbidding that would make it a check people work
+  around rather than fix.
+- **Headings inside fenced code blocks are ignored.** These documents are full
+  of shell examples whose comments start with `#`, and a check that cries wolf
+  is a check somebody disables.
+- `.kiro/specs/**` is deliberately not guarded: every requirements file repeats
+  "#### Acceptance Criteria" by design.
+- **It found a real problem on its first run against the repo** — four
+  "## Outstanding Work" sections in this file, two of which still described
+  finished milestones as not started. The headings name their milestone now and
+  the stale status lines are corrected, with what they used to claim kept.
 
 **Tests build a DOM only when they need one** (2026-09-21). `vitest.config.mts`
 splits the suite into two projects: `.test.tsx` in jsdom, `.test.ts` in node.
@@ -1962,9 +2010,9 @@ dashboard link, follows the page link, and lands on the form.
 
 **Phase 1 alone fixes the defect** and depends on nothing external.
 
-## Outstanding Work
+## Milestone record — Slack Sign-In
 
-### Slack sign-in — spec written 2026-09-13, not started
+### Slack sign-in — built and proved in a real workspace 2026-09-17 *(this section was written on 2026-09-13, when it had not started)*
 
 `.kiro/specs/slack-sign-in/`. Written because provisioning exposed a
 single point of failure nobody had noticed: **email is the only way in**, and
@@ -2000,9 +2048,9 @@ authentication stays the member’s own Slack login. NFR 3 records that.
 **Workspace membership is not team membership.** No Slack interaction creates a
 `TeamMember`; a contractor in one channel is in the workspace.
 
-## Outstanding Work
+## Milestone record — Deployment
 
-### Deployment — spec written 2026-09-12, not yet implemented
+### Deployment — live since 2026-09-13 *(this section was written on 2026-09-12, before any of it was implemented)*
 
 `.kiro/specs/deployment/`. Two findings shaped it before any of it was written,
 and both were verified against source rather than assumed.
