@@ -1035,6 +1035,25 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**`slack-sign-in` is reconciled** (2026-09-23), 66 of 68. The two that stay
+open need a second Slack account: every account in a one-person workspace matches
+a member, so the automatic path always succeeds and the guidance a stranger
+should get cannot be reached from inside it. Work with a prerequisite, not work
+left undone — and worth the distinction, because an open box that cannot be
+closed reads like neglect unless it says why.
+
+The reconcile itself found nothing new, which is the first time that has been
+true of a closing pass in this project. Both workspace findings were already
+written up here and in the spec; what was missing was the README, where a reader
+who never opens a spec could not learn that the pass found two defects and that
+a person reading output found both of them.
+
+One repair while passing: four literal backspace characters, `0x08`, sitting in
+the prose **describing the regular expression those same characters once broke**.
+They reached the documents the way they reached that test — a shell string ate
+the backslash and left the control character it denotes. The passage explaining
+how a test could never match had been unable to render the escape it was naming.
+
 **Rolling back is written down, and previews are confirmed empty** (2026-09-23).
 `deployment` goes to 59 of 62; the three left are the Resend domain.
 
@@ -1489,9 +1508,9 @@ that field is for.
 label, so an automatic link rendered in the audit log as "Slack binding
 matched" — phase 2 named its two change types and phase 3 added a third without
 one. Two tests watch for it now, and the second is worth remembering: it
-*passed* against the defect it was written for, because `/(binding|…)/i` in
+*passed* against the defect it was written for, because `/\b(binding|…)\b/i` in
 the source had been written to disk with literal backspace characters where the
-`` escapes belonged. The pattern required control characters around the word
+`\b` escapes belonged. The pattern required control characters around the word
 and could never match. A test that cannot fail reports safety it does not have.
 
 Two acceptance items stay open and are **not reachable in a one-person

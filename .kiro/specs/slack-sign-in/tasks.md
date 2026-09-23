@@ -264,14 +264,25 @@ rather than an ngrok tunnel.
       binding matched". Phase 2 labelled its two change types and phase 3 added
       a third without one. Fixed, with two tests — one of which passed against
       the defect until its regex was found to contain literal backspace
-      characters where `` was intended
+      characters where `\b` was intended
 - _Requirements: 1.1, 1.2, 1.4, 3.1, 3.5_
 
 ### 5.2 Reconcile
 
-- [ ] Update README and AI_CONTEXT
-- [ ] Record anything the workspace pass found that no test could
-- [ ] Full gate set, then merge
+- [x] Update README and AI_CONTEXT
+- [x] Record anything the workspace pass found that no test could. *Both
+      findings were already written up in 5.1 above and in AI_CONTEXT; the
+      README says them now too, because a reader who never opens a spec should
+      still learn that the pass found two defects and that both were found by a
+      person reading output rather than by anything automated.*
+- [x] Full gate set, then merge
+
+**The spec is closed except for two boxes a one-person workspace cannot reach.**
+66 of 68. Both need a second Slack account: every account in the sandbox matches
+a member, so the automatic path always succeeds and the guidance a stranger
+should get is unreachable from inside it. That is work with a prerequisite
+nobody has yet rather than work left undone, and it is worth the distinction —
+an open box that cannot be closed reads like neglect unless it says why.
 
 ---
 
