@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 /**
  * Executable evidence that the production database path actually works.
  *

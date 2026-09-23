@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 /**
  * A production process without a database must not serve requests.
  *

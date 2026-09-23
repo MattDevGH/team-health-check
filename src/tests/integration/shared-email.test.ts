@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 /**
  * Executable evidence that one email really can belong to several teams.
  *

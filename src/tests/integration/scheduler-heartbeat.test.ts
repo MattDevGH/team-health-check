@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 /**
  * A heartbeat that is replaced rather than appended.
  *

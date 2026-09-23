@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 /**
  * Seeding the fixed question catalogue into a production-shaped database.
  *

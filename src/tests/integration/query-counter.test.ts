@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 /**
  * An instrument for counting database queries.
  *
