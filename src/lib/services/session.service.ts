@@ -109,6 +109,11 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     const session = await sessionRepo.create({
       teamId,
       status: 'open',
+      // One clock for the whole row. Left to the repository this was `new Date()`,
+      // so a tick given a past date created a session claiming to have opened
+      // today — and the scheduler reads exactly this field to decide whether the
+      // current cycle has already been served
+      actualOpenAt: openedAt,
       ...scheduledWindow,
     });
 
