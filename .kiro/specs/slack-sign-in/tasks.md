@@ -311,10 +311,19 @@ have produced, and both Slack variables are scoped to Production alone.
     5.2 so an email-only deployment stays legitimate
   - _Requirements: Slack Sign In NFR 1.3, NFR 1.4_
 
-- [ ] 6.2 Reject when the secret is absent or blank
+- [x] 6.2 Reject when the secret is absent or blank
   - Failing test first: a signature forged with an empty key against an
     unset `SLACK_SIGNING_SECRET`, asserting the request is refused rather than
     asserting which branch ran
+  - Red proved the defect rather than describing it. Two of the three new
+    scenarios failed against the old code — blank and unset, each forged with
+    the empty key anybody could have guessed. The third, a genuine Slack
+    signature against a deployment with no secret, passed all along: a real
+    key never matched an empty one. Only the forgeries got in
+  - The caller is refused with the message a wrong signature gets, so a 403
+    does not disclose whether the deployment is configured. The operator gets
+    the real reason through `console.error`, naming the variable and never a
+    value
   - _Requirements: Slack Sign In NFR 1.3_
 
 - [ ] 6.3 Require the secret at startup wherever Slack is configured
