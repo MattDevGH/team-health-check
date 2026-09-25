@@ -326,9 +326,19 @@ have produced, and both Slack variables are scoped to Production alone.
     value
   - _Requirements: Slack Sign In NFR 1.3_
 
-- [ ] 6.3 Require the secret at startup wherever Slack is configured
+- [x] 6.3 Require the secret at startup wherever Slack is configured
   - `SLACK_SIGNING_SECRET` joins `StartupEnvironment`; a bot token without it
     aborts. Email-only and Slack-complete deployments both still start
+  - Conditioned on the bot token rather than required outright, because
+    Requirement 5.2 says an email-only deployment is legitimate and a guard
+    that made one set a Slack variable would break a working arrangement to
+    fix one nobody is using
+  - **An existing test asserted the contract this changes.** "starts with
+    Slack alone" passed `SLACK_BOT_TOKEN` by itself, because that was the
+    whole of what "Slack is configured" meant. It now passes both, and says
+    why in place rather than silently gaining an argument
+  - No wiring gap to close: `instrumentation.ts` passes `process.env` whole,
+    so the new field is read as soon as the interface declares it
   - _Requirements: Slack Sign In NFR 1.4, 5.2_
 
 - [ ] 6.4 Correct what the deployment guide claims
