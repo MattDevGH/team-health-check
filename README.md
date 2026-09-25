@@ -643,7 +643,7 @@ TURSO_AUTH_TOKEN="your-turso-auth-token"
 ### 4. Vercel Deployment
 
 1. Go to your Vercel project → **Settings** → **Environment Variables**
-2. Add `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` for the **Production** (and optionally Preview) environments
+2. Add `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` to the **Production** environment only — never Preview. A preview deployment is built from a pull request, so production credentials there point every branch at the live team's answers, and anyone who can open a preview URL reads them. This line said "(and optionally Preview)" until 2026-09-25, contradicting the note further down that preview deployments carry no production credentials — which is the arrangement that was actually checked, on 2026-09-23
 3. Deploy — the app detects `TURSO_DATABASE_URL` at runtime and switches to the libSQL adapter automatically
 
 > **Apply the schema to Turso before the first deploy:**
@@ -941,7 +941,7 @@ tasks):
 
 ### Security
 
-- **No CSRF protection** on form submissions (session links are one-time-use tokens which helps, but dashboard forms aren't protected).
+- **No CSRF protection** on form submissions. What limits this today is `SameSite=Lax` on the session cookie, not anything about the links. This entry used to say "session links are one-time-use tokens which helps", and both halves were wrong: a session link is **reusable until the session closes**, deliberately, because a member has to be able to come back and change an answer. `SessionLink` has no `used` column at all — `MagicLink`, `PairingCode` and `PendingGenesis` are the single-use ones. Nor would single use have helped: CSRF turns on the browser attaching the cookie, not on the attacker holding a token.
 - **No rate limiting on non-auth endpoints** — the API has rate limiting on magic link requests and session-link validation, but other endpoints are unprotected.
 - **Slack bot token stored in env only** — no secrets manager integration.
 

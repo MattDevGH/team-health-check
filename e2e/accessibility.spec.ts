@@ -153,6 +153,51 @@ test.describe('feedback states', () => {
     await expectNoViolations(page, 'active feedback form');
   });
 
+  /**
+   * Requirements: NFR 2.5, NFR 2.2
+   *
+   * The score radios are `sr-only` inputs inside their labels, so the
+   * browser's own focus ring lands on an element nobody can see while the
+   * visible circle does not change at all.
+   *
+   * Axe cannot catch this. Focus visibility is a question about rendered
+   * pixels rather than about the accessibility tree, so every automated check
+   * in this file passed against a form a keyboard user had to count their way
+   * through. It took a person reading the markup.
+   *
+   * Driven by real Tab presses rather than `.focus()`, because
+   * `:focus-visible` is precisely a question about how focus arrived.
+   */
+  test('a keyboard user can see which score they are on', async ({ page }) => {
+    await page.goto(`/session/${openToken}`);
+    await expect(page.getByRole('heading', { name: /health check/i })).toBeVisible();
+
+    const firstScore = page.getByRole('radio', { name: '1' }).first();
+
+    for (
+      let presses = 0;
+      presses < 25 && !(await firstScore.evaluate(el => el === document.activeElement));
+      presses += 1
+    ) {
+      await page.keyboard.press('Tab');
+    }
+
+    // Reachable by keyboard at all — NFR 2.2, and the half that already held
+    await expect(firstScore).toBeFocused();
+
+    const indicator = await firstScore.evaluate(el => {
+      const label = el.closest('label');
+      if (label === null) return 'no enclosing label';
+      const style = getComputedStyle(label);
+      return `${style.boxShadow} | ${style.outlineStyle}`;
+    });
+
+    expect(
+      indicator,
+      'the circle a keyboard user is looking at should show a focus indicator',
+    ).not.toBe('none | none');
+  });
+
   test('submission confirmation', async ({ page }) => {
     await page.goto(`/session/${openToken}`);
 

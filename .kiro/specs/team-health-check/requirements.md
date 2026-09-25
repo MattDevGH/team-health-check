@@ -382,6 +382,19 @@ The MVP focuses on: a fixed set of health-check questions, simple feedback colle
 2. THE Web_Interface SHALL be operable by keyboard navigation alone, without requiring a mouse or touch input.
 3. THE Web_Interface SHALL provide appropriate ARIA labels, roles, and states for all interactive elements, charts, and dynamic content.
 4. THE Web_Interface SHALL maintain a minimum colour contrast ratio of 4.5:1 for normal text and 3:1 for large text, consistent with WCAG 2.1 AA requirements.
+5. WHERE a control's real input is visually hidden behind something else — a score radio behind the circle a person clicks — THE Web_Interface SHALL render a visible focus indicator on the element a sighted keyboard user is actually looking at. WCAG 2.1 AA requires focus to be visible (2.4.7), and a control can satisfy criteria 2 and 3 completely while failing this one: reachable by keyboard, correctly labelled, passing every automated rule, and giving the person no way to see where they are.
+
+*Added 2026-09-25, after an external review found the score radios had no focus
+style at all. They are `sr-only` inputs inside their labels, so the browser's
+own ring lands on an invisible element and the visible circle never changes.
+Answering a health check is the single most-used interaction in the product,
+and it was unusable by keyboard without counting arrow presses.*
+
+*Nothing caught it, and nothing could have. Thirty-odd axe assertions run
+against this form across two tiers; axe cannot evaluate whether focus is
+visible, because that is a question about rendered pixels rather than about the
+accessibility tree. Criteria 2 and 3 were both kept. This criterion exists
+because they were not enough.*
 
 ### NFR 3: Data Integrity and Durability
 

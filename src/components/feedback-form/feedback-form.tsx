@@ -14,7 +14,16 @@ import type {
  * Renders score inputs (1-5) and optional trend indicators per question.
  * Mobile-friendly from 320px width with no horizontal scrolling.
  *
- * Validates: Requirements 4.3, 4.5, 4.7, 4.10
+ * The score radios are `sr-only` so the visible circle can be styled freely,
+ * which means the browser's own focus ring lands on an element nobody can see.
+ * The ring is therefore drawn on the enclosing label, keyed off
+ * `has-[:focus-visible]` so it appears for a keyboard user and not on a click.
+ * Until 2026-09-25 there was no ring at all: the radios were reachable by Tab
+ * and correctly labelled, and a sighted keyboard user still had no way to tell
+ * which score they were on. Axe passed throughout — focus visibility is about
+ * rendered pixels, not the accessibility tree.
+ *
+ * Validates: Requirements 4.3, 4.5, 4.7, 4.10, NFR 2.5
  */
 export function FeedbackForm({
   questions,
@@ -131,6 +140,9 @@ export function FeedbackForm({
                         relative flex items-center justify-center w-10 h-10
                         rounded-full border-2 cursor-pointer text-sm font-medium
                         transition-colors
+                        has-[:focus-visible]:ring-2
+                        has-[:focus-visible]:ring-blue-600
+                        has-[:focus-visible]:ring-offset-2
                         ${response?.score === score
                           ? 'border-blue-600 bg-blue-600 text-white'
                           : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400'
