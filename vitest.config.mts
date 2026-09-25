@@ -36,7 +36,7 @@ import react from "@vitejs/plugin-react";
  * is the worst possible outcome of a performance change, and the only reason it
  * was caught is that the totals were compared before and after.
  */
-const EXCLUDE = ['node_modules/**', 'e2e/**', '.next/**', 'dist/**'];
+const EXCLUDE = ['node_modules/**', 'e2e/**/*.spec.ts', '.next/**', 'dist/**'];
 
 export default defineConfig({
   plugins: [react()],

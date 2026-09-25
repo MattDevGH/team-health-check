@@ -20,6 +20,14 @@ const DATABASE_URL = e2eDatabaseUrl();
 export default defineConfig({
   testDir: './e2e',
 
+  /*
+   * Only the browser specs. Playwright's default testMatch also claims
+   * '*.test.ts', which since 2026-09-25 includes the reporter's own unit tests —
+   * they import vitest and have nothing to do with a browser. Vitest owns
+   * '*.test.ts' and Playwright owns '*.spec.ts'; the two no longer overlap.
+   */
+  testMatch: '**/*.spec.ts',
+
   // A single SQLite file is shared by the whole run, so tests are serialised
   // rather than racing each other through it
   fullyParallel: false,
@@ -32,8 +40,8 @@ export default defineConfig({
   // otherwise treats a skip as a pass, which is how a suite reports green while
   // proving nothing.
   reporter: process.env.CI
-    ? [['html'], ['list'], ['./e2e/no-skips-reporter.ts']]
-    : [['html', { open: 'never' }], ['./e2e/no-skips-reporter.ts']],
+    ? [['html'], ['list'], ['./e2e/suite-integrity-reporter.ts']]
+    : [['html', { open: 'never' }], ['./e2e/suite-integrity-reporter.ts']],
 
   use: {
     baseURL: 'http://localhost:3000',
