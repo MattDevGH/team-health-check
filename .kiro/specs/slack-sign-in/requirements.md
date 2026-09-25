@@ -129,6 +129,10 @@ better end state.
 
 1. Every identity claim in this spec rests on Slack's request signature. It SHALL be verified before any identity work.
 2. A Slack user id SHALL never be accepted from a request body, only from a verified payload — the same rule that governs `AuthContext.memberId`.
+3. WHERE the signing secret is absent or blank, verification SHALL reject every request rather than deriving a signature from an empty key. An empty key is not a weak secret but a published one: anybody can compute the same HMAC, so a forged request verifies and the signature stops being evidence of anything. Requirement 5.2 permits a deployment with no Slack app configured — it does not permit one whose Slack routes accept unauthenticated traffic.
+4. WHERE a deployment configures Slack at all, startup SHALL require the signing secret alongside the bot token. A process that can post to Slack but cannot check what comes back is exactly the configuration criterion 3 rejects, and it SHALL be refused before it serves a request rather than at the first forged one.
+
+*Added 2026-09-25, after an external review found that `verifySlackSignature` read the secret as `process.env.SLACK_SIGNING_SECRET ?? ''` and that no startup guard required it. Criteria 1 and 2 were both kept to the letter: the signature was verified before identity work, and the Slack user id came from a verified payload. Neither said what "verified" means when the key is empty, and an empty key verifies anything. The gap was in the requirement before it was in the code.*
 
 ### NFR 2: Auditability
 

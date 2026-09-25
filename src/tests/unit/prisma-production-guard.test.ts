@@ -268,9 +268,18 @@ describe('a production process with one way in', () => {
      * Requirement 5.1, and the point of the whole spec: a team can be run
      * without a verified sending domain, which is the thing that made this
      * untrialable.
+     *
+     * Until 2026-09-25 this passed `SLACK_BOT_TOKEN` by itself, because that
+     * was the whole of what "Slack is configured" meant here. NFR 1.4 made it
+     * both variables: a process that can post to Slack but cannot verify what
+     * comes back is the configuration that let a forged request through.
      */
     expect(() =>
-      assertProductionReady({ ...withDatabase, SLACK_BOT_TOKEN: 'xoxb-test' }),
+      assertProductionReady({
+        ...withDatabase,
+        SLACK_BOT_TOKEN: 'xoxb-test',
+        SLACK_SIGNING_SECRET: 'shhh',
+      }),
     ).not.toThrow();
   });
 
@@ -280,6 +289,49 @@ describe('a production process with one way in', () => {
     expect(() =>
       assertProductionReady({ ...withDatabase, RESEND_API_KEY: '', SLACK_BOT_TOKEN: '' }),
     ).toThrow(/SLACK_BOT_TOKEN/);
+  });
+
+  /**
+   * Requirement: Slack Sign In NFR 1.4
+   *
+   * A deployment that posts to Slack but cannot verify what comes back was
+   * the configuration behind the fail-open: inbound routes accepted anything
+   * while outbound worked normally, so nothing looked wrong.
+   */
+  it('refuses a bot token with no signing secret', () => {
+    expect(() =>
+      assertProductionReady({ ...withDatabase, SLACK_BOT_TOKEN: 'xoxb-test' }),
+    ).toThrow(/SLACK_SIGNING_SECRET/);
+  });
+
+  it('treats a blank signing secret as absent', () => {
+    // The same shape as the response variable: set to nothing, which would
+    // satisfy a presence check and still produce an empty HMAC key
+    expect(() =>
+      assertProductionReady({
+        ...withDatabase,
+        SLACK_BOT_TOKEN: 'xoxb-test',
+        SLACK_SIGNING_SECRET: '',
+      }),
+    ).toThrow(/SLACK_SIGNING_SECRET/);
+  });
+
+  it('says what the missing secret costs', () => {
+    // A guard naming a variable and not its consequence gets set to anything
+    expect(() =>
+      assertProductionReady({ ...withDatabase, SLACK_BOT_TOKEN: 'xoxb-test' }),
+    ).toThrow(/verif/i);
+  });
+
+  it('does not make an email-only deployment set a Slack variable', () => {
+    /*
+     * Requirement 5.2. The guard must bite where Slack is configured and
+     * nowhere else, or it turns a legitimate arrangement into a failed
+     * deployment — which is the same class of error as the one it fixes.
+     */
+    expect(() =>
+      assertProductionReady({ ...withDatabase, RESEND_API_KEY: 're_test' }),
+    ).not.toThrow();
   });
 
   it('leaves development alone', () => {
