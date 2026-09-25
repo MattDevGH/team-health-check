@@ -1035,6 +1035,67 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**Signing in charged its own traffic to the next page** (2026-09-25), which made
+the request budget flaky rather than wrong.
+
+`signIn` finished at `await expect(page).toHaveURL(/…\/dashboard$/)`. That
+resolves when the navigation commits, not when the page is done — so the
+dashboard's own `sessions` and `trends` requests were still in flight when the
+helper returned. `request-budget.spec.ts` then attached its listener and
+navigated again, and on a slow runner the leftover `sessions` landed inside the
+measurement: three requests, `sessions, trends, sessions`, against a budget of
+two.
+
+**The spec had already written down the property that broke.** Its header says
+"Counted after sign-in, so the sign-in flow's own traffic is not charged to the
+page under test." True only while the runner was fast enough, and nothing
+checked it.
+
+Found on PR #92 — a dependency revert that touches none of this. The same
+commit passed on the `push` run and failed on the `pull_request` run twenty-one
+seconds later, and passed locally 7 of 7. Identical input, different result, and
+three failed attempts inside the failing run, so the retries proved nothing
+except that the condition lasted longer than the test did.
+
+`signIn` waits for quiet now, which makes the promise true for every caller
+rather than asking each one to remember. Its `toHaveURL` also carries an
+explicit 20-second timeout: the default five were not enough for a magic-link
+verification that writes a session row and redirects through a route `next
+start` is loading for the first time.
+
+Costs about twenty seconds across 98 browser tests. Worth it — **this is the
+case the "flaky tests are defects" rule exists for, and the fix was to find the
+race rather than to run it again.**
+
+**The Slack signature could be forged when the secret was missing** (2026-09-25),
+found by an external review of the repository and being fixed as `slack-sign-in`
+phase 6 — a spec that had been closed since 2026-09-23.
+
+`verifySlackSignature` read its key as `process.env.SLACK_SIGNING_SECRET ?? ''`.
+An empty HMAC key is not a weak secret but a published one: anybody can compute
+the same digest, so a forged request verifies and the signature proves nothing.
+`/api/slack/commands` then takes `user_id` straight from the request body, so a
+forged `/healthcheck signin` would have handed back a live sign-in link for
+whoever that id named.
+
+Two other things had to line up, and both did. Startup never required the
+variable — `assertProductionReady` accepts `RESEND_API_KEY || SLACK_BOT_TOKEN`,
+and `StartupEnvironment` does not declare the signing secret at all. And
+`docs/deployment.md` listed it as optional, describing its absence as "Slack
+delivery is skipped silently": true of outbound delivery, false of the three
+inbound routes, which stayed open.
+
+**Production was never exposed, and that was established before any code
+changed.** A real `/healthcheck` in the workspace returned a normal ephemeral
+reply, which an empty key could not have produced, and both Slack variables are
+scoped to Production alone.
+
+**The requirement was missing before the code was.** NFR 1 calls the signature
+the root of trust and requires it to be verified before any identity work — and
+the code did exactly that. Nothing said what verification *means* when the key is
+empty. NFR 1.3 and 1.4 say it now, reconciled against Requirement 5.2 so that a
+deployment with no Slack app configured stays legitimate.
+
 **`better-sqlite3` is pinned to 12, and 13 must not be taken** until it ships
 Windows prebuilds (reverted 2026-09-25, a day after merging it).
 

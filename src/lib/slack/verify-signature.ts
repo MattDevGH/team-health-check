@@ -3,7 +3,7 @@
  * Validates incoming Slack webhook requests using HMAC-SHA256
  * with timing-safe comparison and replay attack protection.
  *
- * Requirement: 5.6 (implicit security)
+ * Requirements: Slack Sign In NFR 1.1, NFR 1.3
  */
 import crypto from 'node:crypto';
 
@@ -20,13 +20,43 @@ export interface VerifySlackSignatureParams {
   body: string;
 }
 
+/** What a rejected caller is told, whatever the reason. See below. */
+const REFUSAL = 'Invalid Slack signature';
+
 /**
  * Verifies a Slack request signature using HMAC-SHA256.
  *
- * @throws {ForbiddenError} if the request is too old (>5 min) or the signature is invalid.
+ * @throws {ForbiddenError} if the secret is unconfigured, the request is too
+ * old (>5 min), or the signature is invalid.
  */
 export function verifySlackSignature(params: VerifySlackSignatureParams): void {
-  const signingSecret = process.env.SLACK_SIGNING_SECRET ?? '';
+  const signingSecret = process.env.SLACK_SIGNING_SECRET;
+
+  /**
+   * Requirement: Slack Sign In NFR 1.3
+   *
+   * This used to read `?? ''`, and an empty HMAC key is not a weak secret but
+   * a published one — anybody can compute the same digest, so a forged request
+   * verified and the signature proved nothing. Every route behind this one
+   * takes its identity from the payload it just "verified", so a forged
+   * `/healthcheck signin` would have returned a live sign-in link.
+   *
+   * Empty counts as absent: a variable set to nothing is the shape a
+   * misconfigured deployment actually takes, and it produces the same key.
+   *
+   * The caller is told what a wrong signature is told. Announcing "not
+   * configured" to an unauthenticated request discloses deployment state for
+   * no benefit; the operator learns the real reason from the log, which names
+   * a variable and never its value.
+   */
+  if (!signingSecret) {
+    console.error(
+      'SLACK_SIGNING_SECRET is not set, so no Slack request can be verified and ' +
+        'every inbound Slack route is refusing traffic. Set it from the Slack app ' +
+        'under Basic Information → App Credentials.',
+    );
+    throw new ForbiddenError(REFUSAL);
+  }
 
   // 1. Replay protection: reject requests older than 5 minutes
   const requestTime = parseInt(params.timestamp, 10);
@@ -50,6 +80,6 @@ export function verifySlackSignature(params: VerifySlackSignatureParams): void {
     expectedBuf.length !== actualBuf.length ||
     !crypto.timingSafeEqual(expectedBuf, actualBuf)
   ) {
-    throw new ForbiddenError('Invalid Slack signature');
+    throw new ForbiddenError(REFUSAL);
   }
 }

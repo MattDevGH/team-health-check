@@ -286,6 +286,76 @@ an open box that cannot be closed reads like neglect unless it says why.
 
 ---
 
+## Phase 6: The signature fails closed
+
+Opened 2026-09-25 by an external review, against a spec that had been closed
+since 2026-09-23. Not a change of design — a defect in the one thing this spec
+calls its root of trust.
+
+`verifySlackSignature` read its key as `process.env.SLACK_SIGNING_SECRET ?? ''`,
+so a deployment without the variable computed every HMAC from an empty string.
+An empty key is public knowledge, so a forged request verifies. Startup did not
+require the variable either: `assertProductionReady` accepts
+`RESEND_API_KEY || SLACK_BOT_TOKEN`, and the signing secret appears in neither
+the check nor `StartupEnvironment`. `docs/deployment.md` then described the
+variable's absence as meaning "Slack delivery is skipped silently", which is
+true of outbound delivery and false of the inbound routes.
+
+**Production was never exposed.** Checked before any code changed: a real
+`/healthcheck` returned a normal ephemeral reply, which an empty key could not
+have produced, and both Slack variables are scoped to Production alone.
+
+- [x] 6.1 Add the requirement the code was missing
+  - NFR 1.3 (reject when the key is absent or blank) and NFR 1.4 (startup
+    requires it wherever Slack is configured), reconciled against Requirement
+    5.2 so an email-only deployment stays legitimate
+  - _Requirements: Slack Sign In NFR 1.3, NFR 1.4_
+
+- [x] 6.2 Reject when the secret is absent or blank
+  - Failing test first: a signature forged with an empty key against an
+    unset `SLACK_SIGNING_SECRET`, asserting the request is refused rather than
+    asserting which branch ran
+  - Red proved the defect rather than describing it. Two of the three new
+    scenarios failed against the old code — blank and unset, each forged with
+    the empty key anybody could have guessed. The third, a genuine Slack
+    signature against a deployment with no secret, passed all along: a real
+    key never matched an empty one. Only the forgeries got in
+  - The caller is refused with the message a wrong signature gets, so a 403
+    does not disclose whether the deployment is configured. The operator gets
+    the real reason through `console.error`, naming the variable and never a
+    value
+  - _Requirements: Slack Sign In NFR 1.3_
+
+- [x] 6.3 Require the secret at startup wherever Slack is configured
+  - `SLACK_SIGNING_SECRET` joins `StartupEnvironment`; a bot token without it
+    aborts. Email-only and Slack-complete deployments both still start
+  - Conditioned on the bot token rather than required outright, because
+    Requirement 5.2 says an email-only deployment is legitimate and a guard
+    that made one set a Slack variable would break a working arrangement to
+    fix one nobody is using
+  - **An existing test asserted the contract this changes.** "starts with
+    Slack alone" passed `SLACK_BOT_TOKEN` by itself, because that was the
+    whole of what "Slack is configured" meant. It now passes both, and says
+    why in place rather than silently gaining an argument
+  - No wiring gap to close: `instrumentation.ts` passes `process.env` whole,
+    so the new field is read as soon as the interface declares it
+  - _Requirements: Slack Sign In NFR 1.4, 5.2_
+
+- [x] 6.4 Correct what the deployment guide claims
+  - The optional-variable table called the absence harmless — "Slack delivery
+    is skipped silently", true of outbound and false of the three inbound
+    routes. A new section, *Both Slack variables or neither*, says what the
+    entry used to claim and why it was wrong, rather than quietly replacing it
+  - Listed third on purpose: a reader who believed that table had no reason
+    to open the code, so the documentation was load-bearing for the defect
+    rather than incidental to it
+  - _Requirements: Slack Sign In 5.4, NFR 1.3_
+
+**Phase 6 is complete.** The spec stands at 70 of 72; the two that remain are
+the pair a one-person workspace cannot reach.
+
+---
+
 ## Roadmap, deliberately unscheduled
 
 - **OAuth "Sign in with Slack".** The full identity product. Unnecessary while

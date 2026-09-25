@@ -1,7 +1,7 @@
 /**
  * Configuration that must be right before the server accepts a request.
  *
- * Requirements: Deployment 2.1, 2.3; Slack Sign In 5.1, 5.2, 5.3
+ * Requirements: Deployment 2.1, 2.3; Slack Sign In 5.1, 5.2, 5.3, NFR 1.4
  *
  * These are the mistakes that would otherwise be discovered by a user rather
  * than by a deployment: a production process with nowhere durable to write.
@@ -33,6 +33,7 @@ export interface StartupEnvironment {
   E2E_LOCAL_RUN?: string;
   RESEND_API_KEY?: string;
   SLACK_BOT_TOKEN?: string;
+  SLACK_SIGNING_SECRET?: string;
 }
 
 /**
@@ -120,6 +121,35 @@ export function assertProductionReady(env: StartupEnvironment): void {
         'the application would accept an address, say "check your email", and send ' +
         'nothing. Set RESEND_API_KEY to sign in by email, or SLACK_BOT_TOKEN to sign ' +
         'in from Slack. Either alone is enough.',
+    );
+  }
+
+  /**
+   * Requirement: Slack Sign In NFR 1.4
+   *
+   * A deployment that can post to Slack but cannot verify what comes back is
+   * the configuration that made the fail-open invisible: outbound worked, so
+   * nothing looked wrong, while every inbound route accepted a signature
+   * computed from an empty key — which is to say, from no secret at all.
+   *
+   * `verifySlackSignature` refuses that case now, so the routes fail closed
+   * rather than open. This exists so the deployment fails *first*, at startup,
+   * rather than at the first member who tries to answer from Slack and is
+   * refused without explanation.
+   *
+   * Conditioned on the bot token, not required outright: Requirement 5.2 says
+   * a deployment with no Slack app is legitimate, and a guard that made an
+   * email-only deployment set a Slack variable would break a working
+   * arrangement to fix one that is not in use.
+   */
+  if (env.SLACK_BOT_TOKEN && !env.SLACK_SIGNING_SECRET) {
+    throw new Error(
+      'SLACK_BOT_TOKEN is set but SLACK_SIGNING_SECRET is not, so this deployment ' +
+        'can post to Slack and cannot verify what comes back. Every inbound Slack ' +
+        'route would refuse its traffic: slash commands, interactions and events ' +
+        'would all fail for members who have no other way in. Set ' +
+        'SLACK_SIGNING_SECRET from the Slack app, under Basic Information → App ' +
+        'Credentials, or remove SLACK_BOT_TOKEN to run on email alone.',
     );
   }
 }

@@ -33,8 +33,8 @@ configuration and in the maintainer's local `.env`.
 
 | Variable | Secret | Purpose |
 |---|---|---|
-| `SLACK_SIGNING_SECRET` | **yes** | Verifies Slack request signatures. Absent, Slack delivery is skipped silently and the web interface works normally. |
-| `SLACK_BOT_TOKEN` | **yes** | Posts as the bot. Same: absent means no Slack, not a broken app. |
+| `SLACK_SIGNING_SECRET` | **yes** | Verifies every inbound Slack request. Optional only in the sense that a deployment may use no Slack at all — see *Both Slack variables or neither* below. |
+| `SLACK_BOT_TOKEN` | **yes** | Posts as the bot. Absent means no Slack, not a broken app. |
 | `CLOSING_REMINDER_LEAD_HOURS` | no | How long before a close to remind members. Defaults to **24** when unset, empty, or not a positive number. |
 | `DATABASE_URL` | no | Which local SQLite file to open. Ignored in production, where `TURSO_DATABASE_URL` takes precedence. Used by the E2E suite to target a disposable database. |
 
@@ -47,6 +47,35 @@ configuration and in the maintainer's local `.env`.
 
 `NODE_ENV` is set by the platform and by `next build`/`next start`. Do not set it
 by hand.
+
+### Both Slack variables or neither
+
+**Requirements: Slack Sign In NFR 1.3, NFR 1.4**
+
+Running without Slack is a supported arrangement: set neither variable, use
+email, and nothing about the application changes. Running with *half* of Slack
+is not, and a production process with `SLACK_BOT_TOKEN` and no
+`SLACK_SIGNING_SECRET` refuses to start.
+
+**This table used to say something else, and what it said was dangerous.** Until
+2026-09-25 the entry above read "Absent, Slack delivery is skipped silently and
+the web interface works normally". That is true of *outbound* delivery and false
+of the three inbound routes — `/api/slack/commands`, `/api/slack/events` and
+`/api/slack/interactions` — which stayed open. `verifySlackSignature` read its
+key as `process.env.SLACK_SIGNING_SECRET ?? ''`, and an empty HMAC key is not a
+weak secret but a published one: anybody can compute the same digest, so a
+forged request verified. `/api/slack/commands` takes `user_id` from the request
+body, so a forged `/healthcheck signin` would have returned a live sign-in link
+for whichever Slack user id the forger named.
+
+Both halves are closed now. Verification refuses when the key is absent or
+blank, and startup refuses the configuration that would have relied on it. The
+documentation is listed third deliberately: a reader who believed this table had
+no reason to look at the code.
+
+*Production was never exposed. Checked before any of it changed: a real
+`/healthcheck` returned a normal reply, which an empty key could not have
+produced, and both variables are scoped to Production alone.*
 
 ---
 
