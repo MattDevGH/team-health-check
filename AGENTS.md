@@ -12,9 +12,17 @@ Read AI_CONTEXT.md at the start of every session.
 
 # The Requirement Comes First
 
-Every source file here cites the requirement it serves — 872 citations across
-219 files. That thread is the only thing connecting what was asked for to what
-was built, and nobody reads it until something is wrong.
+Every source file here cites the requirement it serves. That thread is the only
+thing connecting what was asked for to what was built, and nobody reads it until
+something is wrong.
+
+`npx tsx scripts/check-requirement-references.ts` prints the current totals. They
+used to be written here — "872 citations across 219 files" — and by 2026-09-25
+the real figures had passed 1300 across nearly 300. Nothing updated them,
+because nothing could: a number in a rules document has no test and no reason
+to be revisited.
+A file whose job is to say how this repository works should not contain a fact
+that rots, so the count now lives where it is computed.
 
 - **Open the requirement before writing the code.** For anything more than a
   typo. The rule exists because a fix was once small enough that nobody
