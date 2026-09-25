@@ -1035,6 +1035,38 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**Signing in charged its own traffic to the next page** (2026-09-25), which made
+the request budget flaky rather than wrong.
+
+`signIn` finished at `await expect(page).toHaveURL(/…\/dashboard$/)`. That
+resolves when the navigation commits, not when the page is done — so the
+dashboard's own `sessions` and `trends` requests were still in flight when the
+helper returned. `request-budget.spec.ts` then attached its listener and
+navigated again, and on a slow runner the leftover `sessions` landed inside the
+measurement: three requests, `sessions, trends, sessions`, against a budget of
+two.
+
+**The spec had already written down the property that broke.** Its header says
+"Counted after sign-in, so the sign-in flow's own traffic is not charged to the
+page under test." True only while the runner was fast enough, and nothing
+checked it.
+
+Found on PR #92 — a dependency revert that touches none of this. The same
+commit passed on the `push` run and failed on the `pull_request` run twenty-one
+seconds later, and passed locally 7 of 7. Identical input, different result, and
+three failed attempts inside the failing run, so the retries proved nothing
+except that the condition lasted longer than the test did.
+
+`signIn` waits for quiet now, which makes the promise true for every caller
+rather than asking each one to remember. Its `toHaveURL` also carries an
+explicit 20-second timeout: the default five were not enough for a magic-link
+verification that writes a session row and redirects through a route `next
+start` is loading for the first time.
+
+Costs about twenty seconds across 98 browser tests. Worth it — **this is the
+case the "flaky tests are defects" rule exists for, and the fix was to find the
+race rather than to run it again.**
+
 **The Slack signature could be forged when the secret was missing** (2026-09-25),
 found by an external review of the repository and being fixed as `slack-sign-in`
 phase 6 — a spec that had been closed since 2026-09-23.

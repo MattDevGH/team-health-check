@@ -40,7 +40,35 @@ export async function signIn(page: Page, email: string): Promise<void> {
    * Waiting for the dashboard keeps this helper honest: it fails if sign-in
    * ever stops delivering people into the app.
    */
-  await expect(page).toHaveURL(/\/teams\/[^/]+\/dashboard$/);
+  /*
+   * The timeout is explicit because the default five seconds is not enough on
+   * a loaded CI runner. Verifying a magic link writes a session row and then
+   * redirects, and the first request to a route under `next start` pays for
+   * loading it. CI failed here on 2026-09-25 while the same commit passed on
+   * another runner minutes earlier, and passed locally in under a second.
+   */
+  await expect(page).toHaveURL(/\/teams\/[^/]+\/dashboard$/, { timeout: 20_000 });
+
+  /*
+   * Requirements: Feeling Responsive NFR 1.1, 4.1
+   *
+   * Reaching the dashboard is not the same as being finished with it.
+   * `toHaveURL` resolves when the navigation commits, while that page's own
+   * `sessions` and `trends` requests are still in flight — so a test that
+   * starts counting requests immediately afterwards can be handed traffic this
+   * helper caused.
+   *
+   * Not hypothetical. `request-budget.spec.ts` recorded three requests in CI —
+   * `sessions`, `trends`, `sessions` — against a budget of two, because the
+   * leftover `sessions` from signing in arrived after its listener attached.
+   * That spec's own header already promised this could not happen: "Counted
+   * after sign-in, so the sign-in flow's own traffic is not charged to the page
+   * under test." The promise held only while the runner was fast enough.
+   *
+   * Waiting for quiet here makes it true for every caller, rather than asking
+   * each one to remember.
+   */
+  await page.waitForLoadState('networkidle');
 
   const cookies = await page.context().cookies();
   expect(
