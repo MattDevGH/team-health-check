@@ -1096,6 +1096,34 @@ the code did exactly that. Nothing said what verification *means* when the key i
 empty. NFR 1.3 and 1.4 say it now, reconciled against Requirement 5.2 so that a
 deployment with no Slack app configured stays legitimate.
 
+**`better-sqlite3` is pinned to 12, and 13 must not be taken** until it ships
+Windows prebuilds (reverted 2026-09-25, a day after merging it).
+
+v12.11.1 publishes `better-sqlite3-v12.11.1-node-v137-win32-x64.tar.gz` — Node
+24 on Windows x64. **v13.0.3 publishes no `win32-x64` Node prebuild at all.**
+Without one, `npm ci` falls back to `node-gyp rebuild`, which needs Python and a
+C++ toolchain, and fails on a development machine that has neither. The
+repository became uninstallable on the platform it is developed on.
+
+CI never saw it: the gates run on `ubuntu-latest`, where the prebuild exists.
+Every check on the pull request was green.
+
+**The hole was in how it was verified, not in what was verified.** The bump was
+tested with `npm install` — incremental, reusing the binary already sitting in
+`node_modules` from a moment earlier — and the full suite passed against it. CI
+runs `npm ci`, which deletes `node_modules` first. The two commands answer
+different questions, and only one of them answers "can somebody check this
+repository out and install it".
+
+**A dependency change is verified with `npm ci`, not `npm install`.** That is
+the rule this cost.
+
+Worth knowing for when 13 becomes adoptable: the bump was nearly pointless
+anyway. `@prisma/adapter-better-sqlite3` depends on `better-sqlite3: ^12.6.0`
+and keeps its own nested copy, so everything reaching SQLite through Prisma runs
+on 12 regardless. Only three files import the root copy directly — `e2e/db.ts`
+and two integration tests.
+
 **Six boxes are open across twelve specs** (2026-09-23), and every one waits on
 something outside the code: four on a verified Resend sending domain, two on a
 second account in the Slack workspace.
