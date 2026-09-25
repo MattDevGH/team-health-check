@@ -286,6 +286,49 @@ an open box that cannot be closed reads like neglect unless it says why.
 
 ---
 
+## Phase 6: The signature fails closed
+
+Opened 2026-09-25 by an external review, against a spec that had been closed
+since 2026-09-23. Not a change of design — a defect in the one thing this spec
+calls its root of trust.
+
+`verifySlackSignature` read its key as `process.env.SLACK_SIGNING_SECRET ?? ''`,
+so a deployment without the variable computed every HMAC from an empty string.
+An empty key is public knowledge, so a forged request verifies. Startup did not
+require the variable either: `assertProductionReady` accepts
+`RESEND_API_KEY || SLACK_BOT_TOKEN`, and the signing secret appears in neither
+the check nor `StartupEnvironment`. `docs/deployment.md` then described the
+variable's absence as meaning "Slack delivery is skipped silently", which is
+true of outbound delivery and false of the inbound routes.
+
+**Production was never exposed.** Checked before any code changed: a real
+`/healthcheck` returned a normal ephemeral reply, which an empty key could not
+have produced, and both Slack variables are scoped to Production alone.
+
+- [x] 6.1 Add the requirement the code was missing
+  - NFR 1.3 (reject when the key is absent or blank) and NFR 1.4 (startup
+    requires it wherever Slack is configured), reconciled against Requirement
+    5.2 so an email-only deployment stays legitimate
+  - _Requirements: Slack Sign In NFR 1.3, NFR 1.4_
+
+- [ ] 6.2 Reject when the secret is absent or blank
+  - Failing test first: a signature forged with an empty key against an
+    unset `SLACK_SIGNING_SECRET`, asserting the request is refused rather than
+    asserting which branch ran
+  - _Requirements: Slack Sign In NFR 1.3_
+
+- [ ] 6.3 Require the secret at startup wherever Slack is configured
+  - `SLACK_SIGNING_SECRET` joins `StartupEnvironment`; a bot token without it
+    aborts. Email-only and Slack-complete deployments both still start
+  - _Requirements: Slack Sign In NFR 1.4, 5.2_
+
+- [ ] 6.4 Correct what the deployment guide claims
+  - The optional-variable table calls the absence harmless. Say what it
+    actually costs, and that inbound routes refuse rather than fall open
+  - _Requirements: Slack Sign In 5.4, NFR 1.3_
+
+---
+
 ## Roadmap, deliberately unscheduled
 
 - **OAuth "Sign in with Slack".** The full identity product. Unnecessary while

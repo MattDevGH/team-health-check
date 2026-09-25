@@ -1035,6 +1035,35 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**The Slack signature could be forged when the secret was missing** (2026-09-25),
+found by an external review of the repository and being fixed as `slack-sign-in`
+phase 6 — a spec that had been closed since 2026-09-23.
+
+`verifySlackSignature` read its key as `process.env.SLACK_SIGNING_SECRET ?? ''`.
+An empty HMAC key is not a weak secret but a published one: anybody can compute
+the same digest, so a forged request verifies and the signature proves nothing.
+`/api/slack/commands` then takes `user_id` straight from the request body, so a
+forged `/healthcheck signin` would have handed back a live sign-in link for
+whoever that id named.
+
+Two other things had to line up, and both did. Startup never required the
+variable — `assertProductionReady` accepts `RESEND_API_KEY || SLACK_BOT_TOKEN`,
+and `StartupEnvironment` does not declare the signing secret at all. And
+`docs/deployment.md` listed it as optional, describing its absence as "Slack
+delivery is skipped silently": true of outbound delivery, false of the three
+inbound routes, which stayed open.
+
+**Production was never exposed, and that was established before any code
+changed.** A real `/healthcheck` in the workspace returned a normal ephemeral
+reply, which an empty key could not have produced, and both Slack variables are
+scoped to Production alone.
+
+**The requirement was missing before the code was.** NFR 1 calls the signature
+the root of trust and requires it to be verified before any identity work — and
+the code did exactly that. Nothing said what verification *means* when the key is
+empty. NFR 1.3 and 1.4 say it now, reconciled against Requirement 5.2 so that a
+deployment with no Slack app configured stays legitimate.
+
 **Six boxes are open across twelve specs** (2026-09-23), and every one waits on
 something outside the code: four on a verified Resend sending domain, two on a
 second account in the Slack workspace.

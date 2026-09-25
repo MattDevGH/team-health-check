@@ -247,8 +247,16 @@ Since then, and each in its own spec:
 
 ### What is next
 
-Nothing is in flight, and **six boxes are open across twelve specs** — every one
-of them waiting on something outside the code:
+**One fix is in flight** (2026-09-25): `slack-sign-in` phase 6, closing a
+fail-open in Slack signature verification that an external review of the
+repository found. The signing secret was read as
+`process.env.SLACK_SIGNING_SECRET ?? ''`, so a deployment without it computed
+every HMAC from an empty key — which anybody can reproduce, making a forged
+request verify. Production was checked before anything changed and was never
+exposed.
+
+Besides that, **six boxes are open across twelve specs**, every one of them
+waiting on something outside the code:
 
 | Blocked on | Boxes |
 |---|---|
@@ -882,7 +890,7 @@ tasks):
   from the code: response bodies are not saved unless you ask, and the tick
   interval was five minutes rather than the "few minutes" everyone assumed
 
-**`slack-sign-in/`** — A way in that needs no domain (**66 of 68 ticked**):
+**`slack-sign-in/`** — A way in that needs no domain (**67 of 72 ticked**):
 - Email was the only way into the application, and an unverified Resend sender
   delivers **only to the account owner**, dropping everyone else silently
 - Proved in a real workspace on 2026-09-17, including automatic matching on the
