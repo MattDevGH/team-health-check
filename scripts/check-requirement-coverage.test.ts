@@ -1,9 +1,9 @@
-import { execFileSync } from 'node:child_process';
-import path from 'node:path';
-
 import { describe, it, expect } from 'vitest';
 
-import { checkRequirementCoverage } from './check-requirement-coverage';
+import {
+  checkRequirementCoverage,
+  runRequirementCoverageCli,
+} from './check-requirement-coverage';
 
 describe('checkRequirementCoverage', () => {
   describe('passes with valid requirement references', () => {
@@ -102,29 +102,29 @@ Requirement 8.1, Requirement NFR 4.2
     });
   });
 
-  describe('the script CI actually runs', () => {
+  describe('the gate CI actually runs', () => {
     /*
-     * CI runs `check-requirement-coverage.sh`; these tests exercise
-     * `check-requirement-coverage.ts`. Two implementations of one rule, and
-     * only the unused one was tested — so the tested rule and the enforced
-     * rule could differ without anything going red, which is exactly how the
-     * qualified-reference gap survived.
+     * There used to be two implementations of this rule: CI ran
+     * `check-requirement-coverage.sh` while these tests exercised the
+     * TypeScript, with a parity test spanning them. Only the unused one was
+     * covered directly, so the tested rule and the enforced rule could differ
+     * without anything going red — which is how the qualified-reference gap
+     * survived.
      *
-     * Rather than test the shell separately, the shell is compared against the
-     * implementation these tests cover, on the cases that matter.
+     * The parity test also spawned `bash`, which is not a dependency every
+     * environment that runs this suite satisfies.
+     *
+     * One implementation now, exercised through the same entry point CI uses,
+     * in process. Nothing to keep in step and nothing to spawn.
      */
-    const shell = path.resolve(__dirname, 'check-requirement-coverage.sh');
-
-    function runShell(description: string): boolean {
-      try {
-        execFileSync('bash', [shell], {
-          env: { ...process.env, PR_DESCRIPTION: description },
-          stdio: 'pipe',
-        });
-        return true;
-      } catch {
-        return false;
-      }
+    function run(description: string): { code: number; out: string[]; err: string[] } {
+      const out: string[] = [];
+      const err: string[] = [];
+      const code = runRequirementCoverageCli(description, {
+        out: message => out.push(message),
+        err: message => err.push(message),
+      });
+      return { code, out, err };
     }
 
     it.each([
@@ -135,8 +135,28 @@ Requirement 8.1, Requirement NFR 4.2
       'Fixed a bug in the login page.',
       'Updated requirements documentation.',
       'Addresses Requirement 1 items.',
-    ])('agrees with the tested implementation on: %s', description => {
-      expect(runShell(description)).toBe(checkRequirementCoverage(description).pass);
+    ])('exits in agreement with the rule on: %s', description => {
+      const expected = checkRequirementCoverage(description).pass;
+      expect(run(description).code).toBe(expected ? 0 : 1);
+    });
+
+    it('fails an empty description rather than passing it silently', () => {
+      // A gate that accepts nothing at all is a gate that is not running
+      expect(run('').code).toBe(1);
+      expect(run('   \n  ').code).toBe(1);
+    });
+
+    it('names what it found, so a green check is legible', () => {
+      const { code, out } = run('Requirements: Explaining Itself 4.1');
+
+      expect(code).toBe(0);
+      expect(out.join('\n')).toContain('Explaining Itself 4.1');
+    });
+
+    it('says how to satisfy it when it fails', () => {
+      const { err } = run('Fixed a bug.');
+
+      expect(err.join('\n')).toContain('Requirement 1.1');
     });
   });
 
