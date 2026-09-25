@@ -1035,6 +1035,43 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**A response submission was bounded below and not above** (2026-09-25).
+`submitResponseSchema` required at least one entry and accepted any number,
+permitted the same `questionId` twice, and the route wrote each entry as it
+reached it.
+
+Each entry costs several database round trips — the service looks up the
+session and the member, upserts, and then the route looks the session up again
+and scans twenty rows for the rolling average. So one authenticated request
+could name as many entries as it liked and have all of them made. The test that
+posts 5,000 entries took 166ms against the unbounded schema, from a single
+request.
+
+Duplicates were the quieter half: two scores for one question from one member
+were applied in arrival order, so the answer kept was whichever the sender put
+last.
+
+**The cap is the catalogue's size, and a test ties them together.** Writing
+`.max(5)` would have been a number nobody would revisit — the same defect just
+removed from AGENTS.md. `MAX_RESPONSES_PER_SUBMISSION` lives in the schema
+because the seed is not part of the running application, and
+`schemas.test.ts` asserts it equals `QUESTIONS.length`, so growing the
+catalogue cannot quietly leave the bound behind.
+
+Criteria 4.4 and 4.5 were kept exactly throughout: every score really was
+range-checked. They describe the *values* in a submission and never its shape,
+which is why 4.11, 4.12 and 4.13 exist now.
+
+The three route guards were each proven able to fail — bounds removed, all
+three red, bounds restored. Asserting a 400 alone would only have proved the
+route said no; each one reads the responses back and asserts nothing was
+stored.
+
+Still to do here, deliberately: the route makes no check that a `questionId`
+names a question that exists, and still queries the session once per entry.
+Both belong with the batch and transaction work, where a service method will
+take the whole submission at once.
+
 **The score radios had no focus style at all** (2026-09-25), so a sighted
 keyboard user answering a health check could not see which score they were on.
 

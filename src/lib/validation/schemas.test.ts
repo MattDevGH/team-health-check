@@ -4,7 +4,65 @@ import {
   addMemberSchema,
   submitResponseSchema,
   scheduleSchema,
+  MAX_RESPONSES_PER_SUBMISSION,
 } from './schemas';
+import { QUESTIONS } from '../../../prisma/seed';
+
+/** A submission of `count` entries, each naming a different question. */
+function submissionOf(count: number) {
+  return {
+    sessionId: 's-1',
+    responses: Array.from({ length: count }, (_unused, index) => ({
+      questionId: `q-${index}`,
+      score: 3,
+    })),
+  };
+}
+
+/**
+ * Requirements: 4.11, 4.12
+ *
+ * The cap is the catalogue's size because a submission is one member answering
+ * one session. Tying the two together here means growing the catalogue cannot
+ * silently leave the cap behind.
+ */
+describe('how large a submission may be', () => {
+  it('caps a submission at the number of questions that exist', () => {
+    expect(MAX_RESPONSES_PER_SUBMISSION).toBe(QUESTIONS.length);
+  });
+
+  it('accepts a submission that answers every question', () => {
+    expect(submitResponseSchema.safeParse(submissionOf(MAX_RESPONSES_PER_SUBMISSION)).success).toBe(true);
+  });
+
+  it('rejects one entry more than there are questions', () => {
+    expect(submitResponseSchema.safeParse(submissionOf(MAX_RESPONSES_PER_SUBMISSION + 1)).success).toBe(false);
+  });
+
+  it('rejects a submission large enough to be an attack', () => {
+    // Unbounded, each entry cost several database round trips from one request
+    expect(submitResponseSchema.safeParse(submissionOf(10_000)).success).toBe(false);
+  });
+
+  it('rejects the same question answered twice', () => {
+    const twice = {
+      sessionId: 's-1',
+      responses: [
+        { questionId: 'q-delivering-value', score: 2 },
+        { questionId: 'q-delivering-value', score: 5 },
+      ],
+    };
+
+    // Two scores for one question from one member express no intention the
+    // application can honour, and the old code applied whichever arrived last
+    expect(submitResponseSchema.safeParse(twice).success).toBe(false);
+  });
+
+  it('rejects an empty question id', () => {
+    const blank = { sessionId: 's-1', responses: [{ questionId: '', score: 3 }] };
+    expect(submitResponseSchema.safeParse(blank).success).toBe(false);
+  });
+});
 
 describe('createTeamSchema', () => {
   it('accepts a valid team name', () => {
