@@ -130,6 +130,15 @@ The MVP focuses on: a fixed set of health-check questions, simple feedback colle
 8. WHEN a Team_Member has already submitted responses for a session, THE Web_Interface SHALL pre-populate the form with their previously submitted Scores and Trend_Indicators and allow them to update their responses until the session is closed.
 9. IF a Team_Member attempts to submit responses after the Health_Check_Session has been closed, THEN THE Web_Interface SHALL reject the submission and display a message indicating the session has ended.
 10. IF a Response submission fails due to a network or server error, THEN THE Web_Interface SHALL display an error message and retain the user's input so they can retry without re-entering data.
+11. THE Web_Interface SHALL reject a submission that names the same Question more than once, rather than applying the entries in arrival order, since two scores for one Question from one Team_Member in one Health_Check_Session express no intention the application can honour.
+12. THE Web_Interface SHALL reject a submission carrying more entries than the Question catalogue holds, and SHALL do so before performing any write. A submission is one member answering one session, so its length is bounded by the catalogue; accepting an unbounded array lets a single authenticated request multiply into as many database round trips as it names.
+13. THE validation in criteria 4, 5, 11 and 12 SHALL complete before the first Response is written, so that a rejected submission leaves no partial state behind.
+
+*Added 2026-09-25, after an external review observed that `submitResponseSchema`
+bounded the array below (`.min(1)`) and not above, permitted the same
+`questionId` twice, and that the route wrote each entry as it went. Criteria 4
+and 5 were kept exactly — every score was range-checked — but they describe the
+values in a submission and never its shape.*
 
 ### Requirement 5: Feedback Collection via Slack
 
