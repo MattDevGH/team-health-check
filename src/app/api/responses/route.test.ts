@@ -260,4 +260,60 @@ describe('POST /api/responses', () => {
     expect(response.status).toBe(200);
     expect(body.responses[0].score).toBe(5);
   });
+
+  /**
+   * Requirement 4.13
+   *
+   * Asserting the status alone would prove the route said no. What matters is
+   * that it said no before writing anything: the loop used to upsert each
+   * entry as it reached it, so a submission rejected partway through left the
+   * entries ahead of the problem behind.
+   */
+  describe('a submission the application will not honour', () => {
+    it('stores nothing when one question is answered twice', async () => {
+      const request = makeAuthRequest(sessionToken, {
+        sessionId,
+        responses: [
+          { questionId: 'q-delivering-value', score: 2 },
+          { questionId: 'q-delivering-value', score: 5 },
+        ],
+      });
+
+      const response = await POST(request, { params: Promise.resolve({}) });
+
+      expect(response.status).toBe(400);
+      expect(await repos.response.findBySession(sessionId)).toHaveLength(0);
+    });
+
+    it('stores nothing when the submission is longer than the catalogue', async () => {
+      const request = makeAuthRequest(sessionToken, {
+        sessionId,
+        responses: Array.from({ length: 6 }, (_unused, index) => ({
+          questionId: `q-${index}`,
+          score: 3,
+        })),
+      });
+
+      const response = await POST(request, { params: Promise.resolve({}) });
+
+      expect(response.status).toBe(400);
+      expect(await repos.response.findBySession(sessionId)).toHaveLength(0);
+    });
+
+    it('stores nothing from a submission large enough to be an attack', async () => {
+      // Each entry cost several database round trips before this was bounded
+      const request = makeAuthRequest(sessionToken, {
+        sessionId,
+        responses: Array.from({ length: 5_000 }, (_unused, index) => ({
+          questionId: `q-${index}`,
+          score: 3,
+        })),
+      });
+
+      const response = await POST(request, { params: Promise.resolve({}) });
+
+      expect(response.status).toBe(400);
+      expect(await repos.response.findBySession(sessionId)).toHaveLength(0);
+    });
+  });
 });
