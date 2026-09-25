@@ -208,3 +208,11 @@ jobs:
       # section is not there twice, which is the shape that accident takes.
       - name: Check no section appears twice
         run: npx tsx scripts/check-doc-structure.ts
+
+      # AI_CONTEXT.md is read at the start of every session, and its header
+      # asserted a branch merged a month earlier, a CI job that "has never
+      # executed" but runs on every pull request, and one remaining task across
+      # eleven specs written after it. Prose cannot be kept true by rule, so the
+      # facts that rot are generated and this fails when they drift.
+      - name: Check the generated status block is current
+        run: npx tsx scripts/generate-status.ts --check
