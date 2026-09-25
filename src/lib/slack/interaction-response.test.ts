@@ -61,4 +61,35 @@ describe('createInteractionResponder', () => {
       createInteractionResponder({ fetchImpl }).respond(RESPONSE_URL, 'hi'),
     ).resolves.toBe(false);
   });
+
+  /**
+   * Requirement NFR 1.2 — acknowledge within three seconds.
+   *
+   * There was no timeout at all. A `response_url` that accepted the connection
+   * and never answered held this call open for as long as the platform allowed,
+   * and the acknowledgement Slack was waiting for sat behind it.
+   */
+  describe('a reply that never comes back', () => {
+    /** Never resolves on its own; settles only when the caller gives up. */
+    function hangingFetch(): typeof fetch {
+      return ((_url: string | URL | Request, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('The operation was aborted.', 'AbortError')),
+          );
+        })) as unknown as typeof fetch;
+    }
+
+    it('gives up rather than waiting for ever', async () => {
+      const started = Date.now();
+
+      const delivered = await createInteractionResponder({
+        fetchImpl: hangingFetch(),
+      }).respond(RESPONSE_URL, 'hi');
+
+      // The outcome a caller sees: a failed delivery, in bounded time
+      expect(delivered).toBe(false);
+      expect(Date.now() - started).toBeLessThan(3_000);
+    });
+  });
 });

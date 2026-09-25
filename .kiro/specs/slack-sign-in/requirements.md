@@ -131,6 +131,19 @@ better end state.
 2. A Slack user id SHALL never be accepted from a request body, only from a verified payload — the same rule that governs `AuthContext.memberId`.
 3. WHERE the signing secret is absent or blank, verification SHALL reject every request rather than deriving a signature from an empty key. An empty key is not a weak secret but a published one: anybody can compute the same HMAC, so a forged request verifies and the signature stops being evidence of anything. Requirement 5.2 permits a deployment with no Slack app configured — it does not permit one whose Slack routes accept unauthenticated traffic.
 4. WHERE a deployment configures Slack at all, startup SHALL require the signing secret alongside the bot token. A process that can post to Slack but cannot check what comes back is exactly the configuration criterion 3 rejects, and it SHALL be refused before it serves a request rather than at the first forged one.
+5. A Slack payload SHALL be decoded by a check that can fail, not by asserting a type onto the result of `JSON.parse`. A cast makes the compiler agree with a claim nobody verified, which at a trust boundary is indistinguishable from not checking.
+6. A value carried inside a payload SHALL be accepted only when it matches what the application itself emitted, rather than when a lenient parse happens to yield something usable from it.
+
+*Criteria 5 and 6 added 2026-09-25. The interactions route read
+`const payload: SlackInteractionPayload = JSON.parse(payloadStr)` — an
+unchecked `any`, at the one boundary where the project's own "no `any`, use
+`unknown` with type guards" rule matters most — and a malformed body threw
+rather than being refused. Its score parser used `parseInt`, which reads
+`"3abc"` as 3.*
+
+*A verified signature makes these harder to reach, not unreachable: Slack's own
+retries, a future payload shape, and anything holding the signing secret all
+arrive past that door.*
 
 *Added 2026-09-25, after an external review found that `verifySlackSignature` read the secret as `process.env.SLACK_SIGNING_SECRET ?? ''` and that no startup guard required it. Criteria 1 and 2 were both kept to the letter: the signature was verified before identity work, and the Slack user id came from a verified payload. Neither said what "verified" means when the key is empty, and an empty key verifies anything. The gap was in the requirement before it was in the code.*
 
