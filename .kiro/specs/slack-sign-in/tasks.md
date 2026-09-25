@@ -341,10 +341,18 @@ have produced, and both Slack variables are scoped to Production alone.
     so the new field is read as soon as the interface declares it
   - _Requirements: Slack Sign In NFR 1.4, 5.2_
 
-- [ ] 6.4 Correct what the deployment guide claims
-  - The optional-variable table calls the absence harmless. Say what it
-    actually costs, and that inbound routes refuse rather than fall open
+- [x] 6.4 Correct what the deployment guide claims
+  - The optional-variable table called the absence harmless — "Slack delivery
+    is skipped silently", true of outbound and false of the three inbound
+    routes. A new section, *Both Slack variables or neither*, says what the
+    entry used to claim and why it was wrong, rather than quietly replacing it
+  - Listed third on purpose: a reader who believed that table had no reason
+    to open the code, so the documentation was load-bearing for the defect
+    rather than incidental to it
   - _Requirements: Slack Sign In 5.4, NFR 1.3_
+
+**Phase 6 is complete.** The spec stands at 70 of 72; the two that remain are
+the pair a one-person workspace cannot reach.
 
 ---
 
