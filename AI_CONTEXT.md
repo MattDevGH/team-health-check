@@ -1035,6 +1035,33 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**The score radios had no focus style at all** (2026-09-25), so a sighted
+keyboard user answering a health check could not see which score they were on.
+
+They are `sr-only` inputs inside their labels, which is how the visible circle
+gets styled freely — and it means the browser's own focus ring lands on an
+element nobody can see while the circle does not change. The ring is drawn on
+the label now, keyed off `has-[:focus-visible]` so it appears for a keyboard
+user and not on a click.
+
+**Nothing in the suite could have caught it.** Thirty-odd axe assertions run
+against this form across two tiers and every one passed, because focus
+visibility is a question about rendered pixels rather than about the
+accessibility tree. The new test's own `toBeFocused()` assertion passed against
+the defect: the radio was reachable by Tab and correctly labelled the whole
+time. NFR 2.2 and 2.3 were kept completely. What failed was WCAG 2.4.7, which
+no criterion here had ever named — so NFR 2.5 names it now.
+
+Worth keeping in view: this was the **primary interaction of the product**,
+found by a person reading markup, on a form that had been reviewed for
+accessibility repeatedly. It is the same lesson as every production pass in
+this project, arriving from a different direction.
+
+One practical note for the next person: the E2E server runs `npm run start`
+against the existing production build, so a CSS change needs `npm run build`
+before Playwright will see it. The first run of this test passed its Red for
+the right reason and would have passed its Green for the wrong one.
+
 **The Slack signature could be forged when the secret was missing** (2026-09-25),
 found by an external review of the repository and being fixed as `slack-sign-in`
 phase 6 — a spec that had been closed since 2026-09-23.
