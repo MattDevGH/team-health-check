@@ -278,3 +278,11 @@ jobs:
       # off within a week.
       - name: Check no confidential data in tracked documents
         run: npx tsx scripts/check-sensitive-doc-content.ts
+
+      # AI_CONTEXT.md is read at the start of every session, and its header
+      # asserted a branch merged a month earlier, a CI job that "has never
+      # executed" but runs on every pull request, and one remaining task across
+      # eleven specs written after it. Prose cannot be kept true by rule, so the
+      # facts that rot are generated and this fails when they drift.
+      - name: Check the generated status block is current
+        run: npx tsx scripts/generate-status.ts --check
