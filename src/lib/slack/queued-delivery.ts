@@ -24,6 +24,28 @@ export type QueuedDelivery =
       kind: 'response_url';
       responseUrl: string;
       text: string;
+    }
+  | {
+      /**
+       * Score buttons that have been accepted but not yet applied.
+       *
+       * Requirements: NFR 1.2; Slack Sign In NFR 1.1
+       *
+       * The interaction route acknowledges Slack before doing the work, and
+       * unawaited work in a serverless function may simply stop when the
+       * response is flushed. So the work is written down first and applied
+       * afterwards: if the instance dies between the two, a later scheduler
+       * tick finds the entry and applies it.
+       *
+       * Carries the decoded actions rather than the raw payload. The signature
+       * has already been verified by the time this is written, and re-verifying
+       * on replay would be impossible anyway — the timestamp would be minutes
+       * old and fail the five-minute replay window.
+       */
+      kind: 'score_actions';
+      slackUserId: string;
+      actions: Array<{ actionId?: string; value?: string }>;
+      responseUrl?: string;
     };
 
 export function encodeQueuedDelivery(delivery: QueuedDelivery): string {
@@ -67,6 +89,28 @@ export function decodeQueuedDelivery(raw: string): QueuedDelivery | null {
       memberId: parsed.memberId,
       slackUserId: parsed.slackUserId,
       blocks: parsed.blocks,
+    };
+  }
+
+  if (parsed.kind === 'score_actions') {
+    if (!isNonEmptyString(parsed.slackUserId) || !Array.isArray(parsed.actions)) {
+      return null;
+    }
+
+    return {
+      kind: 'score_actions',
+      slackUserId: parsed.slackUserId,
+      // Keep only entries shaped like actions; a malformed one is dropped
+      // rather than taken on trust, the same rule the live route follows
+      actions: parsed.actions.filter(isRecord).map(entry => ({
+        actionId: isNonEmptyString(entry.action_id)
+          ? entry.action_id
+          : isNonEmptyString(entry.actionId)
+            ? entry.actionId
+            : undefined,
+        value: isNonEmptyString(entry.value) ? entry.value : undefined,
+      })),
+      responseUrl: isNonEmptyString(parsed.responseUrl) ? parsed.responseUrl : undefined,
     };
   }
 

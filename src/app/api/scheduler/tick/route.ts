@@ -26,6 +26,7 @@ import { createProductionSlackLinkChecker } from '@/lib/slack/production-slack-l
 import { createSlackApiClient } from '@/lib/slack/delivery';
 import { createInteractionQueue } from '@/lib/slack/interaction-queue';
 import { createQueuedDeliveryDispatcher } from '@/lib/slack/queue-drain';
+import { createProductionScoreActionDeps } from '@/lib/slack/production-score-actions';
 import { createInteractionResponder } from '@/lib/slack/interaction-response';
 import type { NotificationSink } from '@/lib/services/notification.service';
 import type { EmailService } from '@/lib/services/email.service';
@@ -213,6 +214,9 @@ export const POST = withErrorHandling(async (request: Request) => {
     createQueuedDeliveryDispatcher({
       slackClient: slackBotToken ? createSlackApiClient(slackBotToken) : undefined,
       responder: createInteractionResponder(),
+      // Score buttons the interaction route accepted but did not finish
+      // applying, because its instance stopped after acknowledging
+      scoreActions: createProductionScoreActionDeps(),
     });
   await queue.processPending(deliver, now);
 
