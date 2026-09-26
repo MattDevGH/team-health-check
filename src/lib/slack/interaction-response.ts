@@ -25,6 +25,20 @@ export interface InteractionResponderDeps {
 }
 
 /**
+ * Requirement NFR 1.2 — acknowledge an interaction within three seconds.
+ *
+ * There was no timeout. A `response_url` that accepted the connection and
+ * never answered held this call open for as long as the platform allowed, and
+ * because the route replies before acknowledging, Slack's three seconds were
+ * spent waiting on somebody else's server.
+ *
+ * Two seconds leaves room inside that budget for the database work in front of
+ * it. A reply that has not left in two seconds is not going to arrive usefully:
+ * the member is looking at a message that still says nothing happened.
+ */
+const REPLY_TIMEOUT_MS = 2_000;
+
+/**
  * Creates the production responder.
  * `replace_original: false` keeps the prompt and its score buttons in place so
  * the member can still change an answer (Requirement 5.10).
@@ -39,6 +53,7 @@ export function createInteractionResponder(
       try {
         const response = await fetchImpl(responseUrl, {
           method: 'POST',
+          signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             response_type: 'ephemeral',
@@ -54,6 +69,7 @@ export function createInteractionResponder(
 
         return true;
       } catch (error: unknown) {
+        // An abort arrives here too, as the timeout expiring
         const message = error instanceof Error ? error.message : 'Network error';
         console.error(`Slack interaction reply failed: ${message}`);
         return false;
