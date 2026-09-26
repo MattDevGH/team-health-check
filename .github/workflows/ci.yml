@@ -30,10 +30,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -71,10 +71,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -105,10 +105,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -125,13 +125,18 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      # Fails on any skipped test via e2e/no-skips-reporter.ts, so a required
-      # scenario cannot quietly opt out and still report green
+      # Fails on any skipped test via e2e/suite-integrity-reporter.ts, so a required
+      # scenario cannot quietly opt out and still report green.
+      #
+      # `--max-failures=0` keeps the whole suite running; the reporter fails the
+      # run if anything passed only after a retry. Retries stay switched on so a
+      # flake is *recorded* rather than merely fatal — the run reports which test
+      # was nondeterministic instead of looking like an ordinary failure.
       - name: Run Playwright tests
         run: npx playwright test
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
@@ -140,7 +145,7 @@ jobs:
 
       # Traces, screenshots and the seeded database from a failed run
       - name: Upload failure diagnostics
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ failure() }}
         with:
           name: playwright-failure-diagnostics
@@ -149,6 +154,53 @@ jobs:
             prisma/e2e.db
           retention-days: 30
           if-no-files-found: ignore
+
+  # Everything above runs on Linux, and this repository is developed on Windows.
+  #
+  # On 2026-09-24 a better-sqlite3 13 bump merged with every check green and
+  # left the repository uninstallable on Windows: v13.0.3 publishes no win32-x64
+  # Node prebuild, so `npm ci` fell back to `node-gyp rebuild` and failed on a
+  # machine with no Python or C++ toolchain. Linux had the prebuild, so CI saw
+  # nothing. It was reverted the next day.
+  #
+  # Deliberately not the whole pipeline duplicated. This covers what only a
+  # different operating system can catch — a native module that will not
+  # install, a path assumption, a process this platform spawns differently —
+  # and leaves the browser suite to the Linux job.
+  windows:
+    name: Windows install and test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      # `npm ci` rather than `npm install`: it deletes node_modules first, which
+      # is the question this job exists to answer. The bump above was verified
+      # with `npm install`, which reused a binary already on disk and so proved
+      # nothing about a clean checkout.
+      - name: Install dependencies from a clean tree
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      # Includes the integration tests, which open a real SQLite file through
+      # the better-sqlite3 binary this job just built or downloaded
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
 
   # Skipped for Dependabot, which never writes a requirement reference and has no
   # honest one to write: a dependency bump serves the dependency tree, not a
@@ -166,34 +218,40 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Read live, not from the event payload. The payload's body is frozen at
-      # the moment the event fired, so a description edited to satisfy this gate
-      # changed nothing until the next push — and re-running the job replayed
-      # the same stale body. Fetching it means a re-run actually re-checks.
-      - name: Check requirement references in PR description
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          chmod +x scripts/check-requirement-coverage.sh
-          PR_DESCRIPTION="$(gh pr view "$PR_NUMBER" --json body --jq .body)" \
-            ./scripts/check-requirement-coverage.sh
-
-      # The step above checks a requirement is *mentioned*. This one checks the
-      # ones cited in the code are real: a reference to "Manager Experience 5.x"
-      # reached a pull request description on 2026-09-15 and the requirement had
-      # never existed. A citation nobody can follow is worse than none, because
-      # it reads as though somebody checked.
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      # Read live, not from the event payload. The payload's body is frozen at
+      # the moment the event fired, so a description edited to satisfy this gate
+      # changed nothing until the next push — and re-running the job replayed
+      # the same stale body. Fetching it means a re-run actually re-checks.
+      #
+      # This ran `check-requirement-coverage.sh` until 2026-09-25, while the
+      # tests covered `check-requirement-coverage.ts`: two implementations of
+      # one rule, kept together by a parity test that spawned `bash`. The shell
+      # is deleted and this runs the implementation the tests exercise, so the
+      # tested rule and the enforced rule are now the same code.
+      - name: Check requirement references in PR description
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          PR_DESCRIPTION="$(gh pr view "$PR_NUMBER" --json body --jq .body)" \
+            npx tsx scripts/check-requirement-coverage.ts
+
+      # The step above checks a requirement is *mentioned*. This one checks the
+      # ones cited in the code are real: a reference to "Manager Experience 5.x"
+      # reached a pull request description on 2026-09-15 and the requirement had
+      # never existed. A citation nobody can follow is worse than none, because
+      # it reads as though somebody checked.
 
       - name: Check requirement references resolve
         run: npx tsx scripts/check-requirement-references.ts
@@ -220,3 +278,11 @@ jobs:
       # off within a week.
       - name: Check no confidential data in tracked documents
         run: npx tsx scripts/check-sensitive-doc-content.ts
+
+      # AI_CONTEXT.md is read at the start of every session, and its header
+      # asserted a branch merged a month earlier, a CI job that "has never
+      # executed" but runs on every pull request, and one remaining task across
+      # eleven specs written after it. Prose cannot be kept true by rule, so the
+      # facts that rot are generated and this fails when they drift.
+      - name: Check the generated status block is current
+        run: npx tsx scripts/generate-status.ts --check
