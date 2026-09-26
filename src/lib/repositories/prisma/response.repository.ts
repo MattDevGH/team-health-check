@@ -62,11 +62,39 @@ export class PrismaResponseRepository implements ResponseRepository {
       where: {
         questionId,
         session: { teamId },
+        // Requirement 16.1: an answer its author can still change is not counted
+        finalisedAt: { not: null },
       },
       orderBy: { submittedAt: 'desc' },
       take: count,
     });
     return records.map((r) => this.mapToEntity(r));
+  }
+
+  /**
+   * Requirement 18.2
+   *
+   * One `updateMany`, which SQLite applies as a single statement, so a member
+   * cannot end up half finished. `finalisedAt: null` in the filter is what
+   * makes a second call keep the first timestamp.
+   */
+  async finaliseForMemberSession(memberId: string, sessionId: string, at: Date): Promise<Response[]> {
+    await this.prisma.response.updateMany({
+      where: { memberId, sessionId, finalisedAt: null },
+      data: { finalisedAt: at },
+    });
+
+    const records = await this.prisma.response.findMany({ where: { memberId, sessionId } });
+    return records.map(r => this.mapToEntity(r));
+  }
+
+  /** Requirement 18.4 */
+  async finaliseForSession(sessionId: string, at: Date): Promise<number> {
+    const result = await this.prisma.response.updateMany({
+      where: { sessionId, finalisedAt: null },
+      data: { finalisedAt: at },
+    });
+    return result.count;
   }
 
   async deleteByMemberId(memberId: string): Promise<number> {
@@ -92,6 +120,7 @@ export class PrismaResponseRepository implements ResponseRepository {
       trendIndicator: record.trendIndicator,
       submittedAt: record.submittedAt,
       updatedAt: record.updatedAt,
+      finalisedAt: record.finalisedAt,
     };
   }
 }

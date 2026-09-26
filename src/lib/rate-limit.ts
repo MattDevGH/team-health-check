@@ -12,6 +12,30 @@ interface RateLimitEntry {
   timestamps: number[];
 }
 
+/**
+ * **This store is per process, and the deployment is serverless.**
+ *
+ * Requirements: 6.7; Slack Sign In 4.3
+ *
+ * Each function instance keeps its own Map, so the limit is "10 failures per
+ * IP per instance", not per IP. A caller spread across enough cold starts gets
+ * a fresh allowance each time, and an instance that scales down forgets
+ * everything it had counted. The limit written in the requirement is therefore
+ * an upper bound on what any single instance will tolerate rather than a
+ * guarantee about the deployment.
+ *
+ * Recorded rather than fixed, deliberately (2026-09-26). The threat is
+ * guessing a session-link or magic-link token, both of which are at least 32
+ * random characters — so the limiter is defence in depth against a weakness
+ * that is not the one an attacker would attack. Making it durable means a
+ * write to Turso on every failed attempt, which is real cost and a new failure
+ * mode on the authentication path, for a product currently trialling with one
+ * team.
+ *
+ * What would change the answer: a second team, an unexplained spike in failed
+ * validations in the audit log, or moving any credential to something a person
+ * could plausibly guess.
+ */
 const store = new Map<string, RateLimitEntry>();
 
 const CLEANUP_INTERVAL_MS = 60_000; // Run cleanup every 60 seconds

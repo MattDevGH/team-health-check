@@ -150,6 +150,17 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
       status: 'closed',
       actualCloseAt: now(),
     });
+
+    /**
+     * Requirement 18.4
+     *
+     * A response in a closed session is final whether or not its author said
+     * so, because nothing can change it any more. Stamping it here rather than
+     * inferring it at read time keeps the rolling average's filter to one
+     * condition, and means a member who never marked their answers final is
+     * still counted (Requirement 18.7).
+     */
+    await responseRepo.finaliseForSession(sessionId, now());
   }
 
   /**

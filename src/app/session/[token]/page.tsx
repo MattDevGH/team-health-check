@@ -38,6 +38,8 @@ interface SessionContext {
   allQuestions: QuestionData[];
   expandable: boolean;
   responses: ResponseData[];
+  /** Requirement 18.6 — set once the member has said they have finished. */
+  answersAreFinal: boolean;
 }
 
 interface RollingAverageResult {
@@ -130,6 +132,17 @@ export default function SessionLinkPage({ params }: PageProps) {
    */
   const confirmationRef = useRef<HTMLDivElement>(null);
   const [sessionEnded, setSessionEnded] = useState(false);
+
+  /**
+   * Requirements: 18.1, 18.3, 18.6
+   *
+   * Whether this member has said they have finished. Seeded from the context
+   * so that reopening the link shows what they answered rather than a form
+   * that will refuse the next save.
+   */
+  const [answersAreFinal, setAnswersAreFinal] = useState(false);
+  const [isFinalising, setIsFinalising] = useState(false);
+  const [finaliseError, setFinaliseError] = useState<string | null>(null);
   const [results, setResults] = useState<RollingAverageResult[]>([]);
 
   useEffect(() => {
@@ -160,6 +173,7 @@ export default function SessionLinkPage({ params }: PageProps) {
             })),
           );
           setSessionEnded(data.sessionStatus === 'closed');
+          setAnswersAreFinal(data.answersAreFinal);
           setLoading(false);
         }
       } catch {
@@ -173,6 +187,44 @@ export default function SessionLinkPage({ params }: PageProps) {
     validate();
     return () => { cancelled = true; };
   }, [params]);
+
+  /**
+   * Requirements: 18.1, 18.2, 18.5
+   *
+   * Saying "I have finished". Two things needed this and neither was solved by
+   * another save button: a member editing an answer a second time could not
+   * tell that anything had happened, and the rolling average counted rows that
+   * could still move, so reading it, changing a score and reading it again gave
+   * away everybody else's answers.
+   */
+  const handleFinalise = useCallback(async () => {
+    if (!context) return;
+
+    setIsFinalising(true);
+    setFinaliseError(null);
+
+    try {
+      const res = await fetch('/api/responses/finalise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: context.sessionId }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setFinaliseError(
+          body?.error?.message ?? 'Could not mark your answers final. Please try again.',
+        );
+        return;
+      }
+
+      setAnswersAreFinal(true);
+    } catch {
+      setFinaliseError('Could not mark your answers final. Please try again.');
+    } finally {
+      setIsFinalising(false);
+    }
+  }, [context]);
 
   const handleSubmit = useCallback(async (responses: ResponseInput[]) => {
     if (!context) return;
@@ -361,7 +413,41 @@ export default function SessionLinkPage({ params }: PageProps) {
           Hi {context.memberName}, rate each area from 1 (needs work) to 5 (great).
         </p>
 
-        {isMicroPulse ? (
+        {/*
+          Requirement 18.6 — once the answers are final there is nothing to
+          edit, so the form goes. Showing a form that will refuse the next save
+          is the shape of the problem this feature exists to remove.
+        */}
+        {answersAreFinal ? (
+          <section
+            aria-label="Your final answers"
+            className="bg-white rounded-lg border border-gray-200 p-4"
+          >
+            <h2 className="font-medium text-gray-800">You have finished this health check</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              These are the answers you sent. They count towards the team average and cannot be
+              changed now.
+            </p>
+            <dl className="mt-4 space-y-2">
+              {context.responses.map((response) => {
+                const question = context.allQuestions.find((q) => q.id === response.questionId);
+                return (
+                  <div key={response.questionId} className="flex items-baseline justify-between gap-4">
+                    <dt className="text-sm text-gray-700">
+                      {question?.title ?? response.questionId}
+                    </dt>
+                    <dd className="text-sm font-medium text-gray-900">
+                      {response.score}
+                      {response.trendIndicator ? (
+                        <span className="text-gray-600 font-normal"> · {response.trendIndicator}</span>
+                      ) : null}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </section>
+        ) : isMicroPulse ? (
           <MicroPulseView
             questions={selectedFormQuestions}
             allQuestions={allFormQuestions}
@@ -379,6 +465,38 @@ export default function SessionLinkPage({ params }: PageProps) {
             isSubmitting={isSubmitting}
             hasSavedAnswers={hasSavedAnswers}
           />
+        )}
+
+        {/*
+          Requirements: 18.1, 18.5
+
+          Offered only once there is something to be finished with, and it says
+          what it costs before it is pressed rather than behind a dialog — the
+          consequence is one sentence, and a dialog for one sentence is a step
+          people click past.
+        */}
+        {!answersAreFinal && !sessionEnded && hasSavedAnswers && (
+          <section aria-label="Finish this health check" className="mt-6">
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-sm text-gray-700">
+                Your answers are saved and you can still change them. Once you mark them final they
+                count towards the team average, and you will not be able to change them.
+              </p>
+              <button
+                type="button"
+                onClick={handleFinalise}
+                disabled={isFinalising}
+                className="mt-3 inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-60"
+              >
+                {isFinalising ? 'Marking as final…' : "I've finished — mark my answers final"}
+              </button>
+              {finaliseError && (
+                <p role="alert" className="text-sm text-red-600 mt-2">
+                  {finaliseError}
+                </p>
+              )}
+            </div>
+          </section>
         )}
 
         {/*

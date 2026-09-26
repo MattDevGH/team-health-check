@@ -108,6 +108,8 @@ export const handlers = [
         allQuestions: DEFAULT_QUESTIONS,
         expandable: false,
         responses: [], // NOT `existingResponses`
+        // Requirement 18.6: the page renders a read-only view when this is true
+        answersAreFinal: false,
       },
       {
         headers: {
@@ -230,5 +232,28 @@ export const handlers = [
     }));
 
     return HttpResponse.json({ responses: results });
+  }),
+
+  /**
+   * POST /api/responses/finalise
+   *
+   * Requirements: 18.1, 18.2
+   *
+   * Mirrors the real route: the member comes from the cookie, so the body
+   * carries only { sessionId }. A mock that accepted a memberId here would be
+   * asserting a contract no server implements, which this project has been
+   * bitten by before.
+   */
+  http.post('/api/responses/finalise', async ({ request }) => {
+    const body = (await request.json()) as { sessionId?: string };
+
+    if (!body?.sessionId) {
+      return HttpResponse.json(
+        { error: { code: 'VALIDATION_ERROR', message: 'sessionId is required' } },
+        { status: 400 },
+      );
+    }
+
+    return HttpResponse.json({ finalisedAt: new Date().toISOString(), count: 5 });
   }),
 ];

@@ -27,6 +27,7 @@ export interface ResponseService {
     trendIndicator?: string;
   }): Promise<Response>;
   getRollingAverage(teamId: string, questionId: string, count?: number): Promise<number | null>;
+  finalise(params: { memberId: string; sessionId: string }): Promise<{ finalisedAt: Date; count: number }>;
   deleteMyData(memberId: string): Promise<void>;
 }
 
@@ -86,6 +87,22 @@ export function createResponseService(deps: ResponseServiceDeps): ResponseServic
       throw new ForbiddenError('Member does not belong to the session team');
     }
 
+    /**
+     * Requirement 18.3
+     *
+     * Once a member says they have finished, nothing they gave in that session
+     * changes — including a question they had not answered at the time. The
+     * alternative, letting them add answers after finishing, would mean
+     * "final" described some of their answers and not others, and the rolling
+     * average would be counting a set that could still grow.
+     */
+    const existing = await responseRepo.findByMemberAndSession(params.memberId, params.sessionId);
+    if (existing.some(response => response.finalisedAt !== null)) {
+      throw new ConflictError(
+        'Your answers for this health check were marked final and cannot be changed',
+      );
+    }
+
     // 7. Upsert response via responseRepo.upsert()
     const response = await responseRepo.upsert({
       memberId: params.memberId,
@@ -123,6 +140,55 @@ export function createResponseService(deps: ResponseServiceDeps): ResponseServic
   }
 
   /**
+   * Requirement 18.1, 18.2
+   *
+   * Marks everything this member gave in this session final, in one repository
+   * operation so a partial finalisation cannot happen.
+   *
+   * Idempotent: the repository only stamps rows that are still null, so a
+   * second click keeps the first timestamp rather than quietly moving it.
+   */
+  async function finalise(params: {
+    memberId: string;
+    sessionId: string;
+  }): Promise<{ finalisedAt: Date; count: number }> {
+    const session = await sessionRepo.findById(params.sessionId);
+    if (!session) {
+      throw new NotFoundError('Session not found');
+    }
+
+    /**
+     * Closing already finalises everything (Requirement 18.4), so there is
+     * nothing here for a closed session to do — and accepting the call would
+     * imply the member had a choice they no longer have.
+     */
+    if (session.status !== 'open') {
+      throw new ConflictError('Session is closed');
+    }
+
+    const mine = await responseRepo.findByMemberAndSession(params.memberId, params.sessionId);
+    if (mine.length === 0) {
+      // Requirement 18.1 offers this only to a member who has answered
+      // something. Recording a finish for somebody who never started would
+      // claim participation that did not happen.
+      throw new ConflictError('There are no answers to mark final');
+    }
+
+    const finalised = await responseRepo.finaliseForMemberSession(
+      params.memberId,
+      params.sessionId,
+      new Date(),
+    );
+
+    const stamped = finalised.find(response => response.finalisedAt !== null);
+    if (!stamped?.finalisedAt) {
+      throw new ConflictError('Answers could not be marked final');
+    }
+
+    return { finalisedAt: stamped.finalisedAt, count: finalised.length };
+  }
+
+  /**
    * GDPR self-service: delete all response data for a member.
    * Preserves materialised aggregates (computed at session close).
    * Logs an audit entry without recording deleted data content.
@@ -153,5 +219,5 @@ export function createResponseService(deps: ResponseServiceDeps): ResponseServic
     }
   }
 
-  return { upsert, getRollingAverage, deleteMyData };
+  return { upsert, getRollingAverage, finalise, deleteMyData };
 }

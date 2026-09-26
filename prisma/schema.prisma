@@ -103,6 +103,10 @@ model Response {
   trendIndicator String?
   submittedAt    DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  /// Set when the member marks their answers for the session final, or when the
+  /// session closes. A response that can still be changed is not counted
+  /// towards the rolling average (Requirements 16.1, 18.2, 18.4).
+  finalisedAt    DateTime?
 
   member   TeamMember         @relation(fields: [memberId], references: [id])
   session  HealthCheckSession @relation(fields: [sessionId], references: [id])

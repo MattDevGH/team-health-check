@@ -250,6 +250,17 @@ describe('InMemoryResponseRepository', () => {
       await responseRepo.upsert({ memberId: 'm-2', sessionId: s2.id, questionId: 'q-1', score: 4 });
       await responseRepo.upsert({ memberId: 'm-3', sessionId: s3.id, questionId: 'q-1', score: 5 });
 
+      /*
+       * Requirement 16.1 (2026-09-26): this returns final responses only. The
+       * sessions above are closed, and the service stamps everything in a
+       * session when it closes — the repository does not do it on its own, so
+       * a test driving the repository directly has to say so.
+       */
+      const finalisedAt = new Date();
+      for (const session of [s1, s2, s3]) {
+        await responseRepo.finaliseForSession(session.id, finalisedAt);
+      }
+
       const results = await responseRepo.findRecentByTeamAndQuestion('team-1', 'q-1', 10);
 
       expect(results).toHaveLength(2);
@@ -264,9 +275,31 @@ describe('InMemoryResponseRepository', () => {
       await responseRepo.upsert({ memberId: 'm-1', sessionId: s1.id, questionId: 'q-1', score: 3 });
       await responseRepo.upsert({ memberId: 'm-2', sessionId: s1.id, questionId: 'q-1', score: 4 });
       await responseRepo.upsert({ memberId: 'm-3', sessionId: s1.id, questionId: 'q-1', score: 5 });
+      await responseRepo.finaliseForSession(s1.id, new Date());
 
       const results = await responseRepo.findRecentByTeamAndQuestion('team-1', 'q-1', 2);
       expect(results).toHaveLength(2);
+    });
+
+    /**
+     * Requirement 16.1
+     *
+     * The filter this test covers is the whole reason the column exists: an
+     * answer its author can still change must not reach the average, because
+     * returning the average to the member who just wrote one let them read it,
+     * change their score, and read it again.
+     */
+    it('excludes a response its author can still change', async () => {
+      const s1 = await sessionRepo.create({ teamId: 'team-1', status: 'open' });
+
+      await responseRepo.upsert({ memberId: 'm-1', sessionId: s1.id, questionId: 'q-1', score: 3 });
+      await responseRepo.upsert({ memberId: 'm-2', sessionId: s1.id, questionId: 'q-1', score: 4 });
+      await responseRepo.finaliseForMemberSession('m-1', s1.id, new Date());
+
+      const results = await responseRepo.findRecentByTeamAndQuestion('team-1', 'q-1', 10);
+
+      expect(results).toHaveLength(1);
+      expect(results[0]?.memberId).toBe('m-1');
     });
 
     it('returns empty array when no matching responses', async () => {

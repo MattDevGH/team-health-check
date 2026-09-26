@@ -56,6 +56,14 @@ export const GET = withErrorHandling(async (request, context) => {
     trendIndicator: r.trendIndicator,
   }));
 
+  /**
+   * Requirement 18.6 — the page shows answers rather than a form once they are
+   * final. "Every" rather than "some": a member is finished with a session or
+   * they are not, and `finaliseForMemberSession` stamps the whole set at once.
+   */
+  const answersAreFinal =
+    existingResponses.length > 0 && existingResponses.every(r => r.finalisedAt !== null);
+
   const selection = await container.questionSelection.selectForSessionLink(
     memberId,
     sessionId,
@@ -82,6 +90,7 @@ export const GET = withErrorHandling(async (request, context) => {
     allQuestions: formattedQuestions,
     expandable: selection.expandable,
     responses: formattedResponses,
+    answersAreFinal,
   };
 
   const response = Response.json(responseBody);

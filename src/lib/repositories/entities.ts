@@ -71,6 +71,13 @@ export interface Response {
   trendIndicator: string | null;
   submittedAt: Date;
   updatedAt: Date;
+  /**
+   * Set when the member marks their answers for the session final, or when the
+   * session closes. Null while the answer can still be changed, and a response
+   * that can still be changed is not counted towards the rolling average
+   * (Requirements 16.1, 18.2, 18.4).
+   */
+  finalisedAt: Date | null;
 }
 
 export interface SessionLink {
