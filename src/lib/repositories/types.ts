@@ -103,7 +103,20 @@ export interface ResponseRepository {
   upsert(data: { memberId: string; sessionId: string; questionId: string; score: number; trendIndicator?: string }): Promise<Response>;
   findByMemberAndSession(memberId: string, sessionId: string): Promise<Response[]>;
   findBySession(sessionId: string): Promise<Response[]>;
+  /**
+   * Requirement 16.1 — the most recent *final* responses only. An answer its
+   * author can still change is excluded, because returning the average to the
+   * member who just wrote one let them difference it against their own score.
+   */
   findRecentByTeamAndQuestion(teamId: string, questionId: string, count: number): Promise<Response[]>;
+  /**
+   * Requirement 18.2 — marks every response this member gave in this session
+   * final, in one operation, and returns them. Already-final responses keep
+   * their original timestamp, so a second call changes nothing.
+   */
+  finaliseForMemberSession(memberId: string, sessionId: string, at: Date): Promise<Response[]>;
+  /** Requirement 18.4 — closing a session makes everything in it final. */
+  finaliseForSession(sessionId: string, at: Date): Promise<number>;
   deleteByMemberId(memberId: string): Promise<number>;
   countBySessionAndQuestion(sessionId: string, questionId: string): Promise<number>;
 }

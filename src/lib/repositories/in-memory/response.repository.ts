@@ -50,6 +50,7 @@ export class InMemoryResponseRepository implements ResponseRepository {
       trendIndicator: data.trendIndicator ?? null,
       submittedAt: now,
       updatedAt: now,
+      finalisedAt: null,
     };
 
     this.responses.set(response.id, response);
@@ -80,12 +81,43 @@ export class InMemoryResponseRepository implements ResponseRepository {
     const matching = Array.from(this.responses.values())
       .filter(r => {
         if (r.questionId !== questionId) return false;
+        // Requirement 16.1: an answer its author can still change is not counted
+        if (r.finalisedAt === null) return false;
         const sessionTeamId = this.getSessionTeamId(r.sessionId);
         return sessionTeamId === teamId;
       })
       .sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime());
 
     return matching.slice(0, count);
+  }
+
+  /** Requirement 18.2 */
+  async finaliseForMemberSession(memberId: string, sessionId: string, at: Date): Promise<Response[]> {
+    const finalised: Response[] = [];
+
+    for (const [id, response] of this.responses) {
+      if (response.memberId !== memberId || response.sessionId !== sessionId) continue;
+
+      // A second call keeps the first timestamp: finishing twice is finishing once
+      const updated: Response = { ...response, finalisedAt: response.finalisedAt ?? at };
+      this.responses.set(id, updated);
+      finalised.push(updated);
+    }
+
+    return finalised;
+  }
+
+  /** Requirement 18.4 */
+  async finaliseForSession(sessionId: string, at: Date): Promise<number> {
+    let count = 0;
+
+    for (const [id, response] of this.responses) {
+      if (response.sessionId !== sessionId || response.finalisedAt !== null) continue;
+      this.responses.set(id, { ...response, finalisedAt: at });
+      count += 1;
+    }
+
+    return count;
   }
 
   async deleteByMemberId(memberId: string): Promise<number> {

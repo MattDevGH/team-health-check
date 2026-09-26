@@ -200,6 +200,24 @@ describe('ResponseService.upsert', () => {
 
 
 describe('ResponseService.getRollingAverage', () => {
+  /**
+   * Seeds a response that counts towards the rolling average.
+   *
+   * Requirement 16.1 (2026-09-26): the average counts only responses their
+   * author can no longer change. These tests seeded live responses and expected
+   * them counted, which was the contract until the average was found to be
+   * probeable by changing one's own answer and reading the number again.
+   */
+  async function seedFinalResponse(data: {
+    memberId: string;
+    sessionId: string;
+    questionId: string;
+    score: number;
+  }): Promise<void> {
+    await repos.response.upsert(data);
+    await repos.response.finaliseForMemberSession(data.memberId, data.sessionId, new Date());
+  }
+
   let repos: Repositories;
   let responseService: ReturnType<typeof createResponseService>;
 
@@ -221,15 +239,15 @@ describe('ResponseService.getRollingAverage', () => {
     // Create a session and submit 5 responses with known scores: 1, 2, 3, 4, 5
     const session = await repos.session.create({ teamId: 'team-1', status: 'open' });
 
-    await repos.response.upsert({ memberId: 'member-1', sessionId: session.id, questionId: 'q-delivering-value', score: 1 });
-    await repos.response.upsert({ memberId: 'member-2', sessionId: session.id, questionId: 'q-delivering-value', score: 2 });
-    await repos.response.upsert({ memberId: 'member-3', sessionId: session.id, questionId: 'q-delivering-value', score: 3 });
-    await repos.response.upsert({ memberId: 'member-1', sessionId: session.id, questionId: 'q-team-collaboration', score: 4 });
+    await seedFinalResponse({ memberId: 'member-1', sessionId: session.id, questionId: 'q-delivering-value', score: 1 });
+    await seedFinalResponse({ memberId: 'member-2', sessionId: session.id, questionId: 'q-delivering-value', score: 2 });
+    await seedFinalResponse({ memberId: 'member-3', sessionId: session.id, questionId: 'q-delivering-value', score: 3 });
+    await seedFinalResponse({ memberId: 'member-1', sessionId: session.id, questionId: 'q-team-collaboration', score: 4 });
 
     // Need more for q-delivering-value — create another session
     const session2 = await repos.session.create({ teamId: 'team-1', status: 'open' });
-    await repos.response.upsert({ memberId: 'member-1', sessionId: session2.id, questionId: 'q-delivering-value', score: 4 });
-    await repos.response.upsert({ memberId: 'member-2', sessionId: session2.id, questionId: 'q-delivering-value', score: 5 });
+    await seedFinalResponse({ memberId: 'member-1', sessionId: session2.id, questionId: 'q-delivering-value', score: 4 });
+    await seedFinalResponse({ memberId: 'member-2', sessionId: session2.id, questionId: 'q-delivering-value', score: 5 });
 
     // 5 responses for q-delivering-value: 1, 2, 3, 4, 5 → mean = 15/5 = 3.0
     const avg = await responseService.getRollingAverage('team-1', 'q-delivering-value');
@@ -240,12 +258,12 @@ describe('ResponseService.getRollingAverage', () => {
     const session = await repos.session.create({ teamId: 'team-1', status: 'open' });
 
     // Only 4 responses
-    await repos.response.upsert({ memberId: 'member-1', sessionId: session.id, questionId: 'q-delivering-value', score: 3 });
-    await repos.response.upsert({ memberId: 'member-2', sessionId: session.id, questionId: 'q-delivering-value', score: 4 });
-    await repos.response.upsert({ memberId: 'member-3', sessionId: session.id, questionId: 'q-delivering-value', score: 5 });
+    await seedFinalResponse({ memberId: 'member-1', sessionId: session.id, questionId: 'q-delivering-value', score: 3 });
+    await seedFinalResponse({ memberId: 'member-2', sessionId: session.id, questionId: 'q-delivering-value', score: 4 });
+    await seedFinalResponse({ memberId: 'member-3', sessionId: session.id, questionId: 'q-delivering-value', score: 5 });
 
     const session2 = await repos.session.create({ teamId: 'team-1', status: 'open' });
-    await repos.response.upsert({ memberId: 'member-1', sessionId: session2.id, questionId: 'q-delivering-value', score: 2 });
+    await seedFinalResponse({ memberId: 'member-1', sessionId: session2.id, questionId: 'q-delivering-value', score: 2 });
 
     const avg = await responseService.getRollingAverage('team-1', 'q-delivering-value');
     expect(avg).toBeNull();
@@ -265,7 +283,7 @@ describe('ResponseService.getRollingAverage', () => {
     // Session 1: 11 responses (all score=3)
     for (let i = 1; i <= 11; i++) {
       const memberId = i <= 3 ? `member-${i}` : `gen-member-${i}`;
-      await repos.response.upsert({
+      await seedFinalResponse({
         memberId,
         sessionId: session1.id,
         questionId: 'q-delivering-value',
@@ -275,7 +293,7 @@ describe('ResponseService.getRollingAverage', () => {
 
     // Session 2: 11 responses (all score=3)
     for (let i = 12; i <= 22; i++) {
-      await repos.response.upsert({
+      await seedFinalResponse({
         memberId: `gen-member-${i}`,
         sessionId: session2.id,
         questionId: 'q-delivering-value',
@@ -296,15 +314,15 @@ describe('ResponseService.getRollingAverage', () => {
   it('spans multiple sessions (responses from different sessions count)', async () => {
     // Session 1: 3 responses
     const session1 = await repos.session.create({ teamId: 'team-1', status: 'closed' });
-    await repos.response.upsert({ memberId: 'member-1', sessionId: session1.id, questionId: 'q-delivering-value', score: 2 });
-    await repos.response.upsert({ memberId: 'member-2', sessionId: session1.id, questionId: 'q-delivering-value', score: 3 });
-    await repos.response.upsert({ memberId: 'member-3', sessionId: session1.id, questionId: 'q-delivering-value', score: 4 });
+    await seedFinalResponse({ memberId: 'member-1', sessionId: session1.id, questionId: 'q-delivering-value', score: 2 });
+    await seedFinalResponse({ memberId: 'member-2', sessionId: session1.id, questionId: 'q-delivering-value', score: 3 });
+    await seedFinalResponse({ memberId: 'member-3', sessionId: session1.id, questionId: 'q-delivering-value', score: 4 });
 
     // Session 2: 3 responses (total 6 ≥ 5 threshold)
     const session2 = await repos.session.create({ teamId: 'team-1', status: 'open' });
-    await repos.response.upsert({ memberId: 'member-1', sessionId: session2.id, questionId: 'q-delivering-value', score: 3 });
-    await repos.response.upsert({ memberId: 'member-2', sessionId: session2.id, questionId: 'q-delivering-value', score: 4 });
-    await repos.response.upsert({ memberId: 'member-3', sessionId: session2.id, questionId: 'q-delivering-value', score: 5 });
+    await seedFinalResponse({ memberId: 'member-1', sessionId: session2.id, questionId: 'q-delivering-value', score: 3 });
+    await seedFinalResponse({ memberId: 'member-2', sessionId: session2.id, questionId: 'q-delivering-value', score: 4 });
+    await seedFinalResponse({ memberId: 'member-3', sessionId: session2.id, questionId: 'q-delivering-value', score: 5 });
 
     // Total: 2+3+4+3+4+5 = 21, mean = 21/6 = 3.5
     const avg = await responseService.getRollingAverage('team-1', 'q-delivering-value');
@@ -319,7 +337,7 @@ describe('ResponseService.getRollingAverage', () => {
     for (let i = 0; i < scores.length; i++) {
       const memberId = `rounding-member-${i}`;
       await repos.teamMember.create({ id: memberId, teamId: 'team-1', name: `Rounding ${i}` });
-      await repos.response.upsert({
+      await seedFinalResponse({
         memberId,
         sessionId: session.id,
         questionId: 'q-delivering-value',
