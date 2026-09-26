@@ -433,3 +433,11 @@ duplicate a reader can see.*
 session, the second about leaving materialised aggregates alone. Anything
 citing it should say which, and new work should cite 4.7 or later.*
 7. THE Web_Interface SHALL inform the Team_Member at the point of deletion that historical aggregate data will be retained as it is anonymised and cannot be attributed to them.
+8. A response score, a trend indicator, a record identifier from a real team, a member handle or a session token SHALL NOT appear in a tracked document. The rule that keeps these out of logs exists because they are the confidential payload of the product; a file committed to the repository is read by more people than a log is, and this repository is public.
+
+*Added 2026-09-25. `AI_CONTEXT.md` had carried a production team id, two
+production session ids, the scores and trend indicators recorded in both, and a
+member handle since 2026-08-23 — in the one file every session is instructed to
+read. Nothing had ever said the log rule applied to documents too, so nothing
+stopped it. `scripts/check-sensitive-doc-content.ts` enforces it, and finds
+seven instances in the version this criterion was written against.*
