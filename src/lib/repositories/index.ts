@@ -112,6 +112,10 @@ export function createInMemoryRepositories(): Repositories {
       userSession.removeByMemberId(memberId);
       await teamMember.remove(memberId);
     },
+    // The real repository writes this inside the removal's transaction
+    recordAudit: async (entry) => {
+      await auditLog.create(entry);
+    },
   });
   const team = new InMemoryTeamRepository({ teamMember, teamMemberRole, auditLog });
   const pairingCode = new InMemoryPairingCodeRepository();

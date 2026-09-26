@@ -18,6 +18,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createCountedDatabase, type CountedDatabase } from './support/counted-database';
 import { PrismaSessionRepository } from '@/lib/repositories/prisma/session.repository';
 import { PrismaSessionAggregateRepository } from '@/lib/repositories/prisma/session-aggregate.repository';
+import { PrismaTeamMemberRoleRepository } from '@/lib/repositories/prisma/team-member-role.repository';
 
 const QUESTIONS = ['q-delivering-value', 'q-team-collaboration', 'q-ease-of-delivery'];
 
@@ -251,5 +252,86 @@ describe('opening a health check', () => {
 
     expect(session.id).toBeTruthy();
     expect(await linkCount()).toBe(0);
+  });
+});
+
+/**
+ * Requirements: NFR 3.5; 1.6, 19.7
+ *
+ * `removeMember` has been documented as atomic since it was written — "protect
+ * the final manager, remove, and audit" — while the removal and the entry were
+ * two separate awaits. A failure between them removed somebody from a team
+ * with nothing recording who did it, in a log whose whole purpose is to answer
+ * that.
+ */
+describe('removing a member from a team', () => {
+  let db: CountedDatabase;
+  let roleRepo: PrismaTeamMemberRoleRepository;
+  let teamId = '';
+  let leaverId = '';
+
+  beforeEach(async () => {
+    db = await createCountedDatabase();
+    roleRepo = new PrismaTeamMemberRoleRepository(db.prisma);
+
+    const team = await db.prisma.team.create({ data: { name: 'Audited Team' } });
+    teamId = team.id;
+
+    // Two managers, so removing one is permitted
+    for (const name of ['Keeper', 'Leaver']) {
+      const member = await db.prisma.teamMember.create({
+        data: { teamId, name, email: `${name.toLowerCase()}@atomic.invalid` },
+      });
+      await db.prisma.teamMemberRole.create({
+        data: { memberId: member.id, teamId, role: 'delivery_manager' },
+      });
+      if (name === 'Leaver') leaverId = member.id;
+    }
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  function entry(overrides: Record<string, string> = {}) {
+    return {
+      teamId,
+      changeType: 'member_removed',
+      previousValue: '{}',
+      newValue: '{}',
+      userId: 'actor-1',
+      ...overrides,
+    };
+  }
+
+  it('removes the member and records who did it', async () => {
+    await roleRepo.removeMemberWithRoleProtection(leaverId, teamId, entry());
+
+    expect(await db.prisma.teamMember.count({ where: { id: leaverId } })).toBe(0);
+    expect(await db.prisma.auditLogEntry.count({ where: { teamId } })).toBe(1);
+  });
+
+  /** Requirement NFR 3.5 — the half that was only ever claimed. */
+  it('keeps the member when the entry cannot be written', async () => {
+    // A team that does not exist: a foreign key the database itself refuses
+    await expect(
+      roleRepo.removeMemberWithRoleProtection(leaverId, teamId, entry({ teamId: 'no-such-team' })),
+    ).rejects.toThrow();
+
+    expect(await db.prisma.teamMember.count({ where: { id: leaverId } })).toBe(1);
+    expect(await db.prisma.auditLogEntry.count()).toBe(0);
+  });
+
+  it('writes no entry when the removal itself is refused', async () => {
+    // The final manager cannot be removed, and a log saying otherwise would be
+    // worse than no log
+    const keeper = await db.prisma.teamMember.findFirst({ where: { teamId, name: 'Keeper' } });
+    await roleRepo.removeMemberWithRoleProtection(leaverId, teamId, entry());
+
+    await expect(
+      roleRepo.removeMemberWithRoleProtection(keeper!.id, teamId, entry()),
+    ).rejects.toThrow(/final delivery manager/i);
+
+    expect(await db.prisma.auditLogEntry.count({ where: { teamId } })).toBe(1);
   });
 });

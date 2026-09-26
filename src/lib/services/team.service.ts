@@ -170,8 +170,16 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
       throw new NotFoundError('Team member not found in this team');
     }
 
-    await teamMemberRoleRepo.removeMemberWithRoleProtection(memberId, teamId);
-    await auditLogRepo.create({
+    /*
+     * Requirements: NFR 3.5; 1.6, 19.7
+     *
+     * The entry goes in with the removal, in the repository's transaction.
+     * This function has been documented as atomic since it was written, and
+     * was not: a failure between the two awaits removed somebody from a team
+     * with nothing recording who did it, in a log whose whole purpose is to
+     * answer that.
+     */
+    await teamMemberRoleRepo.removeMemberWithRoleProtection(memberId, teamId, {
       teamId,
       changeType: 'member_removed',
       previousValue: JSON.stringify({ name: member.name, email: member.email }),
@@ -193,16 +201,27 @@ export function createTeamService(deps: TeamServiceDeps): TeamService {
     }
 
     const previous = await teamMemberRoleRepo.findByMemberAndTeam(memberId, teamId);
-    await teamMemberRoleRepo.replace({ memberId, teamId, role });
-    if (previous.length !== 1 || previous[0].role !== role) {
-      await auditLogRepo.create({
-        teamId,
-        changeType: 'role_replaced',
-        previousValue: JSON.stringify(previous.map((entry) => entry.role)),
-        newValue: JSON.stringify([role]),
-        userId: actorId,
-      });
-    }
+
+    /*
+     * Requirements: NFR 3.5; 19.5-19.7
+     *
+     * The entry goes in with the change, in the repository's transaction.
+     * Passed only when something actually changed: a log recording a change
+     * that did not happen is its own defect.
+     */
+    const changed = previous.length !== 1 || previous[0].role !== role;
+    await teamMemberRoleRepo.replace(
+      { memberId, teamId, role },
+      changed
+        ? {
+            teamId,
+            changeType: 'role_replaced',
+            previousValue: JSON.stringify(previous.map((entry) => entry.role)),
+            newValue: JSON.stringify([role]),
+            userId: actorId,
+          }
+        : undefined,
+    );
     return assembleMemberSummary(member, teamMemberRoleRepo, slackIdentityLinkRepo);
   }
 

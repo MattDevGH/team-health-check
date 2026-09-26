@@ -139,6 +139,15 @@ export interface SessionRepository {
   ): Promise<void>;
 }
 
+/** An audit entry written in the same transaction as the change it records. */
+export interface AuditedChange {
+  teamId: string;
+  changeType: string;
+  previousValue: string;
+  newValue: string;
+  userId: string;
+}
+
 export interface OpenCycleParams {
   /** The session this cycle replaces, closed in the same transaction. */
   closeExisting?: { id: string; closedAt: Date };
@@ -220,9 +229,31 @@ export interface AvailabilityRepository {
 /** Requirement 19.1: Role-based access control */
 export interface TeamMemberRoleRepository {
   assign(data: { memberId: string; teamId: string; role: string }): Promise<TeamMemberRole>;
-  replace(data: { memberId: string; teamId: string; role: TeamRole }): Promise<TeamMemberRole>;
+  /**
+   * Requirements: NFR 3.5; 19.5-19.7
+   *
+   * `audit` is written in the same transaction, when given. It is optional
+   * because replacing a role with the one it already has changes nothing, and
+   * an audit log recording a change that did not happen is its own defect —
+   * the caller decides, and the write is atomic either way.
+   */
+  replace(
+    data: { memberId: string; teamId: string; role: TeamRole },
+    audit?: AuditedChange,
+  ): Promise<TeamMemberRole>;
   remove(memberId: string, teamId: string, role: string): Promise<void>;
-  removeMemberWithRoleProtection(memberId: string, teamId: string): Promise<void>;
+  /**
+   * Requirements: NFR 3.5; 1.6, 19.7
+   *
+   * The audit entry is written inside the same transaction as the change.
+   *
+   * `removeMember` was documented as doing this — "atomically protect the
+   * final manager, remove, and audit" — while the removal and the entry were
+   * two separate awaits. A failure between them removed somebody from a team
+   * with nothing recording who did it or why, in a log that exists to answer
+   * exactly that.
+   */
+  removeMemberWithRoleProtection(memberId: string, teamId: string, audit: AuditedChange): Promise<void>;
   findByMemberAndTeam(memberId: string, teamId: string): Promise<TeamMemberRole[]>;
   countByTeamAndRole(teamId: string, role: string): Promise<number>;
 }
