@@ -532,4 +532,82 @@ describe('POST /api/slack/interactions', () => {
     expect(scores).toContainEqual({ questionId: 'q-delivering-value', score: 4 });
     expect(scores).toContainEqual({ questionId: 'q-team-collaboration', score: 5 });
   });
+
+  /**
+   * Requirements: Slack Sign In NFR 1.5, NFR 1.6
+   *
+   * A correctly signed request can still carry a body this application cannot
+   * read. It used to be asserted into a shape rather than checked, so a body
+   * that was not JSON threw out of the handler.
+   */
+  describe('a signed request the application cannot read', () => {
+    /** Signs an arbitrary raw body, rather than a payload object. */
+    function makeSignedRaw(body: string): Request {
+      const timestamp = String(Math.floor(Date.now() / 1000));
+
+      return new Request('http://localhost/api/slack/interactions', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-slack-request-timestamp': timestamp,
+          'x-slack-signature': signRequest(body, timestamp),
+        },
+        body,
+      });
+    }
+
+    it('refuses a payload that is not JSON, rather than throwing', async () => {
+      const response = await POST(makeSignedRaw('payload=' + encodeURIComponent('not json {')));
+
+      expect(response.status).toBe(400);
+    });
+
+    it('refuses a payload that is not an object', async () => {
+      const response = await POST(makeSignedRaw('payload=' + encodeURIComponent('"a string"')));
+
+      expect(response.status).toBe(400);
+    });
+
+    it('refuses a payload that cannot say what it is', async () => {
+      const response = await POST(
+        makeSignedRaw('payload=' + encodeURIComponent(JSON.stringify({ user: { id: 'U1' } }))),
+      );
+
+      expect(response.status).toBe(400);
+    });
+
+    it('stores nothing for a score value this application would never emit', async () => {
+      // parseInt read "4abc" as 4, so a value nobody sent was stored as though
+      // somebody had
+      const team = await repos.team.create({ name: 'Lenient Parse Team' });
+      const member = await repos.teamMember.create({
+        teamId: team.id,
+        name: 'Test User',
+        email: 'lenient@example.com',
+      });
+      const session = await repos.session.create({ teamId: team.id, status: 'open' });
+      // Its own Slack id: the repos are module-level singletons with no reset
+      // between tests, so reusing USLACK123 resolves an earlier test's member
+      // and stores the score against a session this one never looks at
+      await linkSlackUser('USLACKLENIENT', member.id);
+
+      const request = makeSignedRequest(
+        buildInteractionPayload({
+          user: { id: 'USLACKLENIENT', name: 'lenient' },
+          actions: [
+            {
+              action_id: 'score_q-delivering-value',
+              value: 'q-delivering-value:4abc',
+              type: 'button',
+            },
+          ],
+        }),
+      );
+
+      const response = await POST(request);
+      expect(response.status).toBe(200);
+
+      expect(await repos.response.findBySession(session.id)).toHaveLength(0);
+    });
+  });
 });
