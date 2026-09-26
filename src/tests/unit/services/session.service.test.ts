@@ -14,7 +14,6 @@ describe('SessionService.open', () => {
       sessionLinkRepo: repos.sessionLink,
       teamMemberRepo: repos.teamMember,
       responseRepo: repos.response,
-      sessionAggregateRepo: repos.sessionAggregate,
     });
 
     // Seed team members for link generation
@@ -95,7 +94,6 @@ describe('SessionService.close', () => {
       sessionLinkRepo: repos.sessionLink,
       teamMemberRepo: repos.teamMember,
       responseRepo: repos.response,
-      sessionAggregateRepo: repos.sessionAggregate,
     });
 
     await repos.teamMember.create({ teamId: 'team-1', name: 'Alice', email: 'alice@example.com' });
@@ -152,7 +150,6 @@ describe('SessionService.get', () => {
       sessionLinkRepo: repos.sessionLink,
       teamMemberRepo: repos.teamMember,
       responseRepo: repos.response,
-      sessionAggregateRepo: repos.sessionAggregate,
     });
   });
 
@@ -188,7 +185,6 @@ describe('SessionService.generateSessionLinks', () => {
       sessionLinkRepo: repos.sessionLink,
       teamMemberRepo: repos.teamMember,
       responseRepo: repos.response,
-      sessionAggregateRepo: repos.sessionAggregate,
     });
   });
 
@@ -296,7 +292,6 @@ describe('SessionService.materializeAggregates', () => {
       sessionLinkRepo: repos.sessionLink,
       teamMemberRepo: repos.teamMember,
       responseRepo: repos.response,
-      sessionAggregateRepo: repos.sessionAggregate,
     });
   });
 

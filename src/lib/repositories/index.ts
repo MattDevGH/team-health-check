@@ -87,6 +87,11 @@ export function createInMemoryRepositories(): Repositories {
   const magicLink = new InMemoryMagicLinkRepository();
   const auditLog = new InMemoryAuditLogRepository();
   const sessionAggregate = new InMemorySessionAggregateRepository();
+  // Materialising writes a session's aggregates and its timestamp together,
+  // which the real repository does in one transaction (NFR 3.5)
+  session.setAggregateStore(sessionAggregate);
+  // Opening a cycle issues a link per member in the same operation (NFR 3.5)
+  session.setLinkStore(sessionLink);
   const question = new InMemoryQuestionRepository();
   const availability = new InMemoryAvailabilityRepository();
   const teamMemberRole = new InMemoryTeamMemberRoleRepository({
@@ -106,6 +111,10 @@ export function createInMemoryRepositories(): Repositories {
       magicLink.removeByMemberId(memberId);
       userSession.removeByMemberId(memberId);
       await teamMember.remove(memberId);
+    },
+    // The real repository writes this inside the removal's transaction
+    recordAudit: async (entry) => {
+      await auditLog.create(entry);
     },
   });
   const team = new InMemoryTeamRepository({ teamMember, teamMemberRole, auditLog });

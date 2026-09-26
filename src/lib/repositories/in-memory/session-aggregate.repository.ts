@@ -35,6 +35,22 @@ export class InMemorySessionAggregateRepository implements SessionAggregateRepos
     return aggregate;
   }
 
+  /**
+   * Requirement NFR 3.6 — what makes materialising retryable.
+   *
+   * The fake cannot roll back, and does not pretend to: atomicity is proved
+   * against a real database in `atomic-writes.test.ts`. What it can do is
+   * behave the same way on the paths that succeed, so a service test is not
+   * reasoning about a different set of rules.
+   */
+  async deleteBySessionId(sessionId: string): Promise<number> {
+    const doomed = Array.from(this.store.entries()).filter(
+      ([, aggregate]) => aggregate.sessionId === sessionId,
+    );
+    for (const [id] of doomed) this.store.delete(id);
+    return doomed.length;
+  }
+
   async findBySessionId(sessionId: string): Promise<SessionAggregate[]> {
     return [...this.store.values()].filter(a => a.sessionId === sessionId);
   }

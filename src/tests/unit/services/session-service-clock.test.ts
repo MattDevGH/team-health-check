@@ -43,7 +43,6 @@ beforeEach(async () => {
     sessionLinkRepo: repos.sessionLink,
     teamMemberRepo: repos.teamMember,
     responseRepo: repos.response,
-    sessionAggregateRepo: repos.sessionAggregate,
     teamScheduleRepo: repos.teamSchedule,
     now: () => FIXED,
   });

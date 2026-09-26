@@ -1226,6 +1226,47 @@ names a question that exists, and still queries the session once per entry.
 Both belong with the batch and transaction work, where a service method will
 take the whole submission at once.
 
+**Only one repository used a transaction** (2026-09-26), and the three places
+that most needed one wrote row by row.
+
+**Materialising was the dangerous one.** It created a `SessionAggregate` per
+question in a loop and then set `materialisedAt`. A failure part-way left some
+rows written and the flag unset — and `(sessionId, questionId)` is unique, so
+the retry collided with the rows the failed attempt had made and threw. **The
+session could never be materialised again and nothing in the application could
+repair it.** One transaction now, deleting the session's existing aggregates
+inside it, which is what makes a retry possible at all.
+
+**Opening a health check** closed the previous session, created the new one and
+issued a link per member, as three steps. A failure after the create left a
+check nobody could answer — which happened in production on 2026-09-14 and is
+why `reaching-your-health-check` exists. Closing the previous session belongs
+in the same transaction, because a team left with no open check would be worse
+than the failure.
+
+**`removeMember` was documented as atomic and was not.** "Atomically protect
+the final manager, remove, and audit", above a removal and an audit entry in
+two separate awaits. A failure between them removed somebody from a team with
+nothing recording who did it, in a log whose whole purpose is to answer that.
+Replacing a role had the same shape.
+
+**The tests that covered these paths could not have caught any of it.** They
+used in-memory fakes, which apply writes one at a time and have nothing to roll
+back — so they proved the service called the repositories, which was never in
+doubt. NFR 3.7 now requires the property to be shown against a real database,
+and `atomic-writes.test.ts` does it over a real SQLite file through the libSQL
+adapter, injecting failures with the database's own foreign keys rather than a
+stub. Thirteen cases, each proven able to fail.
+
+Two things the work exposed on the way. The session service no longer writes
+aggregates at all, so its `sessionAggregateRepo` dependency is gone — it was
+describing something the service had stopped doing. And both `update`
+implementations declared a narrower parameter type than the interface they
+implement, so `materialisedAt` was accepted at runtime while undeclared;
+TypeScript permits that for methods, which is why nothing complained.
+
+Genesis is still not atomic, and still says so where it happens.
+
 **The Slack interaction route acknowledged last, and its header said it
 acknowledged first** (2026-09-26).
 

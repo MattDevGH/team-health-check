@@ -182,6 +182,14 @@ describe('repositories over the libSQL adapter', () => {
     await new PrismaTeamMemberRoleRepository(prisma).removeMemberWithRoleProtection(
       leaves.id,
       team.id,
+      // The entry is written in the same transaction as the removal (NFR 3.5)
+      {
+        teamId: team.id,
+        changeType: 'member_removed',
+        previousValue: '{}',
+        newValue: '{}',
+        userId: 'actor-1',
+      },
     );
 
     expect(await links.findBySlackUserId('U_LEAVES')).toBeNull();

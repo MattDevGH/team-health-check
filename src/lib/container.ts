@@ -98,7 +98,6 @@ export function createContainer(repos: Repositories, options?: ContainerOptions)
     sessionLinkRepo: repos.sessionLink,
     teamMemberRepo: repos.teamMember,
     responseRepo: repos.response,
-    sessionAggregateRepo: repos.sessionAggregate,
     teamScheduleRepo: repos.teamSchedule,
   });
 

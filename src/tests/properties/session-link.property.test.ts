@@ -30,7 +30,6 @@ describe('Session Link Properties', () => {
             sessionLinkRepo: repos.sessionLink,
             teamMemberRepo: repos.teamMember,
             responseRepo: repos.response,
-            sessionAggregateRepo: repos.sessionAggregate,
           });
 
           const teamId = 'team-link-test';

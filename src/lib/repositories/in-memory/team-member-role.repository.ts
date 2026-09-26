@@ -3,10 +3,17 @@ import type { TeamRole } from '@/lib/contracts/member-summary';
 import { ConflictError } from '@/lib/errors';
 
 import type { TeamMemberRole } from '../entities';
-import type { TeamMemberRoleRepository } from '../types';
+import type { AuditedChange, TeamMemberRoleRepository } from '../types';
 
 interface MemberRoleRepositoryDeps {
   removeMember?: (memberId: string) => Promise<void>;
+  /**
+   * Writes the audit entry the real repository writes inside the removal's
+   * transaction (NFR 3.5). Not atomic here, and it cannot be — the property is
+   * proved against a real database in `atomic-writes.test.ts`. This exists so
+   * the paths that succeed behave the same.
+   */
+  recordAudit?: (entry: AuditedChange) => Promise<void>;
 }
 
 export class InMemoryTeamMemberRoleRepository implements TeamMemberRoleRepository {
@@ -29,7 +36,16 @@ export class InMemoryTeamMemberRoleRepository implements TeamMemberRoleRepositor
     return role;
   }
 
-  async replace(data: { memberId: string; teamId: string; role: TeamRole }): Promise<TeamMemberRole> {
+  /**
+   * Requirements: NFR 3.5; 19.5-19.7
+   *
+   * `audit` is written with the change by the real repository, in one
+   * transaction. Not atomic here — see `atomic-writes.test.ts` (NFR 3.7).
+   */
+  async replace(
+    data: { memberId: string; teamId: string; role: TeamRole },
+    audit?: AuditedChange,
+  ): Promise<TeamMemberRole> {
     const current = await this.findByMemberAndTeam(data.memberId, data.teamId);
     if (current.some(({ role }) => role === 'delivery_manager') && data.role !== 'delivery_manager') {
       if (await this.countByTeamAndRole(data.teamId, 'delivery_manager') <= 1) {
@@ -39,7 +55,9 @@ export class InMemoryTeamMemberRoleRepository implements TeamMemberRoleRepositor
     if (current.length === 1 && current[0].role === data.role) return current[0];
 
     for (const role of current) this.store.delete(role.id);
-    return this.assign(data);
+    const assigned = await this.assign(data);
+    if (audit) await this.deps.recordAudit?.(audit);
+    return assigned;
   }
 
   async remove(memberId: string, teamId: string, role: string): Promise<void> {
@@ -48,7 +66,11 @@ export class InMemoryTeamMemberRoleRepository implements TeamMemberRoleRepositor
     }
   }
 
-  async removeMemberWithRoleProtection(memberId: string, teamId: string): Promise<void> {
+  async removeMemberWithRoleProtection(
+    memberId: string,
+    teamId: string,
+    audit: AuditedChange,
+  ): Promise<void> {
     const roles = await this.findByMemberAndTeam(memberId, teamId);
     if (roles.some(({ role }) => role === 'delivery_manager') &&
         await this.countByTeamAndRole(teamId, 'delivery_manager') <= 1) {
@@ -57,6 +79,7 @@ export class InMemoryTeamMemberRoleRepository implements TeamMemberRoleRepositor
     if (!this.deps.removeMember) throw new ConflictError('Member removal is not configured');
     await this.deps.removeMember(memberId);
     for (const role of roles) this.store.delete(role.id);
+    await this.deps.recordAudit?.(audit);
   }
 
   async findByMemberAndTeam(memberId: string, teamId: string): Promise<TeamMemberRole[]> {

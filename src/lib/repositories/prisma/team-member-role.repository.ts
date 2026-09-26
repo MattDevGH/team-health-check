@@ -3,7 +3,7 @@ import { ConflictError, NotFoundError } from '@/lib/errors';
 import type { PrismaClient } from '@/generated/prisma';
 
 import type { TeamMemberRole } from '../entities';
-import type { TeamMemberRoleRepository } from '../types';
+import type { AuditedChange, TeamMemberRoleRepository } from '../types';
 
 /** Prisma role operations keep replacement and final-manager checks transactional. */
 export class PrismaTeamMemberRoleRepository implements TeamMemberRoleRepository {
@@ -18,7 +18,18 @@ export class PrismaTeamMemberRoleRepository implements TeamMemberRoleRepository 
     return this.map(record);
   }
 
-  async replace(data: { memberId: string; teamId: string; role: TeamRole }): Promise<TeamMemberRole> {
+  /**
+   * Requirements: NFR 3.5; 19.5-19.7
+   *
+   * `audit` is written in the same transaction, when given. It is optional
+   * because replacing a role with the one it already has changes nothing, and
+   * an audit log recording a change that did not happen is its own defect —
+   * the caller decides, and the write is atomic either way.
+   */
+  async replace(
+    data: { memberId: string; teamId: string; role: TeamRole },
+    audit?: AuditedChange,
+  ): Promise<TeamMemberRole> {
     const record = await this.prisma.$transaction(async (tx) => {
       const current = await tx.teamMemberRole.findMany({
         where: { memberId: data.memberId, teamId: data.teamId },
@@ -29,7 +40,9 @@ export class PrismaTeamMemberRoleRepository implements TeamMemberRoleRepository 
       }
       if (current.length === 1 && current[0].role === data.role) return current[0];
       await tx.teamMemberRole.deleteMany({ where: { memberId: data.memberId, teamId: data.teamId } });
-      return tx.teamMemberRole.create({ data });
+      const created = await tx.teamMemberRole.create({ data });
+      if (audit) await tx.auditLogEntry.create({ data: audit });
+      return created;
     });
     return this.map(record);
   }
@@ -38,7 +51,22 @@ export class PrismaTeamMemberRoleRepository implements TeamMemberRoleRepository 
     await this.prisma.teamMemberRole.deleteMany({ where: { memberId, teamId, role } });
   }
 
-  async removeMemberWithRoleProtection(memberId: string, teamId: string): Promise<void> {
+  /**
+   * Requirements: NFR 3.5; 1.6, 19.7
+   *
+   * The audit entry is written inside the same transaction as the change.
+   *
+   * `removeMember` was documented as doing this — "atomically protect the
+   * final manager, remove, and audit" — while the removal and the entry were
+   * two separate awaits. A failure between them removed somebody from a team
+   * with nothing recording who did it or why, in a log that exists to answer
+   * exactly that.
+   */
+  async removeMemberWithRoleProtection(
+    memberId: string,
+    teamId: string,
+    audit: AuditedChange,
+  ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const member = await tx.teamMember.findFirst({ where: { id: memberId, teamId } });
       if (!member) throw new NotFoundError('Team member not found in this team');
@@ -57,6 +85,7 @@ export class PrismaTeamMemberRoleRepository implements TeamMemberRoleRepository 
       await tx.userSession.deleteMany({ where: { memberId } });
       await tx.teamMemberRole.deleteMany({ where: { memberId, teamId } });
       await tx.teamMember.delete({ where: { id: memberId } });
+      await tx.auditLogEntry.create({ data: audit });
     });
   }
 

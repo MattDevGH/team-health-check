@@ -1,6 +1,6 @@
 import type { PrismaClient, HealthCheckSession as PrismaHealthCheckSession } from '@/generated/prisma';
 import type { HealthCheckSession } from '../entities';
-import type { SessionRepository } from '../types';
+import type { OpenCycleParams, SessionRepository } from '../types';
 import { NotFoundError } from '../../errors';
 
 /**
@@ -56,9 +56,95 @@ export class PrismaSessionRepository implements SessionRepository {
     return records.map((r) => this.mapToEntity(r));
   }
 
+  /**
+   * Requirements: NFR 3.5, NFR 3.6
+   *
+   * Records everything materialising a session produces, as one outcome: the
+   * aggregate rows and the timestamp saying the work was done.
+   *
+   * It lives on the session repository rather than the aggregate one because
+   * atomicity has to have a single owner — the two tables are written in one
+   * transaction, and a transaction cannot span two clients.
+   *
+   * Deletes the session's existing aggregates first, inside the same
+   * transaction, which is what makes a retry possible. `(sessionId,
+   * questionId)` is unique, so an attempt that failed after writing some rows
+   * would otherwise collide with itself for ever.
+   */
+  /**
+   * Requirements: NFR 3.5, NFR 3.6; 6.1
+   *
+   * Opens a cycle: closes the session this one replaces, creates the new one,
+   * and issues a Session_Link for every member — as one outcome.
+   *
+   * These were three steps. A failure after the session was created left a
+   * check nobody could answer, which is what happened in production on
+   * 2026-09-14 and why `reaching-your-health-check` exists; a failure part-way
+   * through the links left some of the team able to reach it and the rest not.
+   * Closing the previous session belongs in the same transaction because a
+   * team left with no open check at all would be worse than the failure.
+   */
+  async openCycle(params: OpenCycleParams): Promise<HealthCheckSession> {
+    const record = await this.prisma.$transaction(async (tx) => {
+      if (params.closeExisting) {
+        await tx.healthCheckSession.update({
+          where: { id: params.closeExisting.id },
+          data: { status: 'closed', actualCloseAt: params.closeExisting.closedAt },
+        });
+      }
+
+      const created = await tx.healthCheckSession.create({ data: params.session });
+
+      for (const link of params.links) {
+        await tx.sessionLink.create({ data: { ...link, sessionId: created.id } });
+      }
+
+      return created;
+    });
+
+    return this.mapToEntity(record);
+  }
+
+  async materialise(
+    sessionId: string,
+    aggregates: Array<{
+      questionId: string;
+      averageScore: number;
+      responseCount: number;
+      improvingCount: number;
+      stableCount: number;
+      decliningCount: number;
+    }>,
+    at: Date,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.sessionAggregate.deleteMany({ where: { sessionId } });
+
+      for (const aggregate of aggregates) {
+        await tx.sessionAggregate.create({ data: { sessionId, ...aggregate } });
+      }
+
+      /*
+       * Set last, inside the same transaction.
+       *
+       * A check nobody answered produces zero aggregates, which is
+       * indistinguishable from never having been computed — so the timestamp
+       * is the only thing that says the work happened, and it must not survive
+       * a rollback of the rows it describes.
+       */
+      await tx.healthCheckSession.update({
+        where: { id: sessionId },
+        data: { materialisedAt: at },
+      });
+    });
+  }
+
   async update(
     id: string,
-    data: Partial<Pick<HealthCheckSession, 'status' | 'actualCloseAt'>>
+    // Matches the interface. These were narrower than the contract they
+    // implement, which TypeScript permits for methods and which meant
+    // `materialisedAt` was accepted at runtime while being undeclared here.
+    data: Partial<Pick<HealthCheckSession, 'status' | 'actualCloseAt' | 'materialisedAt'>>
   ): Promise<HealthCheckSession> {
     const existing = await this.prisma.healthCheckSession.findUnique({ where: { id } });
     if (!existing) {

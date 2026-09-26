@@ -458,6 +458,24 @@ because they were not enough.*
 2. THE database SHALL support atomic transactions for response upserts to prevent partial writes.
 3. THE Web_Interface SHALL prioritise data durability over availability — in the event of a failure, the system SHALL preserve all previously committed data even if the service is temporarily unavailable.
 4. WHEN a Health_Check_Session closes, THE Web_Interface SHALL wait a minimum of 30 seconds after the close timestamp before materialising aggregate snapshots, to ensure all in-flight response submissions that were initiated before close have completed their database transactions.
+5. WHERE more than one row is written to record a single outcome, THE Web_Interface SHALL write them in one database transaction, so that the outcome either happened or did not. Materialising a session's aggregates, opening a Health_Check_Session together with its Session_Links, and recording a change together with its audit entry are each one outcome rather than a sequence of independent writes.
+6. WHERE an operation covered by criterion 5 fails and is attempted again, THE retry SHALL succeed rather than conflict with what the failed attempt left behind. A partial write that makes its own retry impossible is worse than the failure that caused it, because nothing can then repair it without intervention.
+7. THE atomicity required by criterion 5 SHALL be demonstrated against a real database by injecting a failure part-way through, since an in-memory fake has no transaction to roll back and cannot show the property either way.
+
+*Criteria 5 to 7 added 2026-09-26, after an external review observed that only
+one repository used a transaction.*
+
+*The sharpest case was materialisation. It created one `SessionAggregate` row
+per question in a loop and then set `materialisedAt` on the session. A failure
+part-way left some rows written and the flag unset — and `(sessionId,
+questionId)` is unique, so the retry hit the rows the first attempt had
+already made and threw. The session could never be materialised again, and
+nothing in the application could repair it.*
+
+*Criterion 7 is there because the tests that covered these paths asserted
+against in-memory fakes, which apply writes one at a time and have nothing to
+roll back. They proved the service called the repositories, which was never in
+doubt.*
 
 ### NFR 4: Data Retention and Deletion
 

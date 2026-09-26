@@ -56,7 +56,6 @@ describe('Data Deletion Properties', () => {
               sessionLinkRepo: repos.sessionLink,
               teamMemberRepo: repos.teamMember,
               responseRepo: repos.response,
-              sessionAggregateRepo: repos.sessionAggregate,
             });
             const responseService = createResponseService({
               responseRepo: repos.response,
