@@ -421,6 +421,17 @@ because they were not enough.*
 5. WHEN deletion is confirmed, THE Web_Interface SHALL immediately remove all individual Response records associated with that Team_Member across all sessions (including any open session), and SHALL record the deletion event in the audit log (without recording the deleted data itself). The audit log entry SHALL contain: the TeamMemberId in hashed or masked form (not plaintext), the UTC timestamp of the deletion, the action type "data_deletion", and the TeamId. The entry SHALL NOT contain any deleted response data or individual scores.
 6. IF data deletion occurs while a Health_Check_Session is open, THE Web_Interface SHALL remove the Team_Member's active Responses for that session and decrement the live participation count accordingly.
 6. THE Web_Interface SHALL NOT modify materialised aggregate snapshots when individual responses are deleted, as these constitute anonymised statistical data from which no individual can be re-identified.
+
+*There are two criteria numbered 6, and that is not a display error. Noticed
+2026-09-26 and left as it is: renumbering would silently change what every
+existing citation of "NFR 4.6" points at, and `check-requirement-references.ts`
+verifies that a reference resolves, not that it resolves to the criterion its
+author meant. A rename that the checker cannot police is worse than a
+duplicate a reader can see.*
+
+*So: **"NFR 4.6" is ambiguous.** The first is about deletion during an open
+session, the second about leaving materialised aggregates alone. Anything
+citing it should say which, and new work should cite 4.7 or later.*
 7. THE Web_Interface SHALL inform the Team_Member at the point of deletion that historical aggregate data will be retained as it is anonymised and cannot be attributed to them.
 8. A response score, a trend indicator, a record identifier from a real team, a member handle or a session token SHALL NOT appear in a tracked document. The rule that keeps these out of logs exists because they are the confidential payload of the product; a file committed to the repository is read by more people than a log is, and this repository is public.
 
