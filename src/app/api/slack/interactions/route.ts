@@ -103,7 +103,18 @@ export const POST = withErrorHandling(async (request: Request): Promise<Response
   if (payload.type === 'block_actions' && payload.user?.id) {
     const queue = createInteractionQueue({ repo: repos.interactionQueue });
 
-    await queue.enqueue({
+    /*
+     * Requirements: 5.12; Slack Sign In NFR 1.5
+     *
+     * Slack replays the whole interaction when it believes a delivery failed,
+     * and `trigger_id` is the same on every replay. Null back means this
+     * interaction is already queued or already done, so there is nothing to
+     * add and nothing to drain — acknowledge and stop.
+     *
+     * The score upsert would have survived a replay on its own key. The reply
+     * would not: the member would be told twice.
+     */
+    const accepted = await queue.enqueue({
       interactionPayload: encodeQueuedDelivery({
         kind: 'score_actions',
         slackUserId: payload.user.id,
@@ -112,7 +123,12 @@ export const POST = withErrorHandling(async (request: Request): Promise<Response
       }),
       responseUrl: payload.responseUrl ?? '',
       failureReason: 'Accepted, not yet applied',
+      idempotencyKey: payload.triggerId,
     });
+
+    if (accepted === null) {
+      return new Response(null, { status: 200 });
+    }
 
     const drain = afterResponse(async () => {
       try {

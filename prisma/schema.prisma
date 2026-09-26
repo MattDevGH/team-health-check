@@ -249,6 +249,11 @@ model SlackInteractionQueue {
   status             String    @default("pending")
   createdAt          DateTime  @default(now())
   nextRetryAt        DateTime?
+  /// Stable per interaction and the same across Slack's retries, so a replay
+  /// cannot enqueue the same work twice (Requirement 5.12, Slack Sign In NFR 1.5).
+  /// Nullable because entries queued by a failed outbound delivery have no
+  /// interaction behind them.
+  idempotencyKey     String?   @unique
 }
 
 /// Proof that the scheduler ran, whether or not it did anything.

@@ -5,16 +5,31 @@ import { NotFoundError } from '../../errors';
 export class InMemoryInteractionQueueRepository implements InteractionQueueRepository {
   private store = new Map<string, InteractionQueueEntry>();
 
+  /**
+   * Requirements: 5.12; Slack Sign In NFR 1.5
+   *
+   * Null when the key is already present, matching the unique index the real
+   * repository relies on.
+   */
   async add(data: {
     interactionPayload: string;
     responseUrl: string;
     failureReason: string;
-  }): Promise<InteractionQueueEntry> {
+    idempotencyKey?: string;
+  }): Promise<InteractionQueueEntry | null> {
+    if (
+      data.idempotencyKey !== undefined &&
+      [...this.store.values()].some(held => held.idempotencyKey === data.idempotencyKey)
+    ) {
+      return null;
+    }
+
     const entry: InteractionQueueEntry = {
       id: crypto.randomUUID(),
       interactionPayload: data.interactionPayload,
       responseUrl: data.responseUrl,
       failureReason: data.failureReason,
+      idempotencyKey: data.idempotencyKey ?? null,
       retryCount: 0,
       status: 'pending',
       createdAt: new Date(),

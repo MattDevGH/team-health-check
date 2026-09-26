@@ -640,6 +640,73 @@ describe('POST /api/slack/interactions', () => {
   });
 
   /**
+   * Requirements: 5.12; Slack Sign In NFR 1.5
+   *
+   * Slack replays the whole interaction when it believes a delivery failed,
+   * with the same `trigger_id`. The score upsert survives that on its own key
+   * — the member, session and question are unchanged — but the reply would be
+   * sent twice, and the work would be done twice.
+   */
+  describe('the same interaction arriving twice', () => {
+    async function seedLinked(slackUserId: string, email: string) {
+      const team = await repos.team.create({ name: `Replay ${slackUserId}` });
+      const member = await repos.teamMember.create({ teamId: team.id, name: 'Replay', email });
+      const session = await repos.session.create({ teamId: team.id, status: 'open' });
+      await linkSlackUser(slackUserId, member.id);
+      return session;
+    }
+
+    function click(slackUserId: string, triggerId: string) {
+      return makeSignedRequest(
+        buildInteractionPayload({
+          user: { id: slackUserId, name: 'replay' },
+          trigger_id: triggerId,
+          actions: [
+            {
+              action_id: 'score_q-delivering-value',
+              value: 'q-delivering-value:4',
+              type: 'button',
+            },
+          ],
+        }),
+      );
+    }
+
+    it('is acknowledged both times and applied once', async () => {
+      const session = await seedLinked('U_REPLAY_1', 'replay1@example.invalid');
+
+      expect((await POST(click('U_REPLAY_1', 'trigger-abc'))).status).toBe(200);
+      expect((await POST(click('U_REPLAY_1', 'trigger-abc'))).status).toBe(200);
+
+      // One answer, and one queue entry behind it
+      expect(await repos.response.findBySession(session.id)).toHaveLength(1);
+      const queued = await repos.interactionQueue.findPending(new Date());
+      expect(queued.filter(e => e.idempotencyKey === 'trigger-abc')).toHaveLength(0);
+    });
+
+    it('tells the member once, not once per retry', async () => {
+      await seedLinked('U_REPLAY_2', 'replay2@example.invalid');
+      const before = responder.replies.length;
+
+      await POST(click('U_REPLAY_2', 'trigger-def'));
+      await POST(click('U_REPLAY_2', 'trigger-def'));
+
+      expect(responder.replies.length - before).toBe(1);
+    });
+
+    it('treats a different interaction as different work', async () => {
+      const session = await seedLinked('U_REPLAY_3', 'replay3@example.invalid');
+
+      await POST(click('U_REPLAY_3', 'trigger-one'));
+      await POST(click('U_REPLAY_3', 'trigger-two'));
+
+      // Same question, so still one stored answer — but both were processed,
+      // which is what the second reply shows
+      expect(await repos.response.findBySession(session.id)).toHaveLength(1);
+    });
+  });
+
+  /**
    * Requirements: Slack Sign In NFR 1.5, NFR 1.6
    *
    * A correctly signed request can still carry a body this application cannot

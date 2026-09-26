@@ -92,9 +92,9 @@ describe('PrismaInteractionQueueRepository', () => {
       failureReason: 'channel_not_found',
     });
 
-    expect(entry.status).toBe('pending');
-    expect(entry.retryCount).toBe(0);
-    expect(entry.nextRetryAt).not.toBeNull();
+    expect(entry!.status).toBe('pending');
+    expect(entry!.retryCount).toBe(0);
+    expect(entry!.nextRetryAt).not.toBeNull();
     expect(create).toHaveBeenCalledTimes(1);
   });
 

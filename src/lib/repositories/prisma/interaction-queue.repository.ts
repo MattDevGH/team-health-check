@@ -15,22 +15,38 @@ import type {
 export class PrismaInteractionQueueRepository implements InteractionQueueRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
+  /**
+   * Requirements: 5.12; Slack Sign In NFR 1.5
+   *
+   * Null when the key names work already queued or done. The unique index
+   * decides, not a prior read: two Slack retries can arrive at once, and a
+   * check-then-insert would let both through.
+   */
   async add(data: {
     interactionPayload: string;
     responseUrl: string;
     failureReason: string;
-  }): Promise<InteractionQueueEntry> {
-    const record = await this.prisma.slackInteractionQueue.create({
+    idempotencyKey?: string;
+  }): Promise<InteractionQueueEntry | null> {
+    let record;
+    try {
+      record = await this.prisma.slackInteractionQueue.create({
       data: {
         interactionPayload: data.interactionPayload,
         responseUrl: data.responseUrl,
         failureReason: data.failureReason,
+        idempotencyKey: data.idempotencyKey,
         retryCount: 0,
         status: 'pending',
         // Due immediately; the first drain applies backoff if it fails again
         nextRetryAt: new Date(),
       },
-    });
+      });
+    } catch (error: unknown) {
+      // P2002 is the unique constraint: this interaction is already queued
+      if (isUniqueConstraintViolation(error)) return null;
+      throw error;
+    }
 
     return this.mapToEntity(record);
   }
@@ -83,4 +99,13 @@ export class PrismaInteractionQueueRepository implements InteractionQueueReposit
       nextRetryAt: record.nextRetryAt,
     };
   }
+}
+
+/** Prisma reports a unique index collision as P2002. */
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === 'P2002'
+  );
 }

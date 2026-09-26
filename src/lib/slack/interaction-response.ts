@@ -14,6 +14,8 @@
  * Requirements: Original 5.7, 5.8, 5.9
  */
 
+import { isAllowedResponseUrl } from '@/lib/slack/response-url';
+
 /** Sends a member-visible reply for a Slack interaction. */
 export interface InteractionResponder {
   /** Returns true when Slack accepted the reply. Never throws. */
@@ -50,10 +52,25 @@ export function createInteractionResponder(
 
   return {
     async respond(responseUrl: string, text: string): Promise<boolean> {
+      /*
+       * Requirement: Slack Sign In NFR 1.5
+       *
+       * Checked here rather than at decode time because this is the only
+       * place a connection is opened, and the queue replays entries through
+       * it too — a URL stored minutes ago gets the same check as a live one.
+       */
+      if (!isAllowedResponseUrl(responseUrl)) {
+        console.error('Refusing to send a Slack reply to a URL outside hooks.slack.com');
+        return false;
+      }
+
       try {
         const response = await fetchImpl(responseUrl, {
           method: 'POST',
           signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
+          // A redirect would move the request to an address that never passed
+          // the check above
+          redirect: 'error',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             response_type: 'ephemeral',

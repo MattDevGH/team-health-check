@@ -63,6 +63,25 @@ describe('createInteractionResponder', () => {
   });
 
   /**
+   * Requirement: Slack Sign In NFR 1.5
+   *
+   * The only field in a Slack payload that makes this server open a connection
+   * to an address it was handed.
+   */
+  it('does not open a connection to a URL outside hooks.slack.com', async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 200 }));
+
+    const delivered = await createInteractionResponder({ fetchImpl }).respond(
+      'https://evil.example.com/actions/T1/B2/x',
+      'hi',
+    );
+
+    expect(delivered).toBe(false);
+    // Refused before the request, not after it
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  /**
    * Requirement NFR 1.2 — acknowledge within three seconds.
    *
    * There was no timeout at all. A `response_url` that accepted the connection

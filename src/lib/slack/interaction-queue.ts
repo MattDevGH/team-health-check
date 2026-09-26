@@ -9,6 +9,8 @@ export interface InteractionQueueEntry {
   interactionPayload: string;
   responseUrl: string;
   failureReason: string | null;
+  /** Stable per interaction and the same across Slack retries; null when none. */
+  idempotencyKey?: string | null;
   retryCount: number;
   status: 'pending' | 'delivered' | 'failed';
   createdAt: Date;
@@ -16,11 +18,23 @@ export interface InteractionQueueEntry {
 }
 
 export interface InteractionQueueRepository {
+  /**
+   * Requirements: 5.12; Slack Sign In NFR 1.5
+   *
+   * Returns null when `idempotencyKey` names work already queued or done.
+   * Slack retries an interaction it believes failed, replaying the same
+   * payload — the score upsert survives that on its own key, but enqueuing
+   * twice would apply it twice and reply twice.
+   *
+   * Decided by the unique index rather than a prior read, because two retries
+   * can arrive at once and a check-then-insert would let both through.
+   */
   add(entry: {
     interactionPayload: string;
     responseUrl: string;
     failureReason: string;
-  }): Promise<InteractionQueueEntry>;
+    idempotencyKey?: string;
+  }): Promise<InteractionQueueEntry | null>;
   findPending(now: Date): Promise<InteractionQueueEntry[]>;
   markDelivered(id: string): Promise<void>;
   markFailed(id: string, failureReason: string): Promise<void>;
@@ -38,13 +52,20 @@ function calculateBackoff(retryCount: number): number {
 export function createInteractionQueue(deps: { repo: InteractionQueueRepository }) {
   return {
     /**
-     * Enqueue a failed interaction for later retry.
+     * Enqueue work for later retry.
+     *
+     * Requirements: 5.12; Slack Sign In NFR 1.5
+     *
+     * Null when `idempotencyKey` names an interaction already queued or done —
+     * Slack replays the same payload when it believes a delivery failed, and
+     * accepting it twice would apply the scores twice and reply twice.
      */
     async enqueue(params: {
       interactionPayload: string;
       responseUrl: string;
+      idempotencyKey?: string;
       failureReason: string;
-    }): Promise<InteractionQueueEntry> {
+    }): Promise<InteractionQueueEntry | null> {
       return deps.repo.add(params);
     },
 
