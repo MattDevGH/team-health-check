@@ -1075,6 +1075,15 @@ because what it exists to catch is a native module that will not install, a
 path assumption, or a process this platform spawns differently. That is what
 `better-sqlite3` 13 did on 2026-09-24 while every Linux check stayed green.
 
+**The Windows job earned itself on its first run.** `apply-migrations` failed
+with "Test timed out in 5000ms" after 9.9 seconds, while neighbouring tests in
+the same file passed at 4.7 and 6.4 — ten integration tests open a real SQLite
+file, apply the committed migrations and query through the adapter, and Vitest's
+five-second default was never right for them. Linux was simply fast enough to
+hide it. They run as their own project now with a sixty-second budget, rather
+than raising it for the two thousand tests that should finish in milliseconds.
+Totals compared across the split, because that has bitten here before.
+
 `browserslist` is overridden to 4.29.1, which clears the last high-severity
 advisory. It sits under `eslint-config-next`, and neither `npm audit fix` nor
 `npm update` would apply it: both report no changes, because the lockfile's
