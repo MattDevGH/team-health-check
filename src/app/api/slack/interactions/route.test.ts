@@ -8,7 +8,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import crypto from 'node:crypto';
-import { POST, _repos as repos, _setInteractionResponder } from './route';
+import { POST, _repos as repos, _setInteractionResponder , _setAfterResponse } from './route';
 import type { InteractionResponder } from '@/lib/slack/interaction-response';
 
 /** Records replies instead of POSTing to Slack's response_url. */
@@ -81,6 +81,14 @@ describe('POST /api/slack/interactions', () => {
     vi.stubEnv('SLACK_SIGNING_SECRET', 'test-slack-signing-secret');
     responder = createRecordingResponder();
     _setInteractionResponder(responder);
+
+    /*
+     * The route acknowledges before applying the scores, handing the work to
+     * Next's `after`. That needs a request context this test does not have,
+     * and a test that could not await the work could only assert the 200 came
+     * back — the half that was never in doubt. Run it inline and wait.
+     */
+    _setAfterResponse(work => work());
   });
 
   it('returns 403 when signature is invalid', async () => {
@@ -531,6 +539,104 @@ describe('POST /api/slack/interactions', () => {
     const scores = responses.map(r => ({ questionId: r.questionId, score: r.score }));
     expect(scores).toContainEqual({ questionId: 'q-delivering-value', score: 4 });
     expect(scores).toContainEqual({ questionId: 'q-team-collaboration', score: 5 });
+  });
+
+  /**
+   * Requirements: NFR 1.2; Slack Sign In NFR 1.1
+   *
+   * Slack allows three seconds. The route used to resolve the member, look up
+   * the open session, upsert a response per button, fetch a question title for
+   * each, and POST an outbound reply — all before answering. Its own header
+   * claimed the opposite architecture.
+   *
+   * These hold the post-response work rather than running it, which is the
+   * only way to see the order from outside.
+   */
+  describe('acknowledging before doing the work', () => {
+    /** Captures the work instead of running it, so the test decides when. */
+    function deferWork() {
+      const pending: Array<() => Promise<void>> = [];
+      _setAfterResponse(work => {
+        pending.push(work);
+      });
+      return {
+        async run() {
+          for (const work of pending) await work();
+        },
+        get count() {
+          return pending.length;
+        },
+      };
+    }
+
+    async function seedLinkedMember(slackUserId: string, email: string) {
+      const team = await repos.team.create({ name: `Ack Team ${slackUserId}` });
+      const member = await repos.teamMember.create({ teamId: team.id, name: 'Ack', email });
+      const session = await repos.session.create({ teamId: team.id, status: 'open' });
+      await linkSlackUser(slackUserId, member.id);
+      return { session };
+    }
+
+    it('answers 200 before a single score has been stored', async () => {
+      const { session } = await seedLinkedMember('U_ACK_1', 'ack1@example.invalid');
+      const work = deferWork();
+
+      const response = await POST(
+        makeSignedRequest(
+          buildInteractionPayload({
+            user: { id: 'U_ACK_1', name: 'ack' },
+            actions: [
+              {
+                action_id: 'score_q-delivering-value',
+                value: 'q-delivering-value:4',
+                type: 'button',
+              },
+            ],
+          }),
+        ),
+      );
+
+      expect(response.status).toBe(200);
+      // The acknowledgement is out and nothing has been applied yet
+      expect(await repos.response.findBySession(session.id)).toHaveLength(0);
+      expect(work.count).toBe(1);
+
+      await work.run();
+
+      expect(await repos.response.findBySession(session.id)).toHaveLength(1);
+    });
+
+    /**
+     * The reason this is a durable queue rather than unawaited work: a
+     * serverless runtime may stop the work once the response is flushed. If
+     * that happens the buttons are still written down, and a later scheduler
+     * tick applies them.
+     */
+    it('leaves the work in the queue, so a tick can finish it', async () => {
+      await seedLinkedMember('U_ACK_2', 'ack2@example.invalid');
+      deferWork();
+
+      await POST(
+        makeSignedRequest(
+          buildInteractionPayload({
+            user: { id: 'U_ACK_2', name: 'ack' },
+            actions: [
+              {
+                action_id: 'score_q-delivering-value',
+                value: 'q-delivering-value:3',
+                type: 'button',
+              },
+            ],
+          }),
+        ),
+      );
+
+      const pending = await repos.interactionQueue.findPending(new Date());
+      expect(pending.length).toBeGreaterThan(0);
+      expect(pending.some(entry => entry.interactionPayload.includes('q-delivering-value:3'))).toBe(
+        true,
+      );
+    });
   });
 
   /**

@@ -387,12 +387,29 @@ is the door; this is everything the route did once something came through it.
     were spent waiting on somebody else's server
   - _Requirements: NFR 1.2_
 
-- [ ] 7.4 Acknowledge before processing, across a durable boundary
-  - The header says "Uses immediate ack pattern: respond 200 within 3 seconds"
-    and the code does every query, an upsert per action and an outbound fetch
-    first. It fails under ordinary latency, not under attack
+- [x] 7.4 Acknowledge before processing, across a durable boundary
+  - The header said "Uses immediate ack pattern: respond 200 within 3 seconds"
+    and the code did every query, an upsert per action and an outbound fetch
+    first. It failed under ordinary latency, not under attack
   - Not `void process(...)`: a serverless runtime may stop the work once the
-    response is flushed, which would trade a visible failure for a silent one
+    response is flushed, which would trade a visible failure for a silent one.
+    The buttons are written to the existing interaction queue first, so an
+    instance that stops between acknowledging and applying leaves work a later
+    scheduler tick finds. Draining immediately after the response is what keeps
+    the member's confirmation quick rather than up to a tick away
+  - Applying it had to leave the route: `applyScoreActions` takes its
+    dependencies, and `createProductionScoreActionDeps` builds the one set both
+    the route and the drain use, so a replayed entry behaves like a live one
+  - **Applying is the delivery; the reply is a courtesy on top.** The queue entry
+    counts as delivered once the scores are stored even if the reply fails,
+    because retrying would re-apply answers the member already gave in order to
+    tell them something they may no longer be waiting for
+  - The acknowledgement is unconditional: a failure in the drain is logged and
+    left in the queue rather than reaching the response, since Slack retries a
+    failed interaction by replaying the whole thing
+  - Proved by holding the post-response work rather than running it. With the
+    work moved back in front of the acknowledgement, exactly the two ordering
+    tests go red and the other 21 still pass
   - _Requirements: NFR 1.2; Slack Sign In NFR 1.1_
 
 - [ ] 7.5 Restrict `response_url`, and make a replayed interaction idempotent

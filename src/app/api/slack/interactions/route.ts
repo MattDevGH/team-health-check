@@ -12,16 +12,15 @@
 import { withErrorHandling } from '@/lib/api-utils';
 import { verifySlackSignature } from '@/lib/slack/verify-signature';
 import { container, repos } from '@/lib/container-production';
-import {
-  buildConfirmationText,
-  buildScoreRejectionText,
-  buildSessionEndedText,
-  buildUnlinkedText,
-  createInteractionResponder,
-} from '@/lib/slack/interaction-response';
+import { createInteractionResponder } from '@/lib/slack/interaction-response';
 import type { InteractionResponder } from '@/lib/slack/interaction-response';
-import { decodeInteractionPayload, parseScoreAction } from '@/lib/slack/interaction-payload';
-import type { SlackInteractionPayload } from '@/lib/slack/interaction-payload';
+import { decodeInteractionPayload } from '@/lib/slack/interaction-payload';
+import { after } from 'next/server';
+
+import { createInteractionQueue } from '@/lib/slack/interaction-queue';
+import { encodeQueuedDelivery } from '@/lib/slack/queued-delivery';
+import { createQueuedDeliveryDispatcher } from '@/lib/slack/queue-drain';
+import { createProductionScoreActionDeps } from '@/lib/slack/production-score-actions';
 
 // Test seam: allows route tests to seed data via repos
 export { repos as _repos, container as _container };
@@ -37,26 +36,22 @@ function getResponder(): InteractionResponder {
   return _responderOverride ?? createInteractionResponder();
 }
 
+type AfterResponse = (work: () => Promise<void>) => void | Promise<void>;
+
+let _afterOverride: AfterResponse | null = null;
+
 /**
- * Resolves a Slack user ID to the internal memberId.
- * Queries the SlackIdentityLink repository (backed by DB in production).
- * Returns null if no identity link exists.
+ * Test seam: replaces Next's `after` so a test can run the work and wait for
+ * it. `after` needs a request context this route does not have when POST is
+ * called directly, and a test that could not await the work could only assert
+ * that a 200 came back — which is the half that was never in doubt.
  */
-async function resolveMemberId(slackUserId: string): Promise<string | null> {
-  const link = await repos.slackIdentityLink.findBySlackUserId(slackUserId);
-  return link?.memberId ?? null;
+export function _setAfterResponse(fn: AfterResponse | null): void {
+  _afterOverride = fn;
 }
 
-/**
- * Finds the current open session for a member's team.
- * Returns null if no open session or member not found.
- */
-async function findOpenSessionForMember(memberId: string): Promise<string | null> {
-  const member = await repos.teamMember.findById(memberId);
-  if (!member) return null;
-
-  const session = await repos.session.findOpenByTeamId(member.teamId);
-  return session?.id ?? null;
+function afterResponse(work: () => Promise<void>): void | Promise<void> {
+  return (_afterOverride ?? after)(work);
 }
 
 export const POST = withErrorHandling(async (request: Request): Promise<Response> => {
@@ -86,98 +81,65 @@ export const POST = withErrorHandling(async (request: Request): Promise<Response
     return new Response('Malformed payload', { status: 400 });
   }
 
-  // Process block_actions (button clicks for score submission)
-  if (payload.type === 'block_actions') {
-    const replyText = await processScoreActions(payload);
-    await reply(payload.responseUrl, replyText);
+  /*
+   * Requirements: NFR 1.2; Slack Sign In NFR 1.1
+   *
+   * Write the work down, acknowledge, then do it.
+   *
+   * This route used to resolve the member, look up the open session, upsert a
+   * response per button, fetch a question title for each, and POST an outbound
+   * reply — all before returning the 200 Slack waits three seconds for. Its
+   * own header described the opposite. Under ordinary Turso latency that
+   * budget is not generous, and the outbound reply had no timeout until
+   * 2026-09-25.
+   *
+   * Not `void process(...)`: a serverless runtime may stop unawaited work once
+   * the response is flushed, which would trade a visible failure for a silently
+   * dropped answer. The buttons go into the durable queue first, so if this
+   * instance stops between acknowledging and applying, a later scheduler tick
+   * finds them. Draining immediately afterwards is what keeps the member's
+   * confirmation quick rather than up to a tick away.
+   */
+  if (payload.type === 'block_actions' && payload.user?.id) {
+    const queue = createInteractionQueue({ repo: repos.interactionQueue });
+
+    await queue.enqueue({
+      interactionPayload: encodeQueuedDelivery({
+        kind: 'score_actions',
+        slackUserId: payload.user.id,
+        actions: payload.actions ?? [],
+        responseUrl: payload.responseUrl,
+      }),
+      responseUrl: payload.responseUrl ?? '',
+      failureReason: 'Accepted, not yet applied',
+    });
+
+    const drain = afterResponse(async () => {
+      try {
+        await queue.processPending(
+          createQueuedDeliveryDispatcher({
+            responder: getResponder(),
+            scoreActions: createProductionScoreActionDeps(),
+          }),
+          new Date(),
+        );
+      } catch (error: unknown) {
+        /*
+         * The acknowledgement is unconditional (NFR 1.2). Whatever went wrong
+         * here, the entry is still pending in the queue and a later tick will
+         * try again — letting this reach the response would turn a retryable
+         * failure into one Slack sees, and Slack retries by replaying the
+         * whole interaction.
+         */
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`Slack scores queued but not applied inline: ${message}`);
+      }
+    });
+
+    // Only a test seam returns anything; Next's `after` returns void
+    if (drain) await drain;
   }
 
   // Return 200 to acknowledge (Slack requires response within 3 seconds)
   return new Response(null, { status: 200 });
 });
-
-/**
- * Processes the payload's score actions and returns the member-visible reply.
- * Returns null when there is nothing to say (malformed payload, no score actions).
- */
-async function processScoreActions(
-  payload: SlackInteractionPayload,
-): Promise<string | null> {
-  const slackUserId = payload.user?.id;
-  if (!slackUserId) {
-    // Malformed payload — nobody to reply to
-    return null;
-  }
-
-  const memberId = await resolveMemberId(slackUserId);
-  if (!memberId) {
-    return buildUnlinkedText();
-  }
-
-  const sessionId = await findOpenSessionForMember(memberId);
-  if (!sessionId) {
-    // Requirement 5.9: session ended, reject the submission and say so
-    return buildSessionEndedText();
-  }
-
-  const lines: string[] = [];
-
-  for (const action of payload.actions ?? []) {
-    if (!action.actionId?.startsWith('score_') || !action.value) {
-      continue;
-    }
-
-    const parsed = parseScoreAction(action.value);
-    if (!parsed) {
-      // Requirement 5.7: validation error naming the affected question
-      lines.push(buildScoreRejectionText(await questionTitle(questionIdOf(action.value))));
-      continue;
-    }
-
-    try {
-      // Upsert response via the service (handles uniqueness, Req 5.10)
-      await container.response.upsert({
-        memberId,
-        sessionId,
-        questionId: parsed.questionId,
-        score: parsed.score,
-      });
-      // Requirement 5.8: confirm the stored score
-      lines.push(buildConfirmationText(await questionTitle(parsed.questionId), parsed.score));
-    } catch {
-      lines.push(buildScoreRejectionText(await questionTitle(parsed.questionId)));
-    }
-  }
-
-  return lines.length > 0 ? lines.join('\n') : null;
-}
-
-/**
- * The question id from a value that would not parse, for the rejection
- * message. Split on the last colon, matching `parseScoreAction`.
- */
-function questionIdOf(value: string): string {
-  const separator = value.lastIndexOf(':');
-  return separator <= 0 ? value : value.slice(0, separator);
-}
-
-/** Resolves a question's display title, falling back to its id. */
-async function questionTitle(questionId: string): Promise<string> {
-  const question = await repos.question.findById(questionId);
-  return question?.title ?? questionId;
-}
-
-/**
- * Delivers the reply, if there is one and Slack gave us somewhere to send it.
- * A failed reply must never break the acknowledgement Slack is waiting for.
- */
-async function reply(responseUrl: string | undefined, text: string | null): Promise<void> {
-  if (!responseUrl || !text) return;
-
-  try {
-    await getResponder().respond(responseUrl, text);
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`Slack interaction reply failed: ${message}`);
-  }
-}
