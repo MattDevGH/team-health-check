@@ -12,15 +12,10 @@
 import { withErrorHandling } from '@/lib/api-utils';
 import { verifySlackSignature } from '@/lib/slack/verify-signature';
 import { container, repos } from '@/lib/container-production';
-import {
-  buildConfirmationText,
-  buildScoreRejectionText,
-  buildSessionEndedText,
-  buildUnlinkedText,
-  createInteractionResponder,
-} from '@/lib/slack/interaction-response';
+import { createInteractionResponder } from '@/lib/slack/interaction-response';
 import type { InteractionResponder } from '@/lib/slack/interaction-response';
-import { decodeInteractionPayload, parseScoreAction } from '@/lib/slack/interaction-payload';
+import { decodeInteractionPayload } from '@/lib/slack/interaction-payload';
+import { applyScoreActions } from '@/lib/slack/score-actions';
 import type { SlackInteractionPayload } from '@/lib/slack/interaction-payload';
 
 // Test seam: allows route tests to seed data via repos
@@ -97,74 +92,40 @@ export const POST = withErrorHandling(async (request: Request): Promise<Response
 });
 
 /**
- * Processes the payload's score actions and returns the member-visible reply.
- * Returns null when there is nothing to say (malformed payload, no score actions).
+ * The dependencies `applyScoreActions` needs, drawn from the production
+ * container.
+ *
+ * Named here rather than reached for inside the work itself, so the same
+ * processing can be replayed by a scheduler tick against whatever that process
+ * has — which is what acknowledging before processing requires.
  */
+function productionScoreActionDeps() {
+  return {
+    findMemberBySlackUserId: resolveMemberId,
+    findOpenSessionForMember,
+    questionTitle: async (questionId: string): Promise<string> => {
+      const question = await repos.question.findById(questionId);
+      return question?.title ?? questionId;
+    },
+    upsertResponse: async (params: {
+      memberId: string;
+      sessionId: string;
+      questionId: string;
+      score: number;
+    }): Promise<void> => {
+      await container.response.upsert(params);
+    },
+  };
+}
+
+/** Processes the payload's score actions and returns the member-visible reply. */
 async function processScoreActions(
   payload: SlackInteractionPayload,
 ): Promise<string | null> {
-  const slackUserId = payload.user?.id;
-  if (!slackUserId) {
-    // Malformed payload — nobody to reply to
-    return null;
-  }
-
-  const memberId = await resolveMemberId(slackUserId);
-  if (!memberId) {
-    return buildUnlinkedText();
-  }
-
-  const sessionId = await findOpenSessionForMember(memberId);
-  if (!sessionId) {
-    // Requirement 5.9: session ended, reject the submission and say so
-    return buildSessionEndedText();
-  }
-
-  const lines: string[] = [];
-
-  for (const action of payload.actions ?? []) {
-    if (!action.actionId?.startsWith('score_') || !action.value) {
-      continue;
-    }
-
-    const parsed = parseScoreAction(action.value);
-    if (!parsed) {
-      // Requirement 5.7: validation error naming the affected question
-      lines.push(buildScoreRejectionText(await questionTitle(questionIdOf(action.value))));
-      continue;
-    }
-
-    try {
-      // Upsert response via the service (handles uniqueness, Req 5.10)
-      await container.response.upsert({
-        memberId,
-        sessionId,
-        questionId: parsed.questionId,
-        score: parsed.score,
-      });
-      // Requirement 5.8: confirm the stored score
-      lines.push(buildConfirmationText(await questionTitle(parsed.questionId), parsed.score));
-    } catch {
-      lines.push(buildScoreRejectionText(await questionTitle(parsed.questionId)));
-    }
-  }
-
-  return lines.length > 0 ? lines.join('\n') : null;
-}
-
-/**
- * The question id from a value that would not parse, for the rejection
- * message. Split on the last colon, matching `parseScoreAction`.
- */
-function questionIdOf(value: string): string {
-  const separator = value.lastIndexOf(':');
-  return separator <= 0 ? value : value.slice(0, separator);
-}
-
-/** Resolves a question's display title, falling back to its id. */
-async function questionTitle(questionId: string): Promise<string> {
-  const question = await repos.question.findById(questionId);
-  return question?.title ?? questionId;
+  return applyScoreActions(productionScoreActionDeps(), {
+    slackUserId: payload.user?.id,
+    actions: payload.actions,
+  });
 }
 
 /**
