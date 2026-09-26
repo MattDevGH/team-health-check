@@ -1063,6 +1063,62 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**A green Playwright run could contain a test that failed twice** (2026-09-25).
+`retries: 2` in CI, and nothing looked at whether a pass had needed them — so
+the project's own rule that a flaky test is a defect was written down and
+enforced nowhere. It is enforced now: a run in which anything passed only after
+a retry fails, and names the test.
+
+Retries stay switched on deliberately. The point is to *record* the
+nondeterminism rather than lose the run to a single blip with no diagnosis. A
+test that failed every attempt is not flaky, it is broken, and the run is
+already failing for that reason — conflating the two sends the next person
+looking for the wrong thing.
+
+**`no-skips-reporter.ts` had been citing a requirement that does not say what
+it claimed.** Its header read "Requirement 10.5 asks for that to be impossible
+rather than merely discouraged"; Integration 10.5 is about running without
+external services, and 10.6 about the CI job existing. Neither mentions
+skipping. The citation *resolved*, so
+`check-requirement-references.ts` could not see it — the exact failure AGENTS.md
+warns about and says only reading the requirement catches. Integration 10.7 now
+says what the reporter does, 10.8 covers flakes, and 10.9 requires the reporter
+to be tested at all, which it never was.
+
+Testing it meant two boundary fixes. `vitest.config.mts` excluded `e2e/**`
+wholesale, so nothing in that folder could be unit tested; it excludes
+`e2e/**/*.spec.ts` now. Playwright's default `testMatch` then claimed the new
+`.test.ts` file and tried to run a vitest import in a browser job, so
+`testMatch` is explicit: **vitest owns `*.test.ts`, Playwright owns
+`*.spec.ts`**, and they no longer overlap.
+
+Counts checked against the split, because that has bitten before: 225 files and
+2255 tests, from 224 and 2243, which is the 9 reporter tests and 3 new CLI
+tests and nothing quietly dropped.
+
+**CI now runs on Windows too**, and the workflow's actions are pinned to commit
+SHAs rather than `@v7` tags. The Windows job is deliberately not the whole
+pipeline again — install from a clean tree, generate, type check, test, build —
+because what it exists to catch is a native module that will not install, a
+path assumption, or a process this platform spawns differently. That is what
+`better-sqlite3` 13 did on 2026-09-24 while every Linux check stayed green.
+
+**The Windows job earned itself on its first run.** `apply-migrations` failed
+with "Test timed out in 5000ms" after 9.9 seconds, while neighbouring tests in
+the same file passed at 4.7 and 6.4 — ten integration tests open a real SQLite
+file, apply the committed migrations and query through the adapter, and Vitest's
+five-second default was never right for them. Linux was simply fast enough to
+hide it. They run as their own project now with a sixty-second budget, rather
+than raising it for the two thousand tests that should finish in milliseconds.
+Totals compared across the split, because that has bitten here before.
+
+`browserslist` is overridden to 4.29.1, which clears the last high-severity
+advisory. It sits under `eslint-config-next`, and neither `npm audit fix` nor
+`npm update` would apply it: both report no changes, because the lockfile's
+existing resolution already satisfies every declared range. `fixAvailable: true`
+means a patched version exists in the registry, not that npm will reach for it.
+Verified with `npm ci`.
+
 **The interaction route asserted a type onto `JSON.parse` and called it
 decoding** (2026-09-25).
 
@@ -1093,6 +1149,7 @@ Left open deliberately: acknowledgement still happens after the work, which is
 the defect the header comment claims is already fixed. That needs a durable
 boundary rather than unawaited work, since a serverless runtime may stop the
 work once the response is flushed — trading a visible failure for a silent one.
+
 
 **This file was carrying the product's confidential payload** (2026-09-25).
 

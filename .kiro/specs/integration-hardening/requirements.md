@@ -159,6 +159,19 @@ This spec completes work nominally covered by the original Team Health Check spe
 4. THE Playwright test SHALL verify that response submission results in data visible on the trends dashboard (requires at least two sessions to show trend lines, or verifies the "needs more data" state for a single session).
 5. THE test suite SHALL run in CI without requiring external services (Slack, email) by using interceptors or test mode configuration.
 6. THE `.github/workflows/ci.yml` SHALL include a Playwright job that runs after the build step, using `TEST_MODE=true` environment configuration.
+7. A run containing a skipped test SHALL fail. Playwright reports a skipped test as a pass at the job level, so a required scenario could opt out and still report green — which is how the original happy path behaved for months, calling `test.skip` against an endpoint that never existed.
+8. A run in which any test passed only after a retry SHALL fail, and SHALL name the test that was nondeterministic. Retries stay enabled so the flake is recorded rather than merely fatal; what must not happen is a green build over a test that did not behave the same way twice.
+9. THE reporter that enforces criteria 7 and 8 SHALL itself be covered by tests. It is the only thing standing between a nondeterministic suite and a green check, and nothing else would notice if it stopped working.
+
+*Criteria 7 to 9 added 2026-09-25. Criterion 7 describes behaviour that existed
+since `no-skips-reporter.ts` was written; it had been citing "Integration 10.5,
+10.6", which are about running without external services and about the CI job
+existing. Neither mentions skipping. The citation resolved, so nothing caught
+it — the failure AGENTS.md describes as one the reference checker cannot see.*
+
+*Criterion 8 is new behaviour. `retries: 2` meant a test could fail twice and
+still produce a green build, which contradicts this project's own rule that a
+flaky test is a defect. The rule was written down and not enforced anywhere.*
 
 ### Requirement 11: Repository Hygiene
 
