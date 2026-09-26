@@ -36,7 +36,26 @@ import react from "@vitejs/plugin-react";
  * is the worst possible outcome of a performance change, and the only reason it
  * was caught is that the totals were compared before and after.
  */
-const EXCLUDE = ['node_modules/**', 'e2e/**', '.next/**', 'dist/**'];
+const EXCLUDE = ['node_modules/**', 'e2e/**/*.spec.ts', '.next/**', 'dist/**'];
+
+/**
+ * Tests that open a real database, and therefore take real time.
+ *
+ * Requirements: Integration 10.6
+ *
+ * Ten of these create a SQLite file, apply the committed migrations and run
+ * queries through the adapter. On Linux they finish inside Vitest's five-second
+ * default with room to spare. On the Windows runner added on 2026-09-25 they
+ * take five to ten seconds each, and `apply-migrations` failed on the first run
+ * of that job with "Test timed out in 5000ms" after 9.9 seconds — while
+ * neighbouring tests in the same file passed at 4.7 and 6.4.
+ *
+ * So the default was never right for these; Linux was simply fast enough to
+ * hide it. Raising it for the whole node project would let a genuinely hung
+ * unit test burn a minute before saying so, which is the wrong trade for the
+ * two thousand tests that should finish in milliseconds.
+ */
+const REAL_DATABASE = 'src/tests/integration/**/*.test.ts';
 
 export default defineConfig({
   plugins: [react()],
@@ -59,7 +78,21 @@ export default defineConfig({
           globals: true,
           setupFiles: ["./src/tests/setup-node.ts"],
           include: ["**/*.test.ts"],
+          exclude: [...EXCLUDE, REAL_DATABASE],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "integration",
+          environment: "node",
+          globals: true,
+          setupFiles: ["./src/tests/setup-node.ts"],
+          include: [REAL_DATABASE],
           exclude: EXCLUDE,
+          // See REAL_DATABASE above: a slow runner, not a hung test
+          testTimeout: 60_000,
+          hookTimeout: 60_000,
         },
       },
       {

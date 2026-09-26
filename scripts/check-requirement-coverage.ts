@@ -34,31 +34,50 @@ export function checkRequirementCoverage(description: string): {
   };
 }
 
-// CLI entrypoint
-if (process.argv[1]?.endsWith('check-requirement-coverage.ts')) {
-  const description = process.env.PR_DESCRIPTION ?? '';
+/** Where the CLI writes. Replaced in tests so nothing is spawned. */
+export interface CliOutput {
+  out(message: string): void;
+  err(message: string): void;
+}
 
+/**
+ * The gate exactly as CI runs it, returning the exit code rather than calling
+ * `process.exit`, so a test can exercise the enforced path in process.
+ *
+ * Until 2026-09-25 CI ran `check-requirement-coverage.sh` while these tests
+ * covered the TypeScript — two implementations of one rule, with a parity test
+ * spanning them, and a dependency on `bash` that a Windows environment did not
+ * satisfy. The shell is gone; this is the only implementation now, so the
+ * tested rule and the enforced rule cannot drift apart.
+ */
+export function runRequirementCoverageCli(
+  description: string,
+  output: CliOutput = { out: console.log, err: console.error },
+): number {
   if (!description.trim()) {
-    console.error(
-      '❌ No PR description provided. Set PR_DESCRIPTION environment variable.'
-    );
-    process.exit(1);
+    output.err('❌ No PR description provided. Set PR_DESCRIPTION environment variable.');
+    return 1;
   }
 
   const result = checkRequirementCoverage(description);
 
   if (result.pass) {
-    console.log(
-      `✅ Found ${result.matches.length} requirement reference(s): ${result.matches.join(', ')}`
+    output.out(
+      `✅ Found ${result.matches.length} requirement reference(s): ${result.matches.join(', ')}`,
     );
-    process.exit(0);
-  } else {
-    console.error(
-      '❌ No requirement references found in PR description.\n' +
-        '   Please tag at least one requirement affected by this change.\n' +
-        '   Examples: "Requirement 1.1", "Requirement NFR 4.5",\n' +
-        '             "Requirements: Explaining Itself 4.1"'
-    );
-    process.exit(1);
+    return 0;
   }
+
+  output.err(
+    '❌ No requirement references found in PR description.\n' +
+      '   Please tag at least one requirement affected by this change.\n' +
+      '   Examples: "Requirement 1.1", "Requirement NFR 4.5",\n' +
+      '             "Requirements: Explaining Itself 4.1"',
+  );
+  return 1;
+}
+
+// CLI entrypoint
+if (process.argv[1]?.endsWith('check-requirement-coverage.ts')) {
+  process.exit(runRequirementCoverageCli(process.env.PR_DESCRIPTION ?? ''));
 }
