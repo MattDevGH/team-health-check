@@ -90,6 +90,8 @@ export function createInMemoryRepositories(): Repositories {
   // Materialising writes a session's aggregates and its timestamp together,
   // which the real repository does in one transaction (NFR 3.5)
   session.setAggregateStore(sessionAggregate);
+  // Opening a cycle issues a link per member in the same operation (NFR 3.5)
+  session.setLinkStore(sessionLink);
   const question = new InMemoryQuestionRepository();
   const availability = new InMemoryAvailabilityRepository();
   const teamMemberRole = new InMemoryTeamMemberRoleRepository({

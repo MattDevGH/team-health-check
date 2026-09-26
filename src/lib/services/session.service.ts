@@ -39,6 +39,9 @@ export interface SessionService {
 /**
  * Factory function for creating the session service.
  */
+/** Requirement 6.6: a link outlives its session by a week and no longer. */
+const SESSION_LINK_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
+
 export function createSessionService(deps: SessionServiceDeps): SessionService {
   const {
     sessionRepo,
@@ -56,11 +59,10 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     }
 
     const members = await teamMemberRepo.findByTeamId(session.teamId);
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
 
     // If session is closed, expiry is 7 days after close; otherwise 7 days from now
     const baseTime = session.actualCloseAt ? session.actualCloseAt.getTime() : Date.now();
-    const expiresAt = new Date(baseTime + sevenDaysMs);
+    const expiresAt = new Date(baseTime + SESSION_LINK_LIFETIME_MS);
 
     for (const member of members) {
       const token = crypto.randomBytes(32).toString('hex');
@@ -74,17 +76,9 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
   }
 
   async function open(teamId: string, _userId: string): Promise<HealthCheckSession> {
-    // Enforce at-most-one open session: close existing open session
+    // Enforce at-most-one open session: the previous one closes as part of
+    // opening this cycle, in the same transaction (NFR 3.5)
     const existing = await sessionRepo.findOpenByTeamId(teamId);
-    if (existing) {
-      await sessionRepo.update(existing.id, {
-        status: 'closed',
-        // The injected clock, like every other time this service writes. It read
-        // `new Date()` here while the session replacing it took its dates from
-        // `now()`, so the two disagreed whenever a caller set one
-        actualCloseAt: now(),
-      });
-    }
 
     // Record the cycle's scheduled window so closing reminders and micro-pulse
     // bundling have a real close time to work from (design.md).
@@ -102,22 +96,40 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
         }
       : {};
 
-    // Create new open session
-    const session = await sessionRepo.create({
-      teamId,
-      status: 'open',
-      // One clock for the whole row. Left to the repository this was `new Date()`,
-      // so a tick given a past date created a session claiming to have opened
-      // today — and the scheduler reads exactly this field to decide whether the
-      // current cycle has already been served
-      actualOpenAt: openedAt,
-      ...scheduledWindow,
+    /*
+     * Requirements: NFR 3.5, NFR 3.6; 6.1
+     *
+     * One outcome: the previous session closes, the new one is created, and
+     * every member gets a link.
+     *
+     * These were three steps. A failure after the session was created left a
+     * check nobody could answer — which happened in production on 2026-09-14
+     * and is why `reaching-your-health-check` exists. A failure part-way
+     * through the links left some of the team able to reach it and the rest
+     * not, which is worse, because the check looks fine to whoever opened it.
+     *
+     * One clock for the whole row. Left to the repository this was
+     * `new Date()`, so a tick given a past date created a session claiming to
+     * have opened today — and the scheduler reads exactly this field to decide
+     * whether the current cycle has already been served.
+     */
+    const members = await teamMemberRepo.findByTeamId(teamId);
+    const expiresAt = new Date(openedAt.getTime() + SESSION_LINK_LIFETIME_MS);
+
+    return sessionRepo.openCycle({
+      closeExisting: existing ? { id: existing.id, closedAt: openedAt } : undefined,
+      session: {
+        teamId,
+        status: 'open',
+        actualOpenAt: openedAt,
+        ...scheduledWindow,
+      },
+      links: members.map(member => ({
+        token: crypto.randomBytes(32).toString('hex'),
+        memberId: member.id,
+        expiresAt,
+      })),
     });
-
-    // Generate session links for all team members
-    await generateSessionLinks(session.id);
-
-    return session;
   }
 
   async function get(

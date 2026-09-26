@@ -126,3 +126,130 @@ describe('materialising a session', () => {
     expect((await sessionRepo.findById(sessionId))?.materialisedAt).not.toBeNull();
   });
 });
+
+/**
+ * Requirements: NFR 3.5, NFR 3.6; 6.1
+ *
+ * Opening a cycle closes the previous session, creates the new one and issues
+ * a Session_Link for every member. A session that exists with no links is a
+ * check nobody can answer — which happened in production on 2026-09-14 and is
+ * why `reaching-your-health-check` exists.
+ */
+describe('opening a health check', () => {
+  let db: CountedDatabase;
+  let sessionRepo: PrismaSessionRepository;
+  let teamId = '';
+  let memberIds: string[] = [];
+
+  beforeEach(async () => {
+    db = await createCountedDatabase();
+    sessionRepo = new PrismaSessionRepository(db.prisma);
+
+    const team = await db.prisma.team.create({ data: { name: 'Opening Team' } });
+    teamId = team.id;
+
+    memberIds = [];
+    for (const name of ['Alice', 'Bea', 'Cass']) {
+      const member = await db.prisma.teamMember.create({
+        data: { teamId, name, email: `${name.toLowerCase()}@atomic.invalid` },
+      });
+      memberIds.push(member.id);
+    }
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  function links(ids: string[], expiresAt = new Date(Date.now() + 86_400_000)) {
+    return ids.map((memberId, index) => ({
+      token: `token-${memberId}-${index}`,
+      memberId,
+      expiresAt,
+    }));
+  }
+
+  async function linkCount(): Promise<number> {
+    return db.prisma.sessionLink.count();
+  }
+
+  it('creates the session and a link for every member', async () => {
+    const session = await sessionRepo.openCycle({
+      session: { teamId, status: 'open', actualOpenAt: new Date() },
+      links: links(memberIds),
+    });
+
+    expect(session.status).toBe('open');
+    expect(await linkCount()).toBe(3);
+  });
+
+  /**
+   * Requirement NFR 3.5. The loop this replaced created the session first and
+   * then a link per member, so a failure part-way left a check some of the
+   * team could reach and the rest could not.
+   */
+  it('creates no session at all when a link cannot be issued', async () => {
+    const doomed = [
+      ...links(memberIds.slice(0, 2)),
+      // No such member: a foreign key the database itself refuses
+      { token: 'token-ghost', memberId: 'member-does-not-exist', expiresAt: new Date() },
+    ];
+
+    await expect(
+      sessionRepo.openCycle({
+        session: { teamId, status: 'open', actualOpenAt: new Date() },
+        links: doomed,
+      }),
+    ).rejects.toThrow();
+
+    expect(await db.prisma.healthCheckSession.count()).toBe(0);
+    expect(await linkCount()).toBe(0);
+  });
+
+  it('leaves the previous session open when the new cycle fails', async () => {
+    const previous = await sessionRepo.openCycle({
+      session: { teamId, status: 'open', actualOpenAt: new Date() },
+      links: links(memberIds),
+    });
+
+    await expect(
+      sessionRepo.openCycle({
+        closeExisting: { id: previous.id, closedAt: new Date() },
+        session: { teamId, status: 'open', actualOpenAt: new Date() },
+        links: [{ token: 'token-ghost', memberId: 'nobody', expiresAt: new Date() }],
+      }),
+    ).rejects.toThrow();
+
+    // Closing the old one and opening the new one is a single outcome: a team
+    // left with no open check at all would be worse than the failure
+    const stored = await sessionRepo.findById(previous.id);
+    expect(stored?.status).toBe('open');
+  });
+
+  it('closes the previous session as part of opening the next', async () => {
+    const previous = await sessionRepo.openCycle({
+      session: { teamId, status: 'open', actualOpenAt: new Date() },
+      links: links(memberIds),
+    });
+
+    await sessionRepo.openCycle({
+      closeExisting: { id: previous.id, closedAt: new Date() },
+      session: { teamId, status: 'open', actualOpenAt: new Date() },
+      links: links(memberIds).map(link => ({ ...link, token: `${link.token}-2` })),
+    });
+
+    expect((await sessionRepo.findById(previous.id))?.status).toBe('closed');
+    expect(await linkCount()).toBe(6);
+  });
+
+  it('opens a check for a team with no members yet', async () => {
+    // Nothing to issue, but the check still exists to be answered later
+    const session = await sessionRepo.openCycle({
+      session: { teamId, status: 'open', actualOpenAt: new Date() },
+      links: [],
+    });
+
+    expect(session.id).toBeTruthy();
+    expect(await linkCount()).toBe(0);
+  });
+});

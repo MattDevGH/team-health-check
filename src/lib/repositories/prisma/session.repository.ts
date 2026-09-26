@@ -1,6 +1,6 @@
 import type { PrismaClient, HealthCheckSession as PrismaHealthCheckSession } from '@/generated/prisma';
 import type { HealthCheckSession } from '../entities';
-import type { SessionRepository } from '../types';
+import type { OpenCycleParams, SessionRepository } from '../types';
 import { NotFoundError } from '../../errors';
 
 /**
@@ -71,6 +71,40 @@ export class PrismaSessionRepository implements SessionRepository {
    * questionId)` is unique, so an attempt that failed after writing some rows
    * would otherwise collide with itself for ever.
    */
+  /**
+   * Requirements: NFR 3.5, NFR 3.6; 6.1
+   *
+   * Opens a cycle: closes the session this one replaces, creates the new one,
+   * and issues a Session_Link for every member — as one outcome.
+   *
+   * These were three steps. A failure after the session was created left a
+   * check nobody could answer, which is what happened in production on
+   * 2026-09-14 and why `reaching-your-health-check` exists; a failure part-way
+   * through the links left some of the team able to reach it and the rest not.
+   * Closing the previous session belongs in the same transaction because a
+   * team left with no open check at all would be worse than the failure.
+   */
+  async openCycle(params: OpenCycleParams): Promise<HealthCheckSession> {
+    const record = await this.prisma.$transaction(async (tx) => {
+      if (params.closeExisting) {
+        await tx.healthCheckSession.update({
+          where: { id: params.closeExisting.id },
+          data: { status: 'closed', actualCloseAt: params.closeExisting.closedAt },
+        });
+      }
+
+      const created = await tx.healthCheckSession.create({ data: params.session });
+
+      for (const link of params.links) {
+        await tx.sessionLink.create({ data: { ...link, sessionId: created.id } });
+      }
+
+      return created;
+    });
+
+    return this.mapToEntity(record);
+  }
+
   async materialise(
     sessionId: string,
     aggregates: Array<{
