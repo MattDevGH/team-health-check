@@ -54,6 +54,14 @@ describe('Property 21: Rolling average computation correctness', () => {
               score: scores[i],
             });
 
+            /*
+             * Requirement 16.1 (2026-09-26): the average counts only responses
+             * their author can no longer change. These were seeded live and
+             * expected to count, which was the contract until the rolling
+             * average was found to be probeable by changing one's own answer.
+             */
+            await repos.response.finaliseForMemberSession(member.id, session.id, new Date());
+
             // Patch submittedAt to ensure deterministic ordering
             // Access the internal response to set a distinct timestamp
             const responses = await repos.response.findByMemberAndSession(member.id, session.id);
@@ -117,6 +125,14 @@ describe('Property 21: Rolling average computation correctness', () => {
               questionId,
               score: scores[i],
             });
+
+            /*
+             * Requirement 16.1 (2026-09-26): the average counts only responses
+             * their author can no longer change. These were seeded live and
+             * expected to count, which was the contract until the rolling
+             * average was found to be probeable by changing one's own answer.
+             */
+            await repos.response.finaliseForMemberSession(member.id, session.id, new Date());
           }
 
           const responseService = createResponseService({
@@ -167,6 +183,14 @@ describe('Property 21: Rolling average computation correctness', () => {
               questionId,
               score: scores[i],
             });
+
+            /*
+             * Requirement 16.1 (2026-09-26): the average counts only responses
+             * their author can no longer change. These were seeded live and
+             * expected to count, which was the contract until the rolling
+             * average was found to be probeable by changing one's own answer.
+             */
+            await repos.response.finaliseForMemberSession(member.id, session.id, new Date());
           }
 
           const responseService = createResponseService({

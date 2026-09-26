@@ -88,6 +88,14 @@ describe('Response submission flow - integration', () => {
           questionId,
           score: scores[i],
         });
+
+        /*
+         * Requirement 16.1 (2026-09-26): the average counts only answers their
+         * author can no longer change. Before that, a live answer counted, and
+         * the member could read the average, change their score, and read it
+         * again to recover everybody else's.
+         */
+        await container.response.finalise({ memberId: member.id, sessionId: session.id });
       }
 
       // Verify rolling average

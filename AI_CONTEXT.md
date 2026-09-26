@@ -1072,6 +1072,44 @@ names a question that exists, and still queries the session once per entry.
 Both belong with the batch and transaction work, where a service method will
 take the whole submission at once.
 
+**The rolling average could be probed by changing your own answer**
+(2026-09-26), and the fix was a feature rather than a filter.
+
+The route returned the average immediately after each write, and an answer
+stayed editable until the session closed. So a member could read the number,
+change their own score, and read it again. Two readings give the window size
+and the sum of everybody else's answers: at the five-response minimum the mean
+moves in steps of 0.2, which one decimal place represents exactly, so rounding
+hid nothing. A new team's first completed question is exactly where the floor
+sits.
+
+**The code matched the requirement.** Requirement 16.1 said "across current and
+previous sessions" in as many words, and the 5-response floor was its only
+privacy control — a floor guards the first four responses and does nothing
+about differencing after that. This was a flaw in the requirement, not a drift
+from it.
+
+**Matt's call, and a better one than the options offered.** Rather than sourcing
+the average from closed sessions — which would have made a new team wait a week
+to see anything — a member can now say they have finished. Live answers do not
+count; final ones do; closing a session makes everything in it final so nobody
+who never pressed the button is dropped.
+
+It also closes the other half of a complaint from the 2026-09-17 walkthrough:
+updating an answer a second time gave no sign that anything had happened. There
+is now a moment where the member says they are done and the page changes to
+show what they sent.
+
+**What it does not close**, recorded under Requirement 18 so nobody rediscovers
+it as a surprise: a member who knows the window size can still derive the sum of
+the others from a *single* reading. That is arithmetic inherent to publishing a
+mean over a small known group, and the lever is the size of the floor, not
+liveness.
+
+Nine existing tests asserted the old contract — they seeded live responses and
+expected them counted. Each now says that the response was finished with, and
+why, in place.
+
 **The score radios had no focus style at all** (2026-09-25), so a sighted
 keyboard user answering a health check could not see which score they were on.
 

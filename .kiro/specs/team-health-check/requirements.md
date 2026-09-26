@@ -127,7 +127,7 @@ The MVP focuses on: a fixed set of health-check questions, simple feedback colle
 5. IF a Team_Member submits a Score outside the range 1 to 5 for any answered Question, THEN THE Web_Interface SHALL reject the submission and display a validation error for the affected Question.
 6. WHEN a Team_Member submits valid responses, THE Web_Interface SHALL store each Response and display a confirmation message.
 7. THE Web_Interface SHALL be fully usable on viewports from 320px width upward without horizontal scrolling.
-8. WHEN a Team_Member has already submitted responses for a session, THE Web_Interface SHALL pre-populate the form with their previously submitted Scores and Trend_Indicators and allow them to update their responses until the session is closed.
+8. WHEN a Team_Member has already submitted responses for a session, THE Web_Interface SHALL pre-populate the form with their previously submitted Scores and Trend_Indicators and allow them to update their responses until they mark them final (Requirement 18) or the session is closed, whichever comes first.
 9. IF a Team_Member attempts to submit responses after the Health_Check_Session has been closed, THEN THE Web_Interface SHALL reject the submission and display a message indicating the session has ended.
 10. IF a Response submission fails due to a network or server error, THEN THE Web_Interface SHALL display an error message and retain the user's input so they can retry without re-entering data.
 11. THE Web_Interface SHALL reject a submission that names the same Question more than once, rather than applying the entries in arrival order, since two scores for one Question from one Team_Member in one Health_Check_Session express no intention the application can honour.
@@ -314,12 +314,59 @@ values in a submission and never its shape.*
 
 #### Acceptance Criteria
 
-1. WHEN a Team_Member submits a Response, THE Web_Interface SHALL display a rolling average for the answered Question calculated from the most recent N Responses across current and previous sessions (where N is configurable, defaulting to 20).
-2. THE Web_Interface SHALL NOT display any average (rolling or otherwise) for a Question until a minimum of 5 Responses have been recorded for that Question across all sessions for the Team.
-3. WHEN fewer than 5 Responses exist for a Question, THE Web_Interface SHALL display a message indicating that more responses are needed before averages can be shown.
+1. WHEN a Team_Member submits a Response, THE Web_Interface SHALL display a rolling average for the answered Question calculated from the most recent N **final** Responses across current and previous sessions (where N is configurable, defaulting to 20). A Response that its author can still change SHALL NOT be counted.
+2. THE Web_Interface SHALL NOT display any average (rolling or otherwise) for a Question until a minimum of 5 final Responses have been recorded for that Question across all sessions for the Team.
+3. WHEN fewer than 5 final Responses exist for a Question, THE Web_Interface SHALL display a message indicating that more responses are needed before averages can be shown.
 4. THE rolling average SHALL include Responses from previous closed sessions if the current session has insufficient data to meet the minimum threshold.
+
+*Criteria 1 to 3 gained the word "final" on 2026-09-26, after an external review
+found that the average was computed over live rows and returned to the member
+who had just written one.*
+
+*Because a Response could be changed until the session closed, and the route
+returned the average immediately after each write, a member could read the
+average, change their own answer, and read it again. Two readings give the size
+of the window and the sum of everybody else's scores: at the minimum of five —
+a new team's first completed question — the mean moves in steps of 0.2, which
+one decimal place represents exactly, so nothing was lost to rounding. The
+member learned the sum of four colleagues' answers to that question.*
+
+*The 5-response floor was the only control on this, and it guards the wrong
+thing: it stops the first four responses being exposed and does nothing about
+differencing after that. Requirement 18 gives the member a way to make an answer
+final before the session closes, so the feature keeps working without waiting a
+week — see the note there about what this does and does not close.*
 5. THE Web_Interface SHALL clearly label the displayed average as a "recent team average" to distinguish it from the true session average shown on the Trend_Dashboard.
 6. THE true session average (calculated only from Responses within a single Health_Check_Session) SHALL be stored separately and used for the Trend_Dashboard and future event correlation features.
+
+### Requirement 18: Answers A Member Has Finished With
+
+**User Story:** As a team member, I want to say that I have finished answering, so that I know my responses have landed and I am not left wondering whether the page saved anything.
+
+*Two problems meet here. A member updating an answer a second time could not tell that anything had happened, because the page looked the same afterwards — raised during the 2026-09-17 walkthrough. And the rolling average could be probed by changing an answer and reading the number again, because an answer was editable right up until the session closed.*
+
+*Both come from the same absence: there was no moment at which a member said they were done.*
+
+#### Acceptance Criteria
+
+1. WHEN a Team_Member has answered at least one Question in an open Health_Check_Session, THE Web_Interface SHALL offer them a way to mark their answers for that session as final.
+2. WHEN a Team_Member marks their answers final, THE Web_Interface SHALL record that fact against every Response they have given in that session, in a single atomic operation, so that a partial finalisation cannot occur.
+3. WHERE a Team_Member's Responses for a session are final, THE Web_Interface SHALL reject any further change to them and SHALL say that they were marked final rather than reporting a generic error.
+4. WHEN a Health_Check_Session closes, THE Web_Interface SHALL treat every Response in it as final, whether or not its author marked it so, since it can no longer be changed.
+5. THE Web_Interface SHALL make clear, before a Team_Member marks their answers final, that they will not be able to change them afterwards.
+6. WHERE a Team_Member's answers are final, THE Web_Interface SHALL show them what they answered, rather than an empty or editable form.
+7. Marking answers final SHALL NOT be required in order to participate: a Team_Member who never does so still has their Responses counted when the session closes, per criterion 4.
+
+*Added 2026-09-26.*
+
+*What this closes, and what it does not. It removes the repeatable probe: an
+answer enters the average only when its author can no longer move it, so there
+is no second reading to difference against. It does not remove every inference.
+A member who knows the window size can still compute the sum of the others from
+a single reading — that is arithmetic inherent to publishing a mean over a
+small, known group, and the lever for it is the size of the floor in
+Requirement 16.2, not liveness. The floor stays at five for now, recorded here
+so the next person does not rediscover it as a surprise.*
 
 ### Requirement 17: Personal Engagement Streak
 
