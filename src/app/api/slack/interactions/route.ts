@@ -20,6 +20,8 @@ import {
   createInteractionResponder,
 } from '@/lib/slack/interaction-response';
 import type { InteractionResponder } from '@/lib/slack/interaction-response';
+import { decodeInteractionPayload, parseScoreAction } from '@/lib/slack/interaction-payload';
+import type { SlackInteractionPayload } from '@/lib/slack/interaction-payload';
 
 // Test seam: allows route tests to seed data via repos
 export { repos as _repos, container as _container };
@@ -33,23 +35,6 @@ export function _setInteractionResponder(responder: InteractionResponder): void 
 
 function getResponder(): InteractionResponder {
   return _responderOverride ?? createInteractionResponder();
-}
-
-/**
- * Slack interaction payload types for type safety.
- */
-interface SlackAction {
-  action_id?: string;
-  block_id?: string;
-  value?: string;
-  type?: string;
-}
-
-interface SlackInteractionPayload {
-  type: string;
-  user?: { id: string; name?: string };
-  actions?: SlackAction[];
-  response_url?: string;
 }
 
 /**
@@ -74,24 +59,6 @@ async function findOpenSessionForMember(memberId: string): Promise<string | null
   return session?.id ?? null;
 }
 
-/**
- * Parses a score action value. Expected format: "questionId:score"
- * Returns null if the format or value is invalid.
- */
-function parseScoreAction(value: string): { questionId: string; score: number } | null {
-  const colonIndex = value.indexOf(':');
-  if (colonIndex === -1) return null;
-
-  const questionId = value.substring(0, colonIndex);
-  const scoreStr = value.substring(colonIndex + 1);
-  const score = parseInt(scoreStr, 10);
-
-  if (!questionId || isNaN(score)) return null;
-  if (score < 1 || score > 5) return null;
-
-  return { questionId, score };
-}
-
 export const POST = withErrorHandling(async (request: Request): Promise<Response> => {
   const body = await request.text();
   const timestamp = request.headers.get('x-slack-request-timestamp') ?? '';
@@ -107,12 +74,22 @@ export const POST = withErrorHandling(async (request: Request): Promise<Response
     return new Response('Missing payload', { status: 400 });
   }
 
-  const payload: SlackInteractionPayload = JSON.parse(payloadStr);
+  /**
+   * Requirement: Slack Sign In NFR 1.5
+   *
+   * This was `const payload: SlackInteractionPayload = JSON.parse(payloadStr)`
+   * — an unchecked `any` asserted into a shape, at a trust boundary. A body
+   * that was not JSON threw out of the handler rather than being refused.
+   */
+  const payload = decodeInteractionPayload(payloadStr);
+  if (payload === null) {
+    return new Response('Malformed payload', { status: 400 });
+  }
 
   // Process block_actions (button clicks for score submission)
   if (payload.type === 'block_actions') {
     const replyText = await processScoreActions(payload);
-    await reply(payload.response_url, replyText);
+    await reply(payload.responseUrl, replyText);
   }
 
   // Return 200 to acknowledge (Slack requires response within 3 seconds)
@@ -146,7 +123,7 @@ async function processScoreActions(
   const lines: string[] = [];
 
   for (const action of payload.actions ?? []) {
-    if (!action.action_id?.startsWith('score_') || !action.value) {
+    if (!action.actionId?.startsWith('score_') || !action.value) {
       continue;
     }
 
@@ -175,10 +152,13 @@ async function processScoreActions(
   return lines.length > 0 ? lines.join('\n') : null;
 }
 
-/** Extracts the question id from an unparsed action value ("questionId:score"). */
+/**
+ * The question id from a value that would not parse, for the rejection
+ * message. Split on the last colon, matching `parseScoreAction`.
+ */
 function questionIdOf(value: string): string {
-  const colonIndex = value.indexOf(':');
-  return colonIndex === -1 ? value : value.substring(0, colonIndex);
+  const separator = value.lastIndexOf(':');
+  return separator <= 0 ? value : value.slice(0, separator);
 }
 
 /** Resolves a question's display title, falling back to its id. */

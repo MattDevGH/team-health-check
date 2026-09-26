@@ -1048,6 +1048,37 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**The interaction route asserted a type onto `JSON.parse` and called it
+decoding** (2026-09-25).
+
+`const payload: SlackInteractionPayload = JSON.parse(payloadStr)` — the
+compiler agreed with a claim nobody had checked, at the one boundary where this
+project's own "no `any`, use `unknown` with type guards" rule matters most. A
+body that was not JSON threw out of the handler instead of being refused. Every
+field was then read as though the shape had been verified.
+
+Its score parser used `parseInt`, which reads `"3abc"` as 3 and `"4.9"` as 4,
+so a value the application never emitted was stored as though it had been.
+
+And the outbound reply had no timeout. A `response_url` that accepted the
+connection and never answered held the call open for as long as the platform
+allowed — and because the route replies *before* acknowledging, Slack's three
+seconds were being spent waiting on somebody else's server.
+
+**A test that proved nothing, caught by mutating it.** The new route-level case
+asserted that a lenient score value stored nothing, and it passed against the
+lenient parser. The repos are module-level singletons with no reset between
+tests, so reusing `USLACK123` resolved an *earlier* test's member and stored
+the score against a session this test never looked at — the assertion was
+vacuously true. It has its own Slack id now, and fails when the strictness is
+removed. Worth remembering: the mutation check found the bad test, not the bad
+code.
+
+Left open deliberately: acknowledgement still happens after the work, which is
+the defect the header comment claims is already fixed. That needs a durable
+boundary rather than unawaited work, since a serverless runtime may stop the
+work once the response is flushed — trading a visible failure for a silent one.
+
 **This file was carrying the product's confidential payload** (2026-09-25).
 
 The *Accepted live state* section named a production team id, two production
@@ -1084,6 +1115,7 @@ What the section was evidence *of* is kept, because that is the part anybody
 needed: two sessions driven end to end through a browser, closed, materialised,
 aggregates matching what was entered, the dashboard moving off "more data
 needed", participant links showing the ended state.
+
 
 **A response submission was bounded below and not above** (2026-09-25).
 `submitResponseSchema` required at least one entry and accepted any number,
