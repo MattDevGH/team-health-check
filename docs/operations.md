@@ -218,6 +218,61 @@ pattern matches, so every event came out saying `teamId: "[redacted]"`. The
 record was destroying the one thing it exists to carry. An id field cannot hold
 a token, because the allowlist decides what an id field is.
 
+## The same rule applies to documents
+
+**Requirements: NFR 4.8**
+
+Everything above is about log records. On 2026-09-25 an external review of this
+repository found the same data sitting in `AI_CONTEXT.md`: a production team id,
+two production session ids, the scores recorded in both sessions, the trend
+indicators, and a member handle. Committed on 2026-08-23 and still there a month
+later, in the file every agent session is instructed to read, in a repository
+that is **public**.
+
+The rule that keeps a score out of a log had never been said about a document,
+so nothing stopped it — not review, not the structure check, not the requirement
+reference check.
+
+### What was decided about the history, and why
+
+Removing the block from the working tree does not remove it from git history.
+That decision was taken deliberately rather than by reflex, against the facts:
+
+| Question | Answer |
+|---|---|
+| Was the repository public? | Yes, and was when the data was committed |
+| Was it real production data? | Yes — entered through the deployed product |
+| Whose data? | The repository owner's own, about his own team |
+| Did the respondent consent? | The respondent, the owner and the decision-maker are the same person |
+| Forks or copies? | None observed; a month of public availability |
+
+**Removed from `HEAD`, history left alone.** The only affected individual owns
+the repository, the data is five of his own scores, and a rewrite 313 commits
+later would invalidate every open pull request and existing clone to reclaim
+something already crawled.
+
+**If any other person's data ever reaches a tracked file, this answer inverts.**
+The entire mitigation here is that the respondent and the owner are the same
+person, and that stops being true the moment a second member joins a trial.
+
+### What stops it coming back
+
+`scripts/check-sensitive-doc-content.ts`, which runs in CI. It refuses record
+identifiers, four-or-more slash-joined scores, and four-or-more slash-joined
+trend values, in `AI_CONTEXT.md`, `README.md` and `AGENTS.md`, outside fenced
+code blocks.
+
+Deliberately narrow. Specs and tests discuss scores, ranges and the three trend
+values constantly — "improving/stable/declining" is an enumeration, not a
+recording — and a general score-shaped check would fire on all of it and be
+switched off within a week, or push people into awkward wording to appease it.
+Run against the version this was written from, it finds seven instances and
+nothing else.
+
+It is a stopgap. The intended end state is a generated status document with
+defined fields, where the question is what is allowed *in* rather than what is
+forbidden.
+
 ## Joining a record to the audit log
 
 The audit log is what a **delivery manager** reads: "Schedule changed", in

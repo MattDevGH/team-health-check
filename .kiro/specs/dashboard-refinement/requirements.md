@@ -111,7 +111,10 @@ been in the conversations that produced them.
 
 **User Story:** As a delivery manager reading the audit log, I want to see who made a change, so that the log is usable without a database.
 
-*Entries currently read "Changed by: cmt4sfyxy0002fc0f7i08ao9i".*
+*Entries currently read "Changed by: <member id>" — a raw database
+identifier where a name belongs. The real id stood here until 2026-09-25; it
+named a live member of a production team, in a public repository, which is not
+something an illustration needs.*
 
 #### Acceptance Criteria
 
