@@ -266,3 +266,15 @@ jobs:
       # section is not there twice, which is the shape that accident takes.
       - name: Check no section appears twice
         run: npx tsx scripts/check-doc-structure.ts
+
+      # AI_CONTEXT.md carried a production team id, two session ids, the scores
+      # and trend indicators recorded in both, and a member handle — from
+      # 2026-08-23 until 2026-09-25, in a public repository, in the file every
+      # session is told to read. The rule that keeps those out of logs had
+      # never been said about documents, so nothing stopped it.
+      #
+      # Deliberately narrow: specs and tests discuss scores and the three trend
+      # values constantly, and a check that fired on those would be switched
+      # off within a week.
+      - name: Check no confidential data in tracked documents
+        run: npx tsx scripts/check-sensitive-doc-content.ts
