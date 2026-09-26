@@ -356,6 +356,52 @@ the pair a one-person workspace cannot reach.
 
 ---
 
+## Phase 7: The interaction route stops trusting what it is handed
+
+Opened 2026-09-25 by the same external review as phase 6. A verified signature
+is the door; this is everything the route did once something came through it.
+
+- [x] 7.1 Decode the payload instead of asserting a type onto it
+  - It read `const payload: SlackInteractionPayload = JSON.parse(payloadStr)` —
+    an unchecked `any` at the one boundary where "no `any`, use `unknown`
+    with type guards" matters most. A body that was not JSON threw out of the
+    handler rather than being refused
+  - `decodeInteractionPayload` returns a value or `null` and never throws,
+    because the caller's job is to refuse rather than to catch. A user whose
+    `id` is not a string is dropped rather than trusted: an identity claim that
+    is not a string is not an identity claim
+  - _Requirements: Slack Sign In NFR 1.5_
+
+- [x] 7.2 Accept only score values this application emits
+  - `parseInt` read `"3abc"` as 3 and `"4.9"` as 4, so values nobody sent were
+    stored as though somebody had. A single digit 1 to 5 is the whole of what
+    the message blocks send
+  - Splits on the *last* colon now, so the ambiguity sits on the side we
+    control — question ids are ours, scores are not
+  - _Requirements: Slack Sign In NFR 1.6_
+
+- [x] 7.3 Give the outbound reply a timeout
+  - There was none. A `response_url` that accepted the connection and never
+    answered held the call open for as long as the platform allowed, and
+    because the route replies *before* acknowledging, Slack's three seconds
+    were spent waiting on somebody else's server
+  - _Requirements: NFR 1.2_
+
+- [ ] 7.4 Acknowledge before processing, across a durable boundary
+  - The header says "Uses immediate ack pattern: respond 200 within 3 seconds"
+    and the code does every query, an upsert per action and an outbound fetch
+    first. It fails under ordinary latency, not under attack
+  - Not `void process(...)`: a serverless runtime may stop the work once the
+    response is flushed, which would trade a visible failure for a silent one
+  - _Requirements: NFR 1.2; Slack Sign In NFR 1.1_
+
+- [ ] 7.5 Restrict `response_url`, and make a replayed interaction idempotent
+  - Slack retries an interaction it thinks failed; the upsert is idempotent by
+    key, so scores survive, but the reply is sent again
+  - _Requirements: Slack Sign In NFR 1.5; 5.12_
+
+---
+
 ## Roadmap, deliberately unscheduled
 
 - **OAuth "Sign in with Slack".** The full identity product. Unnecessary while

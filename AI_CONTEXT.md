@@ -68,28 +68,41 @@ updates on the day; the generated block above is where today lives now.*
 
 ### Accepted live state
 
-- Team: `cmt4sfyxs0001fc0f3v6uecya` — **Browser Validated Team**
-- Member/Delivery Manager: `mattheptinstall`
-- First session `cmt4w7ugx0007ek0frb2zmfqm`: closed/materialised with scores
-  `4/5/3/3/4` and subjective trends
-  `improving/none/none/none/stable`.
-- Second session `cmt4y3aj50005aw0fv5ay2m0o`: closed/materialised with scores
-  `5/4/3/4/2` and subjective trends
-  `stable/declining/none/improving/improving`.
-- Both close PATCH requests and scheduler ticks returned 200. Each session has
-  five one-response aggregates with the expected averages and trend counts.
-- Calculated score movement across sessions is `up/down/flat/up/down`; the
-  subjective trend distribution remains independent, including the deliberate
-  mismatches for Delivering Value and Psychological Safety.
-- Both participant links immediately render **Session Ended** after close.
-- The dashboard correctly changed from **More data needed** after one closed
-  session to two-session chart/detail data after the second. Latest counts,
-  subjective distributions, and question drill-down values all matched the API.
-- User reported no browser errors; dev-server logs contained successful 200
-  requests only.
-- Current managed dev server: `term_1787437157697_j206ug48n7`. It uses an
-  ephemeral process-only `CRON_SECRET`; `.env` has a blank value. After restart,
-  configure a non-empty local secret and restart before testing scheduler ticks.
+*Redacted 2026-09-25. This section used to name a production team id, two
+production session ids, the scores and trend indicators recorded in both, and a
+member handle. This repository is public, and the project's own rule is that a
+response score, a trend indicator, free text, a session token and an email
+address never appear in a log — for the obvious reason that they are the
+confidential payload of the entire product. They should not appear in a tracked
+file either, least of all the one every session is instructed to read.*
+
+*The identifiers and values are gone; what they were evidence **of** is kept,
+because that is the part anybody needs. The exposure was the repository owner's
+own scores about his own team, which is why removal from the working tree was
+judged proportionate and a history rewrite was not — recorded in
+`docs/operations.md` so the reasoning survives the decision. If a second
+person's data ever reaches a tracked file, that answer inverts.*
+
+*`scripts/check-sensitive-doc-content.ts` refuses the shapes this contained, so
+it cannot come back by hand.*
+
+- A team was driven through two complete health-check sessions in a browser,
+  both closed and materialised, with every response entered through the real
+  form rather than seeded.
+- Both close requests and the scheduler ticks that followed returned 200. Each
+  session materialised five one-response aggregates, and the averages and trend
+  counts matched what had been entered.
+- Calculated score movement and the subjective trend distribution were checked
+  to be independent of one another, including two questions where they were
+  deliberately made to disagree.
+- Participant links rendered **Session Ended** immediately after close.
+- The dashboard moved from **More data needed** after one closed session to
+  two-session chart and detail data after the second. Latest counts, subjective
+  distributions and question drill-down values all matched the API.
+- No browser errors; dev-server logs contained 200s only.
+- The dev server of the day used an ephemeral process-only `CRON_SECRET` while
+  `.env` held a blank value, so scheduler ticks need a non-empty local secret
+  configured before they will authenticate.
 
 ### Deferred dashboard UX improvements from live acceptance
 
@@ -1050,6 +1063,75 @@ linked — email for a member without it, Slack alone for a member with it.
   a choice overrode it — an implementation consulting the Slack link first would
   have satisfied every example where the two happen to agree.
 
+**The interaction route asserted a type onto `JSON.parse` and called it
+decoding** (2026-09-25).
+
+`const payload: SlackInteractionPayload = JSON.parse(payloadStr)` — the
+compiler agreed with a claim nobody had checked, at the one boundary where this
+project's own "no `any`, use `unknown` with type guards" rule matters most. A
+body that was not JSON threw out of the handler instead of being refused. Every
+field was then read as though the shape had been verified.
+
+Its score parser used `parseInt`, which reads `"3abc"` as 3 and `"4.9"` as 4,
+so a value the application never emitted was stored as though it had been.
+
+And the outbound reply had no timeout. A `response_url` that accepted the
+connection and never answered held the call open for as long as the platform
+allowed — and because the route replies *before* acknowledging, Slack's three
+seconds were being spent waiting on somebody else's server.
+
+**A test that proved nothing, caught by mutating it.** The new route-level case
+asserted that a lenient score value stored nothing, and it passed against the
+lenient parser. The repos are module-level singletons with no reset between
+tests, so reusing `USLACK123` resolved an *earlier* test's member and stored
+the score against a session this test never looked at — the assertion was
+vacuously true. It has its own Slack id now, and fails when the strictness is
+removed. Worth remembering: the mutation check found the bad test, not the bad
+code.
+
+Left open deliberately: acknowledgement still happens after the work, which is
+the defect the header comment claims is already fixed. That needs a durable
+boundary rather than unawaited work, since a serverless runtime may stop the
+work once the response is flushed — trading a visible failure for a silent one.
+
+**This file was carrying the product's confidential payload** (2026-09-25).
+
+The *Accepted live state* section named a production team id, two production
+session ids, the scores recorded in both sessions, the trend indicators, and a
+member handle. Committed 2026-08-23, still there a month and 313 commits later,
+in a **public** repository, in the one file every session is instructed to read.
+
+The rule that keeps a score out of a log — it is the confidential payload of the
+entire product — had never been said about a document. So nothing stopped it:
+not review, not the structure check, not the reference check. NFR 4.8 says it
+now, and `scripts/check-sensitive-doc-content.ts` enforces it in CI. Run against
+the version it was written from, it finds seven instances and nothing else.
+
+A production member id was sitting in `dashboard-refinement` requirements too,
+as an illustration of what the audit log used to display. Redacted.
+
+**The guard is narrow on purpose.** Specs and tests discuss scores, ranges and
+the three trend values constantly, and "improving/stable/declining" is an
+enumeration rather than a recording. A general score-shaped check would fire on
+all of it, then be switched off — or push people into awkward wording to appease
+it. Three patterns, matching how recorded data actually appeared, outside fenced
+code blocks.
+
+**The history decision was made rather than assumed**, and is written up in
+`docs/operations.md`: removed from `HEAD`, history left alone, because the only
+affected individual owns the repository and the data is five of his own scores,
+while a rewrite this late would invalidate every open pull request and existing
+clone to reclaim something already crawled. **If a second person's data ever
+reaches a tracked file, that answer inverts** — the whole mitigation is that the
+respondent and the owner are the same person, which stops being true the moment
+a trial has another member.
+
+What the section was evidence *of* is kept, because that is the part anybody
+needed: two sessions driven end to end through a browser, closed, materialised,
+aggregates matching what was entered, the dashboard moving off "more data
+needed", participant links showing the ended state.
+
+
 **A response submission was bounded below and not above** (2026-09-25).
 `submitResponseSchema` required at least one entry and accepted any number,
 permitted the same `questionId` twice, and the route wrote each entry as it
@@ -1086,6 +1168,7 @@ Still to do here, deliberately: the route makes no check that a `questionId`
 names a question that exists, and still queries the session once per entry.
 Both belong with the batch and transaction work, where a service method will
 take the whole submission at once.
+
 
 **The score radios had no focus style at all** (2026-09-25), so a sighted
 keyboard user answering a health check could not see which score they were on.
