@@ -87,6 +87,9 @@ export function createInMemoryRepositories(): Repositories {
   const magicLink = new InMemoryMagicLinkRepository();
   const auditLog = new InMemoryAuditLogRepository();
   const sessionAggregate = new InMemorySessionAggregateRepository();
+  // Materialising writes a session's aggregates and its timestamp together,
+  // which the real repository does in one transaction (NFR 3.5)
+  session.setAggregateStore(sessionAggregate);
   const question = new InMemoryQuestionRepository();
   const availability = new InMemoryAvailabilityRepository();
   const teamMemberRole = new InMemoryTeamMemberRoleRepository({

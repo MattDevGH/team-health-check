@@ -96,6 +96,33 @@ export interface SessionRepository {
   findOpenByTeamId(teamId: string): Promise<HealthCheckSession | null>;
   findByTeamId(teamId: string): Promise<HealthCheckSession[]>;
   update(id: string, data: Partial<Pick<HealthCheckSession, 'status' | 'actualCloseAt' | 'materialisedAt'>>): Promise<HealthCheckSession>;
+  /**
+   * Requirements: NFR 3.5, NFR 3.6
+   *
+   * Records everything materialising a session produces, as one outcome: the
+   * aggregate rows and the timestamp saying the work was done.
+   *
+   * It lives on the session repository rather than the aggregate one because
+   * atomicity has to have a single owner — the two tables are written in one
+   * transaction, and a transaction cannot span two clients.
+   *
+   * Deletes the session's existing aggregates first, inside the same
+   * transaction, which is what makes a retry possible. `(sessionId,
+   * questionId)` is unique, so an attempt that failed after writing some rows
+   * would otherwise collide with itself for ever.
+   */
+  materialise(
+    sessionId: string,
+    aggregates: Array<{
+      questionId: string;
+      averageScore: number;
+      responseCount: number;
+      improvingCount: number;
+      stableCount: number;
+      decliningCount: number;
+    }>,
+    at: Date,
+  ): Promise<void>;
 }
 
 /** Requirement 10.1: Response data integrity */

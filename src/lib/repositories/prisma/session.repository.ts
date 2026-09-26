@@ -56,9 +56,61 @@ export class PrismaSessionRepository implements SessionRepository {
     return records.map((r) => this.mapToEntity(r));
   }
 
+  /**
+   * Requirements: NFR 3.5, NFR 3.6
+   *
+   * Records everything materialising a session produces, as one outcome: the
+   * aggregate rows and the timestamp saying the work was done.
+   *
+   * It lives on the session repository rather than the aggregate one because
+   * atomicity has to have a single owner — the two tables are written in one
+   * transaction, and a transaction cannot span two clients.
+   *
+   * Deletes the session's existing aggregates first, inside the same
+   * transaction, which is what makes a retry possible. `(sessionId,
+   * questionId)` is unique, so an attempt that failed after writing some rows
+   * would otherwise collide with itself for ever.
+   */
+  async materialise(
+    sessionId: string,
+    aggregates: Array<{
+      questionId: string;
+      averageScore: number;
+      responseCount: number;
+      improvingCount: number;
+      stableCount: number;
+      decliningCount: number;
+    }>,
+    at: Date,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.sessionAggregate.deleteMany({ where: { sessionId } });
+
+      for (const aggregate of aggregates) {
+        await tx.sessionAggregate.create({ data: { sessionId, ...aggregate } });
+      }
+
+      /*
+       * Set last, inside the same transaction.
+       *
+       * A check nobody answered produces zero aggregates, which is
+       * indistinguishable from never having been computed — so the timestamp
+       * is the only thing that says the work happened, and it must not survive
+       * a rollback of the rows it describes.
+       */
+      await tx.healthCheckSession.update({
+        where: { id: sessionId },
+        data: { materialisedAt: at },
+      });
+    });
+  }
+
   async update(
     id: string,
-    data: Partial<Pick<HealthCheckSession, 'status' | 'actualCloseAt'>>
+    // Matches the interface. These were narrower than the contract they
+    // implement, which TypeScript permits for methods and which meant
+    // `materialisedAt` was accepted at runtime while being undeclared here.
+    data: Partial<Pick<HealthCheckSession, 'status' | 'actualCloseAt' | 'materialisedAt'>>
   ): Promise<HealthCheckSession> {
     const existing = await this.prisma.healthCheckSession.findUnique({ where: { id } });
     if (!existing) {

@@ -15,7 +15,6 @@ describe('SchedulerService.tick', () => {
       sessionLinkRepo: repos.sessionLink,
       teamMemberRepo: repos.teamMember,
       responseRepo: repos.response,
-      sessionAggregateRepo: repos.sessionAggregate,
       // Without this, open() has no schedule to read and stamps no
       // scheduledCloseAt — so every close test here ran against a session that
       // had no close time, and passed only because the old comparison ignored
@@ -330,7 +329,6 @@ describe('SchedulerService.tick acts on state, not on the minute', () => {
       sessionLinkRepo: repos.sessionLink,
       teamMemberRepo: repos.teamMember,
       responseRepo: repos.response,
-      sessionAggregateRepo: repos.sessionAggregate,
       teamScheduleRepo: repos.teamSchedule,
       now: () => clockNow,
     });
@@ -497,7 +495,6 @@ describe('SchedulerService.tick and materialisation', () => {
       sessionLinkRepo: repos.sessionLink,
       teamMemberRepo: repos.teamMember,
       responseRepo: repos.response,
-      sessionAggregateRepo: repos.sessionAggregate,
       teamScheduleRepo: repos.teamSchedule,
     });
     scheduler = createSchedulerService({

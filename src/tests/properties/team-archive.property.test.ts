@@ -51,7 +51,6 @@ describe('Team Archive Properties', () => {
               sessionLinkRepo: repos.sessionLink,
               teamMemberRepo: repos.teamMember,
               responseRepo: repos.response,
-              sessionAggregateRepo: repos.sessionAggregate,
             });
 
             const creatorId = 'creator-1';
@@ -143,7 +142,6 @@ describe('Team Archive Properties', () => {
               sessionLinkRepo: repos.sessionLink,
               teamMemberRepo: repos.teamMember,
               responseRepo: repos.response,
-              sessionAggregateRepo: repos.sessionAggregate,
             });
 
             const creatorId = 'creator-1';
@@ -199,7 +197,6 @@ describe('Team Archive Properties', () => {
               sessionLinkRepo: repos.sessionLink,
               teamMemberRepo: repos.teamMember,
               responseRepo: repos.response,
-              sessionAggregateRepo: repos.sessionAggregate,
             });
 
             const creatorId = 'creator-1';

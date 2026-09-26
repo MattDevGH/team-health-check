@@ -6,7 +6,62 @@
 import type { HealthCheckSession } from '../entities';
 import type { SessionRepository } from '../types';
 
+/** What the fake needs in order to write aggregates alongside a session. */
+export interface InMemoryAggregateStore {
+  create(data: {
+    sessionId: string;
+    questionId: string;
+    averageScore: number;
+    responseCount: number;
+    improvingCount: number;
+    stableCount: number;
+    decliningCount: number;
+  }): Promise<unknown>;
+  deleteBySessionId(sessionId: string): Promise<number>;
+}
+
 export class InMemorySessionRepository implements SessionRepository {
+  /**
+   * Set by `createInMemoryRepositories`, because materialising writes to two
+   * stores and the real implementation does it in one transaction.
+   */
+  private aggregateStore: InMemoryAggregateStore | null = null;
+
+  setAggregateStore(store: InMemoryAggregateStore): void {
+    this.aggregateStore = store;
+  }
+
+  /**
+   * Requirements: NFR 3.5, NFR 3.6
+   *
+   * Deliberately **not** atomic, and it cannot be: there is no transaction
+   * here to roll back. NFR 3.7 exists because of that — the property is
+   * demonstrated against a real database, and this exists so that the paths
+   * which succeed behave identically.
+   */
+  async materialise(
+    sessionId: string,
+    aggregates: Array<{
+      questionId: string;
+      averageScore: number;
+      responseCount: number;
+      improvingCount: number;
+      stableCount: number;
+      decliningCount: number;
+    }>,
+    at: Date,
+  ): Promise<void> {
+    if (!this.aggregateStore) {
+      throw new Error('InMemorySessionRepository.materialise needs setAggregateStore first');
+    }
+
+    await this.aggregateStore.deleteBySessionId(sessionId);
+    for (const aggregate of aggregates) {
+      await this.aggregateStore.create({ sessionId, ...aggregate });
+    }
+    await this.update(sessionId, { materialisedAt: at });
+  }
+
   private sessions: Map<string, HealthCheckSession> = new Map();
   private nextId = 1;
 
@@ -50,7 +105,10 @@ export class InMemorySessionRepository implements SessionRepository {
 
   async update(
     id: string,
-    data: Partial<Pick<HealthCheckSession, 'status' | 'actualCloseAt'>>,
+    // Matches the interface. These were narrower than the contract they
+    // implement, which TypeScript permits for methods and which meant
+    // `materialisedAt` was accepted at runtime while being undeclared here.
+    data: Partial<Pick<HealthCheckSession, 'status' | 'actualCloseAt' | 'materialisedAt'>>,
   ): Promise<HealthCheckSession> {
     const session = this.sessions.get(id);
     if (!session) {

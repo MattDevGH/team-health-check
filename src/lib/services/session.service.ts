@@ -9,7 +9,6 @@ import type {
   SessionLinkRepository,
   TeamMemberRepository,
   ResponseRepository,
-  SessionAggregateRepository,
   TeamScheduleRepository,
 } from '@/lib/repositories/types';
 import type { HealthCheckSession } from '@/lib/repositories/entities';
@@ -21,7 +20,6 @@ export interface SessionServiceDeps {
   sessionLinkRepo: SessionLinkRepository;
   teamMemberRepo: TeamMemberRepository;
   responseRepo: ResponseRepository;
-  sessionAggregateRepo: SessionAggregateRepository;
   /**
    * Supplies the team's configured close day/time. Omitted only by focused tests
    * that do not exercise the scheduled window; production wiring always injects it.
@@ -47,7 +45,6 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     sessionLinkRepo,
     teamMemberRepo,
     responseRepo,
-    sessionAggregateRepo,
     teamScheduleRepo,
   } = deps;
   const now = deps.now ?? (() => new Date());
@@ -185,7 +182,9 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
       byQuestion.set(response.questionId, existing);
     }
 
-    // For each question with responses, compute and store aggregate
+    // Compute every aggregate before writing any of them
+    const aggregates = [];
+
     for (const [questionId, questionResponses] of byQuestion) {
       if (questionResponses.length === 0) continue;
 
@@ -202,8 +201,7 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
         else if (r.trendIndicator === 'declining') decliningCount++;
       }
 
-      await sessionAggregateRepo.create({
-        sessionId,
+      aggregates.push({
         questionId,
         averageScore,
         responseCount,
@@ -214,16 +212,25 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     }
 
     /*
-     * Record that the work was done, whether or not it produced anything.
+     * Requirements: NFR 3.5, NFR 3.6
      *
-     * A check nobody answered produces zero aggregates, which is
-     * indistinguishable from never having been computed. The scheduler used to
-     * infer "already done" from the presence of aggregates, so it re-ran
-     * materialisation on every empty session on every tick, forever. And the
-     * dashboard could not tell a reader whether to wait or to conclude that
-     * nobody had answered.
+     * One write, covering the aggregates and the timestamp that says the work
+     * was done.
+     *
+     * This was a create per question followed by a separate update. A failure
+     * part-way left some rows written and the timestamp unset, and
+     * `(sessionId, questionId)` is unique — so the retry collided with the
+     * rows the failed attempt had already made and threw. The session could
+     * never be materialised again and nothing in the application could repair
+     * it.
+     *
+     * The timestamp is recorded whether or not there were any aggregates. A
+     * check nobody answered produces none, which is otherwise
+     * indistinguishable from never having been computed: the scheduler used to
+     * infer "already done" from their presence and so re-ran materialisation
+     * on every empty session on every tick, for ever.
      */
-    await sessionRepo.update(sessionId, { materialisedAt: now() });
+    await sessionRepo.materialise(sessionId, aggregates, now());
   }
 
   return { open, get, close, generateSessionLinks, materializeAggregates };

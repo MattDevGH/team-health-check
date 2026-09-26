@@ -27,7 +27,6 @@ describe('SessionService.open scheduled window', () => {
       sessionLinkRepo: repos.sessionLink,
       teamMemberRepo: repos.teamMember,
       responseRepo: repos.response,
-      sessionAggregateRepo: repos.sessionAggregate,
       teamScheduleRepo: repos.teamSchedule,
       now: () => now,
     });
