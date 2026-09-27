@@ -63,7 +63,17 @@ export function run(
   manifestPath: string = MANIFEST,
 ): number {
   const expected = buildManifest(readCommittedMigrations(dir));
-  const current = existsSync(manifestPath) ? readFileSync(manifestPath, 'utf8') : '';
+  /*
+   * Read and handle absence, rather than asking whether it exists and then
+   * reading it. The two-step version is a check-then-use race — CodeQL flags
+   * it as one — and it is also a syscall more than the job needs.
+   */
+  let current = '';
+  try {
+    current = readFileSync(manifestPath, 'utf8');
+  } catch {
+    // Not written yet; the first run creates it
+  }
 
   // Compare ignoring line endings, which differ by platform and by editor
   const same = current.replace(/\r\n/g, '\n') === expected;
