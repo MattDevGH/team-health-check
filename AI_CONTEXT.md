@@ -1226,6 +1226,49 @@ names a question that exists, and still queries the session once per entry.
 Both belong with the batch and transaction work, where a service method will
 take the whole submission at once.
 
+**The three things left knowingly open are closed** (2026-09-27).
+
+**Genesis is atomic.** It spent the token first and then made five more writes,
+so a failure anywhere after the claim left somebody holding a used link and no
+team, with no way to try again — and it is the door every first user arrives
+through. The claim happens inside the transaction now, so a failure gives the
+link back. Proved by colliding the session token, which makes the last write
+fail after everything before it succeeded: no team, no member, token still
+unspent, and the retry works. That was the last "known limitation, stated
+rather than implied" in the codebase.
+
+**`check-requirement-references.ts` has tests**, twenty of them, driven against
+a temporary directory so none can start passing because somebody edited a
+requirement. The rule it enforces was already 98% covered in
+`reference-index.ts`; what was untested was everything around it — which specs
+it reads, which files it skips, whether it actually fails.
+
+**One line was tracing the whole project into every serverless function.**
+
+`path.resolve(process.cwd(), target)` means exactly what `path.resolve(target)`
+means: `path.resolve` already resolves a relative path from the working
+directory. But Turbopack treats a named `process.cwd()` as dynamic filesystem
+access, cannot know what it reaches, and includes everything. The trace for
+`/api/auth/logout`, a route that deletes one row, went from **665 files to
+292**, and the build has no warnings at all for the first time.
+
+Two things this taught, both worth keeping:
+
+- **The explicit form was documentation, not behaviour**, and it was expensive
+  documentation. The comment that replaced it says not to put it back, and why,
+  where somebody would otherwise helpfully restore it.
+- **The `outputFileTracingExcludes` added the day before are gone.** Measured
+  both ways: 292 files with them and 292 without. They were doing nothing once
+  the cause was fixed, and a line whose comment claims it prevents something it
+  does not prevent is worse than no line. A lazy `require` in `prisma.ts` was
+  also tried and also did nothing — Turbopack follows a static require
+  specifier just as it follows an import — so that was reverted too.
+
+The order matters here: the excludes looked like the fix for a day because
+they moved the number. They moved it from 1,089 to 664 while the cause sat
+untouched, and only counting again after the real fix showed they had stopped
+contributing.
+
 **Every serverless function was shipping the test suite and the
 documentation** (2026-09-26).
 
