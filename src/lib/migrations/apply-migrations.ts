@@ -36,7 +36,8 @@ import type { Client } from '@libsql/client';
  * The cost, recorded rather than hidden: if this database is ever moved
  * somewhere Prisma *can* migrate, this history has to be reconciled by hand.
  */
-export const LEDGER_TABLE = '_applied_migration';
+export { LEDGER_TABLE } from './ledger';
+import { LEDGER_TABLE } from './ledger';
 
 const MIGRATIONS_DIR = path.resolve(process.cwd(), 'prisma', 'migrations');
 
