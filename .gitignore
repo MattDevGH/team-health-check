@@ -60,3 +60,6 @@ next-env.d.ts
 # playwright
 /playwright-report/
 /test-results/
+
+# Coverage output: a measurement, regenerated on every run
+coverage/

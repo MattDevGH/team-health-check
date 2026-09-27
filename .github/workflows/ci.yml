@@ -50,8 +50,15 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
-      - name: Run tests
-        run: npm test
+      # Coverage thresholds are a floor at the value the suite actually reached
+      # on 2026-09-26, not a target to climb — see vitest.config.mts. A threshold
+      # chosen above reality is a wish; one chosen below is nothing.
+      #
+      # Only here, not in the Windows job: the figure is a property of the suite
+      # rather than of the platform, and measuring it twice would double the
+      # slowest part of that job for no extra signal.
+      - name: Run tests with coverage
+        run: npm run test:coverage
 
       - name: Build
         run: npm run build

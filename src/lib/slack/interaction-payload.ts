@@ -34,6 +34,12 @@ export interface SlackInteractionPayload {
   user?: { id: string; name?: string };
   actions?: SlackAction[];
   responseUrl?: string;
+  /**
+   * Slack's own identifier for this interaction, the same on every retry of
+   * it. Used as the idempotency key so a replay cannot enqueue the work twice
+   * (Requirement 5.12).
+   */
+  triggerId?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -96,6 +102,7 @@ export function decodeInteractionPayload(raw: string): SlackInteractionPayload |
     user: decodeUser(parsed.user),
     actions: decodeActions(parsed.actions),
     responseUrl: stringOrUndefined(parsed.response_url),
+    triggerId: stringOrUndefined(parsed.trigger_id),
   };
 }
 

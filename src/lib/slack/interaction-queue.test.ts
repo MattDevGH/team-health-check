@@ -110,7 +110,7 @@ describe('interaction-queue', () => {
       // Simulate 5 previous retries by incrementing (nextRetryAt in past so it's picked up)
       const pastDate = new Date(Date.now() - 60_000);
       for (let i = 0; i < 5; i++) {
-        await repo.incrementRetry(entry.id, pastDate, 'failed');
+        await repo.incrementRetry(entry!.id, pastDate, 'failed');
       }
 
       const now = new Date(Date.now() + 60_000);
@@ -135,7 +135,7 @@ describe('interaction-queue', () => {
 
       // Set nextRetryAt far into the future
       const futureDate = new Date(Date.now() + 3_600_000);
-      await repo.incrementRetry(entry.id, futureDate, 'timeout');
+      await repo.incrementRetry(entry!.id, futureDate, 'timeout');
 
       const now = new Date();
       const deliverFn = vi.fn().mockResolvedValue(true);

@@ -412,9 +412,19 @@ is the door; this is everything the route did once something came through it.
     tests go red and the other 21 still pass
   - _Requirements: NFR 1.2; Slack Sign In NFR 1.1_
 
-- [ ] 7.5 Restrict `response_url`, and make a replayed interaction idempotent
+- [x] 7.5 Restrict `response_url`, and make a replayed interaction idempotent
   - Slack retries an interaction it thinks failed; the upsert is idempotent by
-    key, so scores survive, but the reply is sent again
+    key, so scores survive, but the reply was sent again
+  - `trigger_id` is the same on every replay, so it is the idempotency key. The
+    unique index decides rather than a prior read, because two retries can
+    arrive at once and a check-then-insert would let both through
+  - `response_url` is checked against an allowlist of `hooks.slack.com` over
+    HTTPS, with credentials in the URL refused and redirects rejected. An
+    allowlist rather than a blocklist of private ranges: a blocklist has to
+    anticipate every address worth refusing and each omission is a hole
+  - Checked in the responder rather than at decode time, because that is the
+    only place a connection is opened and the queue replays through it too —
+    a URL stored minutes ago gets the same check as a live one
   - _Requirements: Slack Sign In NFR 1.5; 5.12_
 
 ---

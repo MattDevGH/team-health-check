@@ -284,7 +284,7 @@ describe('POST /api/scheduler/tick', () => {
 
       // Entry is settled, so a further tick does not replay it
       const stillPending = await repos.interactionQueue.findPending(drainAt);
-      expect(stillPending.map(entry => entry.id)).not.toContain(queued.id);
+      expect(stillPending.map(entry => entry.id)).not.toContain(queued!.id);
     });
 
     it('backs off a failed replay instead of retrying it immediately', async () => {
@@ -315,7 +315,7 @@ describe('POST /api/scheduler/tick', () => {
 
       expect(attempts).toBe(1);
 
-      const entry = queueEntries().find(e => e.id === queued.id);
+      const entry = queueEntries().find(e => e.id === queued!.id);
       expect(entry?.retryCount).toBe(1);
       expect(entry?.status).toBe('pending');
       expect(entry?.nextRetryAt?.getTime()).toBeGreaterThan(drainAt.getTime());
@@ -333,7 +333,7 @@ describe('POST /api/scheduler/tick', () => {
         failureReason: 'account_inactive',
       });
       for (let i = 0; i < 5; i++) {
-        await repos.interactionQueue.incrementRetry(queued.id, OPEN_TICK, 'Delivery failed');
+        await repos.interactionQueue.incrementRetry(queued!.id, OPEN_TICK, 'Delivery failed');
       }
 
       let attempts = 0;
@@ -349,7 +349,7 @@ describe('POST /api/scheduler/tick', () => {
       await POST(tickRequest());
 
       expect(attempts).toBe(0);
-      const entry = queueEntries().find(e => e.id === queued.id);
+      const entry = queueEntries().find(e => e.id === queued!.id);
       expect(entry?.status).toBe('failed');
       expect(entry?.failureReason).toBe('Max retries exhausted');
     });
