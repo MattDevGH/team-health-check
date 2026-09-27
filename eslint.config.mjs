@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Generated files (Prisma, etc.)
     "src/generated/**",
+    // Coverage output: a measurement, regenerated on every run
+    "coverage/**",
     // Agent worktrees are full copies of this repository. Linting them reports
     // problems from another branch's working tree as if they were ours.
     ".claude/**",
