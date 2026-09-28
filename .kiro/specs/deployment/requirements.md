@@ -177,6 +177,32 @@ not match.*
 3. WHERE a rollback would leave the schema ahead of the code, THAT hazard SHALL be stated, since migrations do not roll back with the deployment.
 4. THE verification SHALL cover the paths that only exist in production: the Turso adapter, the external trigger, and email delivery to a real address.
 
+### Requirement 10: The Pipeline Is Not A Way In
+
+**User Story:** As the maintainer, I want the thing that builds and deploys this project to be as hard to subvert as the project itself, so that trusting the application does not mean trusting everything it happens to run on the way there.
+
+*CI runs third-party code against the repository with a token that can write to
+it. That is the shape of a supply-chain attack, and it costs two lines to close
+most of.*
+
+#### Acceptance Criteria
+
+1. Every third-party action SHALL be referenced by an immutable commit SHA rather than a tag. A tag is a pointer its owner can move at any time, to anything; a SHA cannot be moved.
+2. THE version a SHA corresponds to SHALL be recorded beside it, so that a reader can tell what is pinned and an automated update can move both together.
+3. Every workflow job SHALL declare the permissions its `GITHUB_TOKEN` needs, and SHALL NOT rely on the repository default. A job that only reads the code should not hold a token that can write to it.
+4. THE permissions granted SHALL be the least the job needs. Where one job needs more than the others — reading a pull request body, writing security results — that grant SHALL sit on that job rather than on the workflow.
+
+*Added 2026-09-28. Criteria 1 and 2 describe work done on 2026-09-25 that had
+no requirement; criteria 3 and 4 close the five CodeQL alerts that work left
+behind.*
+
+*Both commits then cited "Deployment 2.2", which reads "THE production database
+SHALL be verified by executing a real query against it after deployment". It
+resolved, so `check-requirement-references.ts` accepted it, and it had nothing
+to do with either change. That is exactly the failure AGENTS.md describes as one
+the checker cannot catch and only reading the requirement can — recorded here
+rather than quietly corrected, because the useful part is that it happened.*
+
 ### Requirement 9: The Configuration Is Written Down
 
 **User Story:** As the maintainer returning in six months, I want one place that lists every environment variable and where it lives, so that I am not reverse-engineering it from `process.env` references.

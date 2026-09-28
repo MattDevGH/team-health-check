@@ -1226,6 +1226,45 @@ names a question that exists, and still queries the session once per entry.
 Both belong with the batch and transaction work, where a service method will
 take the whole submission at once.
 
+**The pairing code was biased, and CodeQL had been saying so** (2026-09-28).
+
+`generateRandomCode` read `bytes[i] % 36`, and 256 is not a multiple of 36:
+256 = 7 × 36 + 4, so the first four characters of the alphabet came up eight
+times in 256 and the other thirty-two came up seven — about 14% more often.
+
+Not a practical break: a six-character code valid for ten minutes has roughly
+2.2 billion values and the bias costs a fraction of a bit. Fixed anyway, by
+rejection rather than arithmetic — bytes from 252 up are drawn again rather
+than folded onto the start of the alphabet.
+
+**The defect is statistical, so the test had to be.** A generator that reaches
+for `crypto.randomBytes` itself leaves nothing to assert about except the shape
+of one code, which the biased version produced correctly every time. Taking the
+byte source means the mapping can be counted *exactly*: every character
+reachable from exactly seven of 256 values, four rejected. Provable rather than
+probable.
+
+One thing that cost a two-minute hang: counting through the whole generator
+does not terminate. A source yielding only byte 255 is rejected for ever, which
+is right for real randomness and wrong for a test, so the mapping is exported
+separately and the counting test uses that.
+
+**Two other CodeQL findings closed with it.** `container-wiring.test.ts` had
+`statSync` then `readFileSync` on the same path — a check-then-use race, flagged
+twice because the walker was copied verbatim into both tests. `readdirSync` with
+`withFileTypes` answers both questions in the listing that had to happen anyway.
+And every CI job held whatever the repository default token grants, which for a
+job that reads code and runs tests is more than it needs; `contents: read` for
+the workflow, one `pull-requests: read` where a job reads a pull request body.
+
+**A citation that resolved and was wrong.** The SHA-pinning commit on
+2026-09-25 cited "Deployment 2.2", which reads "THE production database SHALL be
+verified by executing a real query against it after deployment". Nothing to do
+with pinning actions; the browserslist override cited it too. Both resolved, so
+`check-requirement-references.ts` accepted them — the failure AGENTS.md
+describes as the one the checker cannot catch. Deployment Requirement 10 covers
+that ground now and records the mistake rather than quietly correcting it.
+
 **The cron job was cancelled, and the cause was a migration nobody applied**
 (2026-09-27).
 

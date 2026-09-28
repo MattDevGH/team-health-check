@@ -4,6 +4,7 @@
  */
 
 import crypto from 'crypto';
+import { generatePairingCodeFrom } from '@/lib/services/pairing-code';
 import { recorder } from '@/lib/observability';
 
 import { AppError, NotFoundError, RateLimitError } from '@/lib/errors';
@@ -125,20 +126,22 @@ const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_LINK_FAIL_RATE_LIMIT = 10;
 const SESSION_LINK_FAIL_WINDOW_MS = 5 * 60 * 1000;
 
-/** Characters used for pairing code generation: uppercase alphanumeric */
-const CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-const CODE_LENGTH = 6;
-
 /**
- * Generates a cryptographically random 6-character uppercase alphanumeric code.
+ * Requirement 2.9
+ *
+ * Moved to `pairing-code.ts` on 2026-09-28, and fixed on the way. It read
+ * `bytes[i] % 36`, and 256 is not a multiple of 36 — so the first four
+ * characters of the alphabet came up eight times in 256 and the rest seven,
+ * about 14% more often. CodeQL had been reporting it as
+ * `js/biased-cryptographic-random`.
+ *
+ * It lives in its own module because the defect is statistical and a
+ * generator that reaches for `crypto.randomBytes` itself leaves nothing to
+ * assert about except the shape of one code — which the biased version
+ * produced correctly every time.
  */
 function generateRandomCode(): string {
-  const bytes = crypto.randomBytes(CODE_LENGTH);
-  let code = '';
-  for (let i = 0; i < CODE_LENGTH; i++) {
-    code += CODE_CHARS[bytes[i] % CODE_CHARS.length];
-  }
-  return code;
+  return generatePairingCodeFrom();
 }
 
 /**
