@@ -2,6 +2,7 @@ import { AppError, ConflictError, NotFoundError } from '../../errors';
 import type { Team } from '../entities';
 import type {
   AddTeamMemberWithAuditData,
+  CreateFromGenesisParams,
   CreateTeamWithCreatorData,
   TeamRepository,
 } from '../types';
@@ -13,6 +14,13 @@ interface TeamCreationDeps {
   teamMember: InMemoryTeamMemberRepository;
   teamMemberRole: InMemoryTeamMemberRoleRepository;
   auditLog: InMemoryAuditLogRepository;
+  /** Genesis also claims a token and opens a session (Requirement 7.9). */
+  pendingGenesis?: {
+    claimToken(token: string): Promise<{ email: string } | null>;
+  };
+  userSession?: {
+    create(data: { memberId: string; token: string; expiresAt: Date }): Promise<unknown>;
+  };
 }
 
 export class InMemoryTeamRepository implements TeamRepository {
@@ -43,6 +51,46 @@ export class InMemoryTeamRepository implements TeamRepository {
     };
     this.store.set(team.id, team);
     return team;
+  }
+
+  /**
+   * Requirements: NFR 3.5, NFR 3.6; 7.9
+   *
+   * Not atomic here — there is nothing to roll back, and in particular a
+   * token this claims stays claimed if a later step throws. That asymmetry is
+   * exactly why NFR 3.7 asks for the property to be shown against a real
+   * database; `atomic-writes.test.ts` does it.
+   */
+  async createFromGenesis(params: CreateFromGenesisParams): Promise<{ team: Team } | null> {
+    const deps = this.creationDeps;
+    if (!deps?.pendingGenesis || !deps.userSession) {
+      throw new ConflictError('Atomic genesis is not configured');
+    }
+
+    const claimed = await deps.pendingGenesis.claimToken(params.token);
+    if (!claimed) return null;
+
+    const team = await this.persistClaimedAggregate(
+      {
+        team: params.team,
+        creator: {
+          id: params.memberId,
+          name: params.memberName,
+          email: params.email,
+          role: 'delivery_manager',
+        },
+        audit: params.audit,
+      },
+      deps,
+    );
+
+    await deps.userSession.create({
+      memberId: params.memberId,
+      token: params.session.token,
+      expiresAt: params.session.expiresAt,
+    });
+
+    return { team };
   }
 
   createWithCreator(data: CreateTeamWithCreatorData): Promise<Team> {

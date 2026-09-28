@@ -293,3 +293,10 @@ jobs:
       # facts that rot are generated and this fails when they drift.
       - name: Check the generated status block is current
         run: npx tsx scripts/generate-status.ts --check
+
+      # The startup guard compares the ledger against this manifest, so a
+      # stale one would let a deployment start against a schema it does not
+      # match — the failure the guard exists to prevent, reintroduced through
+      # the thing meant to prevent it.
+      - name: Check the migration manifest is current
+        run: npx tsx scripts/generate-migration-manifest.ts --check

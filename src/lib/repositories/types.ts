@@ -55,6 +55,23 @@ export interface AddTeamMemberWithAuditData {
 export interface TeamRepository {
   create(data: { name: string; description?: string; privacyMode?: string; timezone?: string }): Promise<Team>;
   createWithCreator(data: CreateTeamWithCreatorData): Promise<Team>;
+  /**
+   * Requirements: NFR 3.5, NFR 3.6; 7.9, 19.4
+   *
+   * Claims the genesis token and creates the team, the member, their
+   * delivery-manager role, the audit entry and the browser session — all in
+   * one transaction. Returns null when the token is unknown, already spent or
+   * expired.
+   *
+   * **The claim is inside the transaction, and that is the point.** Genesis
+   * used to spend the token first and then make five more writes, so a failure
+   * anywhere after it left somebody holding a used link and no team, with no
+   * way to try again. Rolling the claim back means a retry is simply possible.
+   *
+   * Still a compare-and-set: the `used: false` in the filter is what makes two
+   * simultaneous claims of the same token resolve to exactly one team.
+   */
+  createFromGenesis(params: CreateFromGenesisParams): Promise<{ team: Team } | null>;
   addMemberWithAudit(data: AddTeamMemberWithAuditData): Promise<void>;
   findById(id: string): Promise<Team | null>;
   update(id: string, data: Partial<Pick<Team, 'name' | 'description' | 'privacyMode' | 'archived' | 'slackDeliveryStart' | 'slackDeliveryEnd' | 'timezone' | 'preSessionRecipient'>>): Promise<Team>;
@@ -137,6 +154,17 @@ export interface SessionRepository {
     }>,
     at: Date,
   ): Promise<void>;
+}
+
+/** Everything a first user needs, created from one genesis token. */
+export interface CreateFromGenesisParams {
+  token: string;
+  memberId: string;
+  memberName: string;
+  email: string;
+  team: { name: string; description?: string };
+  audit: { changeType: string; previousValue: string; newValue: string; userId: string };
+  session: { token: string; expiresAt: Date };
 }
 
 /** An audit entry written in the same transaction as the change it records. */

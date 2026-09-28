@@ -98,6 +98,24 @@ it is "make the wrong thing impossible, and give the right thing a path".*
 5. Applying migrations to production SHALL be a deliberate step, never a side effect of a deploy.
 6. WHEN migrations have been applied, THE production schema SHALL be verified by reading it back, not inferred from an exit code.
 7. THE fixed question catalogue SHALL be seeded in production, and seeding SHALL be safe to run more than once.
+8. WHERE the committed migrations include one the production database has not recorded, THE application SHALL refuse to serve requests, and SHALL name the migrations that are missing. Criterion 5 makes applying them a deliberate step, which by design leaves a window in which deployed code expects a column the database does not have. Every query touching that column then fails, and the failure surfaces wherever a user or the scheduler happens to be rather than where the mistake was made.
+9. THAT refusal SHALL require a definite answer. WHERE the ledger cannot be read at all, THE application SHALL start. A missing migration is permanent and deterministic and is worth refusing over; a database that cannot be reached for a moment is neither, and refusing on it would turn a transient blip into an outage — a guard that fails more often than the fault it prevents is not worth having.
+
+*Criteria 8 and 9 added 2026-09-27, the day the scheduler's cron job was
+cancelled by cron-job.org for repeated failures.*
+
+*Two migrations had been merged and deployed two days earlier and never
+applied. Every tick asked for `SlackInteractionQueue.idempotencyKey`, which
+production did not have, so every tick returned 500 — from the first attempt,
+not intermittently, which is why the trigger was eventually cancelled rather
+than looking flaky.*
+
+*Nothing detected it, and detection was never the gap:
+`scripts/verify-production.ts` reported "committed but NOT applied" and named
+both migrations the first time anybody ran it. The gap was that a merge
+carrying a migration produced no signal at the moment the deploy went out, and
+the application was perfectly willing to serve requests against a schema it did
+not match.*
 
 ### Requirement 4: The Scheduler Fires Often Enough To Keep Its Promises
 
