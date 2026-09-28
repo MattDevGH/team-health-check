@@ -30,7 +30,24 @@ export function resolveSqliteFileUrl(
       ? configured.replace(/^file:/, '')
       : path.join(...DEFAULT_SQLITE_PATH);
 
-  const absolute = path.resolve(process.cwd(), target);
+  /*
+   * Requirements: Feeling Responsive NFR 1.1
+   *
+   * **Do not write `path.resolve(process.cwd(), target)` here.** It means
+   * exactly the same thing — `path.resolve` already resolves a relative path
+   * from the working directory — and it costs the deployment dearly.
+   *
+   * Turbopack treats a named `process.cwd()` as dynamic filesystem access and
+   * cannot know what it reaches, so it traced the whole project into every
+   * serverless function. Measured on 2026-09-27: the trace for
+   * `/api/auth/logout`, a route that deletes one row, listed 665 files with
+   * the explicit call and **292** without it. The build warning that named
+   * this line disappears with it.
+   *
+   * The explicit form was documentation, not behaviour. This comment is the
+   * documentation now, and it is cheaper.
+   */
+  const absolute = path.resolve(target);
 
   // Forward slashes keep the URL valid on Windows
   return `file:${absolute.replace(/\\/g, '/')}`;

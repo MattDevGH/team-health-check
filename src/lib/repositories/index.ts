@@ -117,7 +117,20 @@ export function createInMemoryRepositories(): Repositories {
       await auditLog.create(entry);
     },
   });
-  const team = new InMemoryTeamRepository({ teamMember, teamMemberRole, auditLog });
+  const team = new InMemoryTeamRepository({
+    teamMember,
+    teamMemberRole,
+    auditLog,
+    // Genesis claims a token and opens a session alongside the team it makes,
+    // which the real repository does in one transaction (NFR 3.5). Getters
+    // because both are declared below this line.
+    get pendingGenesis() {
+      return pendingGenesis;
+    },
+    get userSession() {
+      return userSession;
+    },
+  });
   const pairingCode = new InMemoryPairingCodeRepository();
   const userSession = new InMemoryUserSessionRepository();
   const pendingGenesis = new InMemoryPendingGenesisRepository();

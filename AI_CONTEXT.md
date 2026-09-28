@@ -1226,6 +1226,105 @@ names a question that exists, and still queries the session once per entry.
 Both belong with the batch and transaction work, where a service method will
 take the whole submission at once.
 
+**The cron job was cancelled, and the cause was a migration nobody applied**
+(2026-09-27).
+
+cron-job.org disabled the scheduler trigger after repeated failures. Two
+migrations had been merged and deployed two days earlier and never applied to
+Turso: `add_response_finalised_at` and `add_interaction_idempotency_key`.
+Every tick began by reading the interaction queue, Prisma names every column
+in its `SELECT`, production had no `idempotencyKey` — so every tick returned
+500 from the first attempt rather than intermittently, which is exactly the
+shape that trips a failure limit.
+
+Nothing was corrupted. The application had simply been unable to run its
+scheduler since the deploy.
+
+**Detection was never the gap.** `scripts/verify-production.ts` printed
+"committed but NOT applied" and named both migrations the first time anybody
+ran it. The script was right and available the whole time. What was missing is
+that a merge carrying a migration produced no signal at the moment the deploy
+went out, and the application was perfectly willing to serve against a schema
+it did not match.
+
+**The deployment refuses now.** Requirement 3.5 makes applying migrations a
+deliberate step and not a side effect of a deploy, which is right and which
+creates the window; 3.8 says the application must not serve inside it. Proved
+against the real production build rather than a stub: pointed at a database
+holding one migration, `next start` logged **"Failed to prepare server"** and
+named all nine missing ones with the command that fixes them; pointed at a
+current one, ready in 181ms and answering 200.
+
+**It refuses only on a definite answer** (3.9). A missing migration is
+permanent and deterministic. A database that cannot be reached for a moment is
+neither, and refusing on that would turn a network blip into an outage — a
+guard that fails more often than the fault it prevents is not worth having. A
+ledger that cannot be read lets the process start and says so, which also
+keeps a first deploy against an empty database working, since that has no
+ledger table to read.
+
+Three things the wiring taught, each of which broke a build first:
+
+- **The committed list has to be generated.** `prisma/migrations` is not traced
+  into the serverless bundle, so it is not there to read at runtime — and
+  reading it would mean `path.resolve(process.cwd(), …)`, the exact call
+  removed the day before for tracing the whole project into every function.
+  `scripts/generate-migration-manifest.ts` writes the list and CI fails when it
+  drifts.
+- **`LEDGER_TABLE` needed a module of its own.** Importing it from
+  `apply-migrations.ts` dragged `node:fs` and that same `process.cwd()` into
+  the instrumentation bundle, which fails the Edge build outright.
+- **`register` runs in every runtime.** `@libsql/client` cannot be bundled for
+  Edge, so the check sits behind `process.env.NEXT_RUNTIME === 'nodejs'` and a
+  dynamic import, which is the pattern Next's own instrumentation guide gives.
+
+Cost: one query per cold start, on the connection the first real query would
+have opened anyway. Measured against production from a laptop: 27ms median for
+the ledger read on a warm connection, against 311ms for connection setup.
+
+**The three things left knowingly open are closed** (2026-09-27).
+
+**Genesis is atomic.** It spent the token first and then made five more writes,
+so a failure anywhere after the claim left somebody holding a used link and no
+team, with no way to try again — and it is the door every first user arrives
+through. The claim happens inside the transaction now, so a failure gives the
+link back. Proved by colliding the session token, which makes the last write
+fail after everything before it succeeded: no team, no member, token still
+unspent, and the retry works. That was the last "known limitation, stated
+rather than implied" in the codebase.
+
+**`check-requirement-references.ts` has tests**, twenty of them, driven against
+a temporary directory so none can start passing because somebody edited a
+requirement. The rule it enforces was already 98% covered in
+`reference-index.ts`; what was untested was everything around it — which specs
+it reads, which files it skips, whether it actually fails.
+
+**One line was tracing the whole project into every serverless function.**
+
+`path.resolve(process.cwd(), target)` means exactly what `path.resolve(target)`
+means: `path.resolve` already resolves a relative path from the working
+directory. But Turbopack treats a named `process.cwd()` as dynamic filesystem
+access, cannot know what it reaches, and includes everything. The trace for
+`/api/auth/logout`, a route that deletes one row, went from **665 files to
+292**, and the build has no warnings at all for the first time.
+
+Two things this taught, both worth keeping:
+
+- **The explicit form was documentation, not behaviour**, and it was expensive
+  documentation. The comment that replaced it says not to put it back, and why,
+  where somebody would otherwise helpfully restore it.
+- **The `outputFileTracingExcludes` added the day before are gone.** Measured
+  both ways: 292 files with them and 292 without. They were doing nothing once
+  the cause was fixed, and a line whose comment claims it prevents something it
+  does not prevent is worse than no line. A lazy `require` in `prisma.ts` was
+  also tried and also did nothing — Turbopack follows a static require
+  specifier just as it follows an import — so that was reverted too.
+
+The order matters here: the excludes looked like the fix for a day because
+they moved the number. They moved it from 1,089 to 664 while the cause sat
+untouched, and only counting again after the real fix showed they had stopped
+contributing.
+
 **Every serverless function was shipping the test suite and the
 documentation** (2026-09-26).
 

@@ -19,6 +19,7 @@ import { createCountedDatabase, type CountedDatabase } from './support/counted-d
 import { PrismaSessionRepository } from '@/lib/repositories/prisma/session.repository';
 import { PrismaSessionAggregateRepository } from '@/lib/repositories/prisma/session-aggregate.repository';
 import { PrismaTeamMemberRoleRepository } from '@/lib/repositories/prisma/team-member-role.repository';
+import { PrismaTeamRepository } from '@/lib/repositories/prisma/team.repository';
 
 const QUESTIONS = ['q-delivering-value', 'q-team-collaboration', 'q-ease-of-delivery'];
 
@@ -333,5 +334,136 @@ describe('removing a member from a team', () => {
     ).rejects.toThrow(/final delivery manager/i);
 
     expect(await db.prisma.auditLogEntry.count({ where: { teamId } })).toBe(1);
+  });
+});
+
+/**
+ * Requirements: NFR 3.5, NFR 3.6, NFR 3.7; 7.9, 19.4
+ *
+ * Genesis is the door every first user arrives through. It claimed the token,
+ * then created a team, a member, a role, an audit entry and a session — five
+ * writes after an irreversible one.
+ *
+ * The worst ordering was the original: the token is spent first, so a failure
+ * anywhere after it left somebody holding a used link and no team, with no way
+ * to try again. Claiming inside the transaction is the point of this change,
+ * not just the writes that follow it.
+ */
+describe('creating a team from a genesis token', () => {
+  let db: CountedDatabase;
+  let teamRepo: PrismaTeamRepository;
+
+  beforeEach(async () => {
+    db = await createCountedDatabase();
+    teamRepo = new PrismaTeamRepository(db.prisma);
+
+    await db.prisma.pendingGenesis.create({
+      data: {
+        token: 'genesis-token',
+        email: 'first@genesis.invalid',
+        used: false,
+        expiresAt: new Date(Date.now() + 3_600_000),
+      },
+    });
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  function params(overrides: Record<string, unknown> = {}) {
+    return {
+      token: 'genesis-token',
+      memberId: 'member-genesis',
+      memberName: 'first',
+      email: 'first@genesis.invalid',
+      team: { name: 'First Team', description: 'made at genesis' },
+      audit: {
+        changeType: 'team_created',
+        previousValue: '',
+        newValue: '{}',
+        userId: 'member-genesis',
+      },
+      session: { token: 'session-token', expiresAt: new Date(Date.now() + 3_600_000) },
+      ...overrides,
+    };
+  }
+
+  it('creates everything a first user needs, in one go', async () => {
+    const result = await teamRepo.createFromGenesis(params());
+
+    expect(result).not.toBeNull();
+    expect(await db.prisma.team.count()).toBe(1);
+    expect(await db.prisma.teamMember.count()).toBe(1);
+    expect(await db.prisma.teamMemberRole.count({ where: { role: 'delivery_manager' } })).toBe(1);
+    expect(await db.prisma.auditLogEntry.count()).toBe(1);
+    expect(await db.prisma.userSession.count()).toBe(1);
+    expect((await db.prisma.pendingGenesis.findFirst())?.used).toBe(true);
+  });
+
+  /**
+   * Requirement NFR 3.6, and the reason this one matters most: a used token
+   * cannot be un-used by the person holding it.
+   */
+  it('leaves the token unspent when the team cannot be created', async () => {
+    // A session token that collides with one already stored, so the last
+    // write in the transaction fails after everything else has succeeded
+    await db.prisma.userSession.create({
+      data: {
+        memberId: 'someone-else',
+        token: 'session-token',
+        expiresAt: new Date(Date.now() + 3_600_000),
+      },
+    });
+
+    await expect(teamRepo.createFromGenesis(params())).rejects.toThrow();
+
+    expect(await db.prisma.team.count()).toBe(0);
+    expect(await db.prisma.teamMember.count()).toBe(0);
+    expect((await db.prisma.pendingGenesis.findFirst())?.used).toBe(false);
+  });
+
+  it('can be retried after a failure, because nothing was consumed', async () => {
+    await db.prisma.userSession.create({
+      data: {
+        memberId: 'someone-else',
+        token: 'session-token',
+        expiresAt: new Date(Date.now() + 3_600_000),
+      },
+    });
+    await expect(teamRepo.createFromGenesis(params())).rejects.toThrow();
+
+    const result = await teamRepo.createFromGenesis(
+      params({ session: { token: 'another-token', expiresAt: new Date(Date.now() + 3_600_000) } }),
+    );
+
+    expect(result).not.toBeNull();
+    expect(await db.prisma.team.count()).toBe(1);
+  });
+
+  it('refuses a token that has already been spent', async () => {
+    await teamRepo.createFromGenesis(params());
+
+    const second = await teamRepo.createFromGenesis(
+      params({
+        memberId: 'member-two',
+        session: { token: 'second-session', expiresAt: new Date(Date.now() + 3_600_000) },
+      }),
+    );
+
+    // Null rather than a throw: the caller distinguishes "not found" from
+    // "already used", and both are the same answer here
+    expect(second).toBeNull();
+    expect(await db.prisma.team.count()).toBe(1);
+  });
+
+  it('refuses an expired token', async () => {
+    await db.prisma.pendingGenesis.update({
+      where: { token: 'genesis-token' },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    expect(await teamRepo.createFromGenesis(params())).toBeNull();
+    expect(await db.prisma.team.count()).toBe(0);
   });
 });
