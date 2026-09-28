@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { createContainer } from '@/lib/container';
 import type { Container } from '@/lib/container';
 import { createInMemoryRepositories } from '@/lib/repositories';
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import path from 'path';
 
 describe('Production container wiring', () => {
@@ -122,55 +122,57 @@ describe('Production container wiring', () => {
   });
 
   describe('Route handlers use production container', () => {
-    it('no route handler imports createInMemoryRepositories', () => {
+    /**
+     * Every `route.ts` under the API directory, with its contents.
+     *
+     * Requirements: Integration 3.4
+     *
+     * Reads through `withFileTypes` rather than calling `statSync` and then
+     * `readFileSync` on the same path. The two-step version is a
+     * check-then-use race — CodeQL reported it as one — and it is also a
+     * syscall per entry that the directory listing had already answered.
+     *
+     * One walker rather than two: these two tests had identical copies, which
+     * is how one of them would eventually stop matching the other.
+     */
+    function routeHandlers(): Array<{ relative: string; source: string }> {
       const apiDir = path.resolve(__dirname, '../../app/api');
-      const violations: string[] = [];
+      const found: Array<{ relative: string; source: string }> = [];
 
-      function walkRoutes(dir: string): void {
-        const entries = readdirSync(dir);
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry);
-          const stat = statSync(fullPath);
-          if (stat.isDirectory()) {
-            walkRoutes(fullPath);
-          } else if (entry === 'route.ts') {
-            const content = readFileSync(fullPath, 'utf-8');
-            if (content.includes('createInMemoryRepositories')) {
-              const relative = path.relative(apiDir, fullPath);
-              violations.push(relative);
-            }
+      function walk(dir: string): void {
+        for (const entry of readdirSync(dir, { withFileTypes: true })) {
+          const fullPath = path.join(dir, entry.name);
+
+          if (entry.isDirectory()) {
+            walk(fullPath);
+          } else if (entry.name === 'route.ts') {
+            found.push({
+              relative: path.relative(apiDir, fullPath),
+              source: readFileSync(fullPath, 'utf-8'),
+            });
           }
         }
       }
 
-      walkRoutes(apiDir);
+      walk(apiDir);
+      return found;
+    }
+
+    it('no route handler imports createInMemoryRepositories', () => {
+      const violations = routeHandlers()
+        .filter(({ source }) => source.includes('createInMemoryRepositories'))
+        .map(({ relative }) => relative);
+
       expect(violations).toEqual([]);
     });
 
     it('route handlers import from container module', () => {
-      const apiDir = path.resolve(__dirname, '../../app/api');
-      const missingContainer: string[] = [];
+      const missingContainer = routeHandlers()
+        // Routes that use no services have no container to import
+        .filter(({ source }) => source.includes('container.'))
+        .filter(({ source }) => !source.includes("from '@/lib/container"))
+        .map(({ relative }) => relative);
 
-      function walkRoutes(dir: string): void {
-        const entries = readdirSync(dir);
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry);
-          const stat = statSync(fullPath);
-          if (stat.isDirectory()) {
-            walkRoutes(fullPath);
-          } else if (entry === 'route.ts') {
-            const content = readFileSync(fullPath, 'utf-8');
-            // Skip routes that don't use services (e.g., slack/events, items placeholder)
-            const usesServices = content.includes('container.');
-            if (usesServices && !content.includes("from '@/lib/container")) {
-              const relative = path.relative(apiDir, fullPath);
-              missingContainer.push(relative);
-            }
-          }
-        }
-      }
-
-      walkRoutes(apiDir);
       expect(missingContainer).toEqual([]);
     });
   });
