@@ -3,6 +3,7 @@ import { ConflictError, NotFoundError } from '../../errors';
 import type { Team } from '../entities';
 import type {
   AddTeamMemberWithAuditData,
+  CreateFromGenesisParams,
   CreateTeamWithCreatorData,
   TeamRepository,
 } from '../types';
@@ -29,6 +30,68 @@ export class PrismaTeamRepository implements TeamRepository {
       },
     });
     return this.mapToEntity(record);
+  }
+
+  /**
+   * Requirements: NFR 3.5, NFR 3.6; 7.9, 19.4
+   *
+   * Claims the genesis token and creates the team, the member, their
+   * delivery-manager role, the audit entry and the browser session — all in
+   * one transaction. Returns null when the token is unknown, already spent or
+   * expired.
+   *
+   * **The claim is inside the transaction, and that is the point.** Genesis
+   * used to spend the token first and then make five more writes, so a failure
+   * anywhere after it left somebody holding a used link and no team, with no
+   * way to try again. Rolling the claim back means a retry is simply possible.
+   *
+   * Still a compare-and-set: the `used: false` in the filter is what makes two
+   * simultaneous claims of the same token resolve to exactly one team.
+   */
+  async createFromGenesis(params: CreateFromGenesisParams): Promise<{ team: Team } | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.pendingGenesis.updateMany({
+        where: { token: params.token, used: false, expiresAt: { gt: new Date() } },
+        data: { used: true },
+      });
+
+      // Unknown, already spent, or expired — all the same answer to the caller
+      if (claimed.count === 0) return null;
+
+      const team = await tx.team.create({
+        data: {
+          name: params.team.name,
+          description: params.team.description ?? null,
+          privacyMode: 'anonymous',
+          timezone: 'Europe/London',
+        },
+      });
+
+      await tx.teamMember.create({
+        data: {
+          id: params.memberId,
+          teamId: team.id,
+          name: params.memberName,
+          email: params.email,
+        },
+      });
+
+      await tx.teamMemberRole.create({
+        data: { memberId: params.memberId, teamId: team.id, role: 'delivery_manager' },
+      });
+
+      await tx.auditLogEntry.create({ data: { teamId: team.id, ...params.audit } });
+
+      await tx.userSession.create({
+        data: {
+          memberId: params.memberId,
+          token: params.session.token,
+          expiresAt: params.session.expiresAt,
+        },
+      });
+
+      return { team: this.mapToEntity(team) };
+    });
   }
 
   async createWithCreator(data: CreateTeamWithCreatorData): Promise<Team> {
