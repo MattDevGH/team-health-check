@@ -54,6 +54,20 @@ const EXCLUDE = ['node_modules/**', 'e2e/**/*.spec.ts', '.next/**', 'dist/**'];
  * hide it. Raising it for the whole node project would let a genuinely hung
  * unit test burn a minute before saying so, which is the wrong trade for the
  * two thousand tests that should finish in milliseconds.
+ *
+ * **Sixty seconds was not enough either.** On 2026-09-28 the Windows job failed
+ * two of them — 70.5s and 71.6s — and `atomic-writes.test.ts` took 295 seconds
+ * for its eighteen tests on that runner, against a few seconds here. Each test
+ * builds a database and applies every committed migration, so the fixture cost
+ * grows with the migration count and the runner multiplies it.
+ *
+ * Two minutes, from that evidence rather than from taste. It is still a ceiling
+ * on a hang rather than a target: nothing here should come close on a developer
+ * machine, and a test that does has changed character and wants looking at.
+ *
+ * The cheaper fix is a fixture that migrates once per file and copies the
+ * database per test. Worth doing when this bites again; not worth reshaping
+ * every integration fixture while a dependency bump waits on it.
  */
 const REAL_DATABASE = 'src/tests/integration/**/*.test.ts';
 
@@ -144,8 +158,8 @@ export default defineConfig({
           include: [REAL_DATABASE],
           exclude: EXCLUDE,
           // See REAL_DATABASE above: a slow runner, not a hung test
-          testTimeout: 60_000,
-          hookTimeout: 60_000,
+          testTimeout: 120_000,
+          hookTimeout: 120_000,
         },
       },
       {
