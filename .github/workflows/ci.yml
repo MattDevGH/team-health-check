@@ -234,7 +234,17 @@ jobs:
   requirement-coverage:
     name: Requirement Coverage Check
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    #
+    # Requirement: Traceability 2.4
+    #
+    # The pull request's author, not `github.actor`. The actor is whoever last
+    # pushed, so running `gh pr update-branch` on a Dependabot pull request made
+    # a person the actor and put this gate back in their way — on 2026-09-28,
+    # while shepherding two bumps through, which is exactly when the exemption
+    # is wanted. The author never changes.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
 
     # Requirement: Deployment 10.4
     #

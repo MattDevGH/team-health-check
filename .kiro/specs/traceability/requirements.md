@@ -60,6 +60,11 @@ important.
 1. THE check SHALL run in CI on every pull request.
 2. THE check SHALL be runnable locally by one command.
 3. THE check SHALL report how many citations it verified, so a run that silently checked nothing is visible as such.
+4. THE gate that asks a pull request description for a requirement SHALL exempt one opened by a dependency bot, and THAT exemption SHALL follow the pull request author rather than whoever last pushed to the branch. A dependency bump serves the dependency tree and has no honest requirement to cite; an exemption keyed on the actor stops applying the moment a person updates the branch, which is exactly when the bump is being shepherded through.
+
+*Added 2026-09-28, after `gh pr update-branch` on two Dependabot pull requests
+made a person the actor and put the gate back in their way. The condition read
+`github.actor != 'dependabot[bot]'`; the author never changes, the actor does.*
 
 ### Requirement 3: A Spec Says What Is Built
 
