@@ -1226,6 +1226,42 @@ names a question that exists, and still queries the session once per entry.
 Both belong with the batch and transaction work, where a service method will
 take the whole submission at once.
 
+**The audit job now has a requirement, five pins late** (2026-09-29).
+
+`fast-uri` 3.0.0–3.1.6 picked up two high-severity advisories and the audit job
+failed an unrelated pull request, which is the arrangement working: audit runs
+beside `ci` rather than in front of it, so a supply-chain disclosure and a
+broken change cannot silence each other.
+
+Nothing in any spec said what that job was for. Four transitive pins had
+accumulated under it with their reasoning in a `package.json` comment field and
+no requirement to cite, so Deployment Requirement 11 was written before the
+fifth was added. It carries the rule none of the four states: **an override is
+removed once its parent depends on a patched version itself.** A pin outlives
+its reason silently, and four are sitting there now.
+
+**`npm ls` renders an edge that does not exist.** It showed the package reached
+via `@prisma/client -> prisma`, and `@prisma/client` declares exactly one
+dependency. The real edge is `prisma` as an *optional peer* of the client —
+which is enough to make the whole CLI tree production-reachable from a
+production package, so `npm audit --omit=dev` reports it even though `prisma`
+is a devDependency here. The first version of the note recorded the rendered
+path as fact. Worth knowing before the sixth one.
+
+**The integration tests' timeout was sized on the wrong machine** (2026-09-29).
+
+Sixty seconds, set in September off this machine, where the nineteen
+integration files finish in under seven seconds. The Windows CI runner is an
+order of magnitude slower: two tests failed at 70.5s and 71.6s, and
+`atomic-writes.test.ts` took 295 seconds for its eighteen. Raised to two
+minutes, read off the measured worst case.
+
+It will creep back. Each test builds a SQLite file and applies every committed
+migration, so the fixture cost grows with the migration count. The fix is a
+fixture that migrates once per file and copies the database per test; recorded
+in the config comment rather than done, because reshaping every integration
+fixture to unblock a dependency bump is the wrong order.
+
 **The pairing code was biased, and CodeQL had been saying so** (2026-09-28).
 
 `generateRandomCode` read `bytes[i] % 36`, and 256 is not a multiple of 36:
