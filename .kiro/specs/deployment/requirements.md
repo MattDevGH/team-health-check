@@ -214,6 +214,25 @@ rather than quietly corrected, because the useful part is that it happened.*
 3. `.env.example` SHALL list every variable with a safe placeholder.
 4. No secret SHALL be committed to the repository at any point in this milestone.
 
+### Requirement 11: A Known Advisory Is Not Shipped Quietly
+
+**User Story:** As the maintainer, I want every high-severity advisory against a dependency this application ships to be either fixed or written down with its reasoning, so that "we know about it" is a record rather than a memory.
+
+*The audit job has existed since the first deployment and nothing in this spec
+said what it was for. Four transitive pins accumulated under it, each with a
+paragraph of reasoning stored in a `package.json` comment field, and the
+requirement they served was never written. Added 2026-09-29, when a fifth
+(`fast-uri`) arrived and there was again nothing to cite.*
+
+#### Acceptance Criteria
+
+1. THE production dependency tree SHALL be audited on every pull request, in a job of its own rather than as a step of the main build. A newly disclosed advisory and a broken change are different failures, and neither should stop the other being reported.
+2. WHERE an advisory has a fix reachable without a breaking change, THAT fix SHALL be applied.
+3. WHERE the parent package has not yet moved to a patched version, THE patched version MAY be pinned by an override, provided it satisfies the range the parent declares. An override that violates a declared range is a build waiting to break in a way the audit will not catch.
+4. Every override SHALL record why it exists: the advisory, the path that reaches the package, and whether this application executes that path at all.
+5. An override SHALL be removed once its parent depends on a patched version itself. A pin outlives its reason silently.
+6. WHERE no non-breaking fix exists, THE advisory SHALL be recorded with the reason it is tolerated and what would change that, rather than the audit being weakened to pass.
+
 ## Non-Functional Requirements
 
 ### NFR 1: Cost
