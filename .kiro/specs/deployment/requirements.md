@@ -177,6 +177,32 @@ not match.*
 3. WHERE a rollback would leave the schema ahead of the code, THAT hazard SHALL be stated, since migrations do not roll back with the deployment.
 4. THE verification SHALL cover the paths that only exist in production: the Turso adapter, the external trigger, and email delivery to a real address.
 
+### Requirement 10: The Pipeline Is Not A Way In
+
+**User Story:** As the maintainer, I want the thing that builds and deploys this project to be as hard to subvert as the project itself, so that trusting the application does not mean trusting everything it happens to run on the way there.
+
+*CI runs third-party code against the repository with a token that can write to
+it. That is the shape of a supply-chain attack, and it costs two lines to close
+most of.*
+
+#### Acceptance Criteria
+
+1. Every third-party action SHALL be referenced by an immutable commit SHA rather than a tag. A tag is a pointer its owner can move at any time, to anything; a SHA cannot be moved.
+2. THE version a SHA corresponds to SHALL be recorded beside it, so that a reader can tell what is pinned and an automated update can move both together.
+3. Every workflow job SHALL declare the permissions its `GITHUB_TOKEN` needs, and SHALL NOT rely on the repository default. A job that only reads the code should not hold a token that can write to it.
+4. THE permissions granted SHALL be the least the job needs. Where one job needs more than the others — reading a pull request body, writing security results — that grant SHALL sit on that job rather than on the workflow.
+
+*Added 2026-09-28. Criteria 1 and 2 describe work done on 2026-09-25 that had
+no requirement; criteria 3 and 4 close the five CodeQL alerts that work left
+behind.*
+
+*Both commits then cited "Deployment 2.2", which reads "THE production database
+SHALL be verified by executing a real query against it after deployment". It
+resolved, so `check-requirement-references.ts` accepted it, and it had nothing
+to do with either change. That is exactly the failure AGENTS.md describes as one
+the checker cannot catch and only reading the requirement can — recorded here
+rather than quietly corrected, because the useful part is that it happened.*
+
 ### Requirement 9: The Configuration Is Written Down
 
 **User Story:** As the maintainer returning in six months, I want one place that lists every environment variable and where it lives, so that I am not reverse-engineering it from `process.env` references.
@@ -187,6 +213,25 @@ not match.*
 2. THE document SHALL state which values are secret and must never be committed.
 3. `.env.example` SHALL list every variable with a safe placeholder.
 4. No secret SHALL be committed to the repository at any point in this milestone.
+
+### Requirement 11: A Known Advisory Is Not Shipped Quietly
+
+**User Story:** As the maintainer, I want every high-severity advisory against a dependency this application ships to be either fixed or written down with its reasoning, so that "we know about it" is a record rather than a memory.
+
+*The audit job has existed since the first deployment and nothing in this spec
+said what it was for. Four transitive pins accumulated under it, each with a
+paragraph of reasoning stored in a `package.json` comment field, and the
+requirement they served was never written. Added 2026-09-29, when a fifth
+(`fast-uri`) arrived and there was again nothing to cite.*
+
+#### Acceptance Criteria
+
+1. THE production dependency tree SHALL be audited on every pull request, in a job of its own rather than as a step of the main build. A newly disclosed advisory and a broken change are different failures, and neither should stop the other being reported.
+2. WHERE an advisory has a fix reachable without a breaking change, THAT fix SHALL be applied.
+3. WHERE the parent package has not yet moved to a patched version, THE patched version MAY be pinned by an override, provided it satisfies the range the parent declares. An override that violates a declared range is a build waiting to break in a way the audit will not catch.
+4. Every override SHALL record why it exists: the advisory, the path that reaches the package, and whether this application executes that path at all.
+5. An override SHALL be removed once its parent depends on a patched version itself. A pin outlives its reason silently.
+6. WHERE no non-breaking fix exists, THE advisory SHALL be recorded with the reason it is tolerated and what would change that, rather than the audit being weakened to pass.
 
 ## Non-Functional Requirements
 

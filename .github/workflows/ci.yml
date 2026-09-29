@@ -15,6 +15,19 @@ on:
   pull_request:
     branches: [master]
 
+# Requirements: Deployment 10.3, 10.4
+#
+# The least every job needs, granted once. Without this block each job holds
+# whatever the repository default gives it, which for a job that only reads the
+# code and runs tests is more than it has any use for — CI runs third-party
+# actions against this repository, and that is the shape of a supply-chain
+# attack.
+#
+# `requirement-coverage` needs one more grant to read a pull request body, and
+# it asks for it on the job rather than here.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -222,6 +235,15 @@ jobs:
     name: Requirement Coverage Check
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+
+    # Requirement: Deployment 10.4
+    #
+    # The one job that needs more than the workflow default: it reads the pull
+    # request body with `gh pr view`, which `contents: read` alone cannot do.
+    # Read, not write — it checks the description and never edits it.
+    permissions:
+      contents: read
+      pull-requests: read
 
     steps:
       - name: Checkout code

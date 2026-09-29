@@ -1226,6 +1226,81 @@ names a question that exists, and still queries the session once per entry.
 Both belong with the batch and transaction work, where a service method will
 take the whole submission at once.
 
+**The audit job now has a requirement, five pins late** (2026-09-29).
+
+`fast-uri` 3.0.0–3.1.6 picked up two high-severity advisories and the audit job
+failed an unrelated pull request, which is the arrangement working: audit runs
+beside `ci` rather than in front of it, so a supply-chain disclosure and a
+broken change cannot silence each other.
+
+Nothing in any spec said what that job was for. Four transitive pins had
+accumulated under it with their reasoning in a `package.json` comment field and
+no requirement to cite, so Deployment Requirement 11 was written before the
+fifth was added. It carries the rule none of the four states: **an override is
+removed once its parent depends on a patched version itself.** A pin outlives
+its reason silently, and four are sitting there now.
+
+**`npm ls` renders an edge that does not exist.** It showed the package reached
+via `@prisma/client -> prisma`, and `@prisma/client` declares exactly one
+dependency. The real edge is `prisma` as an *optional peer* of the client —
+which is enough to make the whole CLI tree production-reachable from a
+production package, so `npm audit --omit=dev` reports it even though `prisma`
+is a devDependency here. The first version of the note recorded the rendered
+path as fact. Worth knowing before the sixth one.
+
+**The integration tests' timeout was sized on the wrong machine** (2026-09-29).
+
+Sixty seconds, set in September off this machine, where the nineteen
+integration files finish in under seven seconds. The Windows CI runner is an
+order of magnitude slower: two tests failed at 70.5s and 71.6s, and
+`atomic-writes.test.ts` took 295 seconds for its eighteen. Raised to two
+minutes, read off the measured worst case.
+
+It will creep back. Each test builds a SQLite file and applies every committed
+migration, so the fixture cost grows with the migration count. The fix is a
+fixture that migrates once per file and copies the database per test; recorded
+in the config comment rather than done, because reshaping every integration
+fixture to unblock a dependency bump is the wrong order.
+
+**The pairing code was biased, and CodeQL had been saying so** (2026-09-28).
+
+`generateRandomCode` read `bytes[i] % 36`, and 256 is not a multiple of 36:
+256 = 7 × 36 + 4, so the first four characters of the alphabet came up eight
+times in 256 and the other thirty-two came up seven — about 14% more often.
+
+Not a practical break: a six-character code valid for ten minutes has roughly
+2.2 billion values and the bias costs a fraction of a bit. Fixed anyway, by
+rejection rather than arithmetic — bytes from 252 up are drawn again rather
+than folded onto the start of the alphabet.
+
+**The defect is statistical, so the test had to be.** A generator that reaches
+for `crypto.randomBytes` itself leaves nothing to assert about except the shape
+of one code, which the biased version produced correctly every time. Taking the
+byte source means the mapping can be counted *exactly*: every character
+reachable from exactly seven of 256 values, four rejected. Provable rather than
+probable.
+
+One thing that cost a two-minute hang: counting through the whole generator
+does not terminate. A source yielding only byte 255 is rejected for ever, which
+is right for real randomness and wrong for a test, so the mapping is exported
+separately and the counting test uses that.
+
+**Two other CodeQL findings closed with it.** `container-wiring.test.ts` had
+`statSync` then `readFileSync` on the same path — a check-then-use race, flagged
+twice because the walker was copied verbatim into both tests. `readdirSync` with
+`withFileTypes` answers both questions in the listing that had to happen anyway.
+And every CI job held whatever the repository default token grants, which for a
+job that reads code and runs tests is more than it needs; `contents: read` for
+the workflow, one `pull-requests: read` where a job reads a pull request body.
+
+**A citation that resolved and was wrong.** The SHA-pinning commit on
+2026-09-25 cited "Deployment 2.2", which reads "THE production database SHALL be
+verified by executing a real query against it after deployment". Nothing to do
+with pinning actions; the browserslist override cited it too. Both resolved, so
+`check-requirement-references.ts` accepted them — the failure AGENTS.md
+describes as the one the checker cannot catch. Deployment Requirement 10 covers
+that ground now and records the mistake rather than quietly correcting it.
+
 **The cron job was cancelled, and the cause was a migration nobody applied**
 (2026-09-27).
 

@@ -94,6 +94,18 @@ The MVP focuses on: a fixed set of health-check questions, simple feedback colle
 6. THE Web_Interface SHALL allow a Team_Member to unlink their Slack identity at any time, after which they will no longer receive Slack prompts or reminders.
 7. THE Web_Interface SHALL allow a delivery_manager to view which Team_Members have linked Slack identities and which have not, to facilitate onboarding support.
 8. THE Slack_Bot SHALL NOT send prompts or messages to Team_Members who have not completed the Slack identity linking process.
+9. THE pairing code SHALL be drawn uniformly from its alphabet. A code is a credential, and every character of it has to be as hard to guess as every other — a generator that favours part of its alphabet gives away some of the work of guessing it, whatever else it is doing right.
+
+*Added 2026-09-28, after CodeQL reported `generateRandomCode` as biased. It read
+`bytes[i] % 36` on a byte, and 256 is not a multiple of 36: 256 = 7 × 36 + 4, so
+the first four characters of the alphabet came up eight times in 256 and the
+other thirty-two came up seven. About 14% more often.*
+
+*Not a practical break — a six-character code valid for ten minutes has roughly
+2.2 billion values, and the bias costs a fraction of a bit. It is written down
+as a criterion anyway, because the next credential this project generates should
+not have to rediscover the argument, and because "it is only slightly biased"
+is not a sentence anybody wants to find in an incident review.*
 
 ### Requirement 3: Health Check Session Lifecycle
 
