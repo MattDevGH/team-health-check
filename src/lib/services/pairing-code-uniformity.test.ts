@@ -118,14 +118,53 @@ describe('every character is equally likely', () => {
   });
 });
 
+/**
+ * A byte source that is random enough to sample with and fixed enough to
+ * assert on: a 32-bit LCG, taking the top eight bits because the low ones of
+ * an LCG are notoriously patterned.
+ *
+ * The seed is part of the test. That is the whole point — see below.
+ */
+function pseudoRandomBytes(seed: number): (size: number) => Uint8Array {
+  let state = seed >>> 0;
+  return (size: number) => {
+    const out = new Uint8Array(size);
+    for (let i = 0; i < size; i += 1) {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      out[i] = state >>> 24;
+    }
+    return out;
+  };
+}
+
 describe('over many draws', () => {
+  /*
+   * This test used to call the real generator and bound the tallies at ±40% of
+   * the mean, with a comment promising it "must not fail on an unlucky
+   * afternoon". It failed on one: 3,000 characters over 36 symbols means 83.3
+   * each with a standard deviation of 9, so the ±40% bound sits 3.7σ out — a
+   * little under 1% of runs, and CI runs the suite four times per pull
+   * request. It went red on a branch that changed a timeout value.
+   *
+   * A statistical assertion over unseeded randomness is a coin toss weighted
+   * towards passing, and AGENTS.md is blunt about what that is worth. So the
+   * sample is fixed: the same 120,000 characters every run, on every machine.
+   * It passes always or fails always, which is the only useful behaviour a
+   * test has.
+   *
+   * The bound is ±10% rather than ±40% because it can be. Natural variation in
+   * this fixed sample is under 2%; the old modulo puts four characters 12.5%
+   * above the mean, which was confirmed by putting the old modulo back and
+   * watching this fail on A, B, C and D.
+   */
   it('spreads across the alphabet rather than favouring its start', () => {
-    // The real generator, not a stubbed source: 3,000 characters over 36
-    // symbols averages a little over 83 each. A 14% bias on four of them is
-    // comfortably outside the range this allows.
+    // One source across all the draws. Seeding inside the loop makes every
+    // code identical, which is a fixed sample of exactly one.
+    const source = pseudoRandomBytes(0x5eed);
+
     const counts = new Map<string, number>();
-    for (let draw = 0; draw < 500; draw += 1) {
-      for (const character of generatePairingCodeFrom()) {
+    for (let draw = 0; draw < 20_000; draw += 1) {
+      for (const character of generatePairingCodeFrom(source)) {
         counts.set(character, (counts.get(character) ?? 0) + 1);
       }
     }
@@ -133,8 +172,26 @@ describe('over many draws', () => {
     const tallies = [...PAIRING_CODE_ALPHABET].map(character => counts.get(character) ?? 0);
     const mean = tallies.reduce((sum, n) => sum + n, 0) / tallies.length;
 
-    // Generous bounds: this must not fail on an unlucky afternoon
-    expect(Math.min(...tallies)).toBeGreaterThan(mean * 0.6);
-    expect(Math.max(...tallies)).toBeLessThan(mean * 1.4);
+    expect(Math.min(...tallies)).toBeGreaterThan(mean * 0.9);
+    expect(Math.max(...tallies)).toBeLessThan(mean * 1.1);
+  });
+
+  /*
+   * The one thing a fixed source cannot check: that the shipped generator is
+   * wired to real randomness at all. Its default argument is the only place
+   * `crypto.randomBytes` is named, and nothing else in this file executes it.
+   *
+   * No statistics here, deliberately. Reaching all 36 characters in 3,000
+   * draws fails with probability about 1e-36, so this is a test of the wiring
+   * rather than of the distribution — the distribution is proved exactly two
+   * describes up, over all 256 byte values.
+   */
+  it('runs on real randomness and reaches every character', () => {
+    const seen = new Set<string>();
+    for (let draw = 0; draw < 500; draw += 1) {
+      for (const character of generatePairingCodeFrom()) seen.add(character);
+    }
+
+    expect([...seen].sort().join('')).toBe([...PAIRING_CODE_ALPHABET].sort().join(''));
   });
 });
