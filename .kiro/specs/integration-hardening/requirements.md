@@ -198,6 +198,22 @@ flaky test is a defect. The rule was written down and not enforced anywhere.*
 2. THE UI component tests that consume mocked API responses SHALL continue to pass after MSW handler updates, confirming the UI is compatible with the actual API contracts.
 3. IF a UI component test fails after an MSW handler update, THE UI component SHALL be updated to match the new contract (not the mock reverted to the old shape).
 4. THE following endpoint mocks SHALL be verified and aligned: `/api/auth/session-link/[token]` (field: `responses` not `existingResponses`), `/api/teams/[teamId]/trends` (fields: `closedAt`, `averages[]`, `trendDistribution` as array), and `/api/responses` (body-based auth, no header requirements).
+5. A request with no matching handler SHALL fail the test that made it, rather than being warned about or sent. A warning is a line in a log nobody reads, and a request that escapes to the network makes the suite pass or fail on whether that network is up.
+6. THE behaviour in criterion 5 SHALL itself be covered by a test that asserts MSW's refusal specifically, not merely that the request errored. An unreachable host errors either way, so a test that only asserts "it threw" passes with the guard removed.
+
+*Criteria 5 and 6 added 2026-10-05, during the msw 3 upgrade. msw 3 renamed the
+option that enforces criterion 5 from `onUnhandledRequest` to
+`onUnhandledFrame`, since it now covers WebSocket connections as well. A rename
+type-checks whether or not the new key is the one the library reads, and nothing
+in this spec said the guard had to exist at all — so an upgrade that silently
+dropped it would have left every unmocked call going to the real internet with
+the suite still green.*
+
+*Criterion 6 exists because the first attempt at that test fetched
+`https://unhandled.invalid/`, which rejects because a reserved TLD never
+resolves. It passed with the guard deliberately removed. The corrected version
+uses a host that does resolve and asserts on MSW's own error, and the mutation
+then showed the request being genuinely sent.*
 
 ### Requirement 13: Production Database Wiring (Turso)
 
