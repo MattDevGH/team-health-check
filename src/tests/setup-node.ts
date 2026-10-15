@@ -22,8 +22,19 @@ import { server } from './mocks/server';
  */
 vi.mock('@/lib/container-production');
 
-// Start the mock server before all tests in a file
-beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+/*
+ * Start the mock server before all tests in a file.
+ *
+ * `onUnhandledFrame` was `onUnhandledRequest` until msw 3, which renamed it
+ * because it now covers WebSocket connections and not only requests. The value
+ * is unchanged: anything this suite does not explicitly mock must fail the test
+ * rather than reach the network.
+ *
+ * `unhandled-frames.test.ts` asserts that it still does. A rename like this one
+ * type-checks whether or not the option is honoured, and an ignored key here
+ * would silently turn a hard failure into a warning nobody reads.
+ */
+beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 
 // An unreset handler leaks one test's stubbed server into the next
 afterEach(() => {

@@ -791,3 +791,108 @@ describe('the ticks the ledger keeps', () => {
     expect(await repos.session.findOpenByTeamId(team.id)).not.toBeNull();
   });
 });
+
+/**
+ * Requirements: Remembering What Happened 1.1, 1.6
+ *
+ * Found on 2026-10-15, investigating a scheduler that stopped on 11 October.
+ * Every trail had expired: cron-job.org keeps fifty executions, Vercel's Hobby
+ * plan keeps one hour of runtime logs, and the ledger is written only after
+ * the work succeeds — so a tick that threw left nothing anywhere at all, and
+ * four days later the cause was unrecoverable.
+ *
+ * The frozen heartbeat was ambiguous in exactly the way that mattered. It
+ * could mean nothing ever called the endpoint, or that every call failed.
+ * Those have completely different fixes, and there was no way to tell them
+ * apart.
+ */
+describe('a tick that could not finish', () => {
+  let sink: ReturnType<typeof createRecordingSink>;
+
+  async function seedTeam(name: string): Promise<Team> {
+    const team = await repos.team.create({ name, timezone: 'UTC' });
+    await repos.teamSchedule.create({
+      teamId: team.id,
+      cadence: 'weekly',
+      openDay: 1,
+      openTime: '09:00',
+      closeDay: 5,
+      closeTime: '17:00',
+      timezone: 'UTC',
+    });
+    return team;
+  }
+
+  /** The likeliest real cause, and the one that defeats recording as well. */
+  function breakTheDatabase(): void {
+    vi.spyOn(repos.team, 'list').mockRejectedValue(new Error('Turso unreachable'));
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('CRON_SECRET', CRON_SECRET);
+    sink = createRecordingSink();
+    _setTickTestDeps({ notificationSink: sink, now: () => OPEN_TICK });
+  });
+
+  afterEach(() => {
+    _resetTickTestDeps();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('leaves a heartbeat saying it ran and did not finish', async () => {
+    await seedTeam(`Failing Tick ${Date.now()}`);
+    breakTheDatabase();
+
+    const response = await POST(tickRequest());
+
+    expect(response.status).toBe(500);
+
+    const heartbeat = await repos.schedulerHeartbeat.latest();
+    expect(heartbeat?.ranAt).toEqual(OPEN_TICK);
+    expect(heartbeat?.summary).toMatch(/could not finish/i);
+  });
+
+  it('keeps the failure in the ledger, naming what went wrong', async () => {
+    await seedTeam(`Ledger Failure ${Date.now()}`);
+    breakTheDatabase();
+
+    await POST(tickRequest());
+
+    const kept = (await repos.schedulerTickRecord.recent(50)).find(row =>
+      /could not finish/i.test(row.summary),
+    );
+    expect(kept, 'a failed tick left no ledger row').toBeDefined();
+    /*
+     * The message is the half that says *why*, and is the entire reason this
+     * exists. A row reading "the tick failed" would have told the 11 October
+     * investigation nothing it did not already know from the silence.
+     */
+    expect(kept?.summary).toContain('Turso unreachable');
+    expect(kept?.failures).toBeGreaterThan(0);
+  });
+
+  it('still answers 500 when recording the failure also fails', async () => {
+    // One unreachable database breaks the tick and the writing-down alike
+    await seedTeam(`Both Broken ${Date.now()}`);
+    breakTheDatabase();
+    vi.spyOn(repos.schedulerHeartbeat, 'record').mockRejectedValue(
+      new Error('Turso unreachable'),
+    );
+
+    const response = await POST(tickRequest());
+
+    expect(response.status).toBe(500);
+  });
+
+  it('says nothing about failure when the tick worked', async () => {
+    const team = await seedTeam(`Healthy Tick ${Date.now()}`);
+
+    const response = await POST(tickRequest());
+
+    expect(response.status).toBe(200);
+    const heartbeat = await repos.schedulerHeartbeat.latest();
+    expect(heartbeat?.summary).not.toMatch(/could not finish/i);
+    expect(await repos.session.findOpenByTeamId(team.id)).not.toBeNull();
+  });
+});

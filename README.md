@@ -538,6 +538,14 @@ because a quiet week and a stopped scheduler are otherwise identical, and no row
 at all means the scheduler has never run. A failed heartbeat never fails the
 tick.
 
+**A tick that fails writes one too**, saying it ran, could not finish, and why.
+Until 2026-10-15 it did not, and that cost a diagnosis: the scheduler stopped
+on 11 October and by the time anyone looked, cron-job.org's history and
+Vercel's hour of logs had both expired. What was left was a heartbeat frozen
+four days earlier, which could mean nothing was calling the endpoint or that
+every call was failing — opposite problems, no way to tell them apart. Now the
+frozen case means only the first.
+
 ### Local Development with Slack
 
 For testing Slack locally:
