@@ -1226,6 +1226,33 @@ names a question that exists, and still queries the session once per entry.
 Both belong with the batch and transaction work, where a service method will
 take the whole submission at once.
 
+**A tick that failed left no trace, and it cost a diagnosis** (2026-10-15).
+
+The scheduler stopped on 11 October. Four days later the cause was
+unrecoverable, because every record of it had expired: cron-job.org keeps fifty
+executions, Vercel's Hobby plan keeps **one hour** of runtime logs, and the
+heartbeat and ledger are written *after* the work succeeds — so a tick that
+threw wrote nothing at all.
+
+What survived was a heartbeat frozen at `2026-10-11T14:55:07`, and it could
+not distinguish the two hypotheses that mattered: nothing called the endpoint,
+or every call failed. Those want opposite fixes.
+
+**What the investigation could rule out**, which is most of its value: all ten
+migrations applied (so not the September cause); the endpoint executing and
+rejecting correctly with 403; and Vercel reaching Turso — proved by forcing a
+database read through a bogus session token and getting a rendered error page
+in 1.4s rather than a 500.
+
+**The gap was against a requirement already written.** "EVERY tick SHALL record
+that it ran … whether or not it did anything" had been criterion 1.1 since the
+milestone was specified, and was implemented as every *completed* tick.
+Criterion 1.6 now says it explicitly.
+
+One detail worth keeping: the first failing test failed by reading a *previous
+test's* heartbeat, because the failed tick wrote none — the production
+ambiguity reproduced exactly, in miniature, by accident.
+
 **The audit job now has a requirement, five pins late** (2026-09-29).
 
 `fast-uri` 3.0.0–3.1.6 picked up two high-severity advisories and the audit job
