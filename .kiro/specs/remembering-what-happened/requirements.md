@@ -95,6 +95,19 @@ for a join nobody can make.
 3. THE heartbeat SHALL carry the tick's summary sentence and counts, so that "what did it last do?" is answered by the same read as "is it alive?".
 4. WHERE writing the heartbeat fails, THE tick SHALL continue and SHALL record the failure — a scheduler that stops working because it could not write down that it was working is a worse outcome than one that forgets.
 5. THE heartbeat SHALL be safe to write from two ticks at once, since nothing prevents a second cron service, a manual `curl`, or an overlapping run.
+6. A tick that throws SHALL record that it ran and could not finish, naming the cause, before the error reaches the caller. Criterion 1 already required this — "every tick … whether or not it did anything" — and it was read as every *completed* tick for months.
+
+*Criterion 6 added 2026-10-15, after the scheduler stopped on 11 October and
+the cause proved unrecoverable. The ledger is written after the work succeeds,
+so a tick that threw left no row; cron-job.org keeps fifty executions and
+Vercel's Hobby plan keeps one hour of runtime logs, and both had expired by the
+time anyone looked. The frozen heartbeat could not distinguish "nothing called
+the endpoint" from "every call failed", which are the two hypotheses that
+matter and want opposite fixes.*
+
+*This is a gap against criterion 1 rather than new scope, and it is written
+down as its own criterion because the plain reading of criterion 1 did not stop
+the gap existing.*
 
 *Criterion 1 is why the heartbeat cannot be "the most recent ledger row". A quiet tick writes no ledger row, so a genuinely quiet week would be indistinguishable from a week of not running — which is the exact confusion this milestone exists to remove.*
 
