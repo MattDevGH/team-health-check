@@ -13,6 +13,7 @@ import { recorder } from '@/lib/observability';
 import { recordingSink } from '@/lib/observability/recorded-sink';
 import { summariseTick } from '@/lib/services/tick-summary';
 import { createTickRecordService } from '@/lib/services/tick-record.service';
+import { recordFailedTick } from '@/lib/services/tick-failure';
 import { ForbiddenError } from '@/lib/errors';
 import { repos } from '@/lib/container-production';
 import { createSchedulerService } from '@/lib/services/scheduler.service';
@@ -88,227 +89,258 @@ export const POST = withErrorHandling(async (request: Request) => {
   const now = _testDeps.now?.() ?? new Date();
   const tickClock = () => now;
 
-  const sessionService = createSessionService({
-    sessionRepo: repos.session,
-    sessionLinkRepo: repos.sessionLink,
-    teamMemberRepo: repos.teamMember,
-    responseRepo: repos.response,
-    teamScheduleRepo: repos.teamSchedule,
-    now: tickClock,
-  });
-
-  const scheduler = createSchedulerService({
-    teamRepo: repos.team,
-    teamScheduleRepo: repos.teamSchedule,
-    sessionRepo: repos.session,
-    sessionService,
-    recorder,
-  });
-
-  // 3. Snapshot open sessions before tick (to detect newly opened ones)
-  const teams = await repos.team.list();
-  const openSessionsBefore = new Map<string, string>();
-  for (const team of teams) {
-    if (team.archived) continue;
-    const openSession = await repos.session.findOpenByTeamId(team.id);
-    if (openSession) {
-      openSessionsBefore.set(team.id, openSession.id);
-    }
-  }
-
-  // 4. Execute tick
-  const summary = await scheduler.tick(now);
-
-  // 5. Wire NotificationService with production sink and link checker
-  const slackLinkChecker = createProductionSlackLinkChecker({
-    slackIdentityLinkRepo: repos.slackIdentityLink,
-  });
-
-  const slackBotToken = process.env.SLACK_BOT_TOKEN;
-  const notificationSink = _testDeps.notificationSink
-    ?? (slackBotToken
-    ? createProductionNotificationSink({
-        slackClient: createSlackApiClient(slackBotToken),
-        slackIdentityLinkRepo: repos.slackIdentityLink,
-        slackInteractionQueueRepo: repos.interactionQueue,
-        questionRepo: repos.question,
-        sessionLinkRepo: repos.sessionLink,
-        responseRepo: repos.response,
-        sessionRepo: repos.session,
-      })
-      : { send: async () => {} }); // No-op sink if no Slack token configured
+  const startedAt = Date.now();
 
   /*
-   * Wrapped once, here, because every notification the tick sends goes through
-   * this one object — prompts, closing reminders, nudges. "I never got a
-   * message" had no answer before it.
+   * Requirements: Remembering What Happened 1.1, 1.6
+   *
+   * Everything below can throw, and until 2026-10-15 a throw left no trace:
+   * the heartbeat and the ledger are both written at the end, so a tick that
+   * failed looked exactly like a tick that never happened. The difference is
+   * the one that matters — one means the trigger is dead, the other means the
+   * application is — and the 11 October outage could not be diagnosed for
+   * precisely that reason.
    */
-  const recordedSink = recordingSink(notificationSink, recorder);
+  try {
+    const sessionService = createSessionService({
+      sessionRepo: repos.session,
+      sessionLinkRepo: repos.sessionLink,
+      teamMemberRepo: repos.teamMember,
+      responseRepo: repos.response,
+      teamScheduleRepo: repos.teamSchedule,
+      now: tickClock,
+    });
 
-  const notificationService = createNotificationService({
-    teamRepo: repos.team,
-    teamMemberRepo: repos.teamMember,
-    responseRepo: repos.response,
-    questionRepo: repos.question,
-    availabilityRepo: repos.availability,
-    sessionRepo: repos.session,
-    notificationDeliveryRepo: repos.notificationDelivery,
-    notificationSink: recordedSink,
-    slackLinkChecker,
-    /*
-     * Requirements: Reaching Your Health Check 3.1, 3.2
-     *
-     * The second channel. Absent an email provider these are undefined and the
-     * tick prompts by Slack alone, which is the arrangement every deployment
-     * had before this existed.
-     */
-    sessionLinkRepo: repos.sessionLink,
-    emailService: _testDeps.emailService ?? productionEmailService,
-    recorder,
-    now: tickClock,
-  });
+    const scheduler = createSchedulerService({
+      teamRepo: repos.team,
+      teamScheduleRepo: repos.teamSchedule,
+      sessionRepo: repos.session,
+      sessionService,
+      recorder,
+    });
 
-  // 6. Notify for open sessions (Requirements 8.1, 8.2).
-  // NotificationService owns eligibility: Slack link, availability, delivery
-  // window, reminder preference, completion, and the once-per-session guard.
-  let prompts = 0;
-
-  for (const team of teams) {
-    if (team.archived) continue;
-
-    const openSession = await repos.session.findOpenByTeamId(team.id);
-    if (!openSession) continue;
-
-    if (!openSessionsBefore.has(team.id)) {
-      // Session was just opened — prompt eligible members
-      const members = await repos.teamMember.findByTeamId(team.id);
-      for (const member of members) {
-        /*
-         * Every channel the member is eligible for, not only Slack.
-         *
-         * A team with no Slack was never told a check had opened — the tick
-         * called `sendSlackPrompt` and nothing else. One channel failing does
-         * not stop the other, and each failure is recorded.
-         *
-         * The count is of members reached, not messages sent: somebody who
-         * got both has been prompted once as far as a person reading the
-         * response is concerned.
-         */
-        const reached = await notificationService.promptByEveryChannel(member.id, openSession);
-        if (reached.slack || reached.email) {
-          prompts += 1;
-        }
+    // 3. Snapshot open sessions before tick (to detect newly opened ones)
+    const teams = await repos.team.list();
+    const openSessionsBefore = new Map<string, string>();
+    for (const team of teams) {
+      if (team.archived) continue;
+      const openSession = await repos.session.findOpenByTeamId(team.id);
+      if (openSession) {
+        openSessionsBefore.set(team.id, openSession.id);
       }
     }
 
-    // Remind members whose session is approaching its close
-    await notificationService.sendDueClosingReminders(openSession, reminderLeadMs());
-  }
+    // 4. Execute tick
+    const summary = await scheduler.tick(now);
 
-  // 7. Retry Slack deliveries that failed on an earlier tick (Requirement 8.5).
-  // The queue is Prisma-backed, so entries survive the request that created them.
-  const queue = createInteractionQueue({ repo: repos.interactionQueue });
-  const deliver =
-    _testDeps.queueDeliver ??
-    createQueuedDeliveryDispatcher({
-      slackClient: slackBotToken ? createSlackApiClient(slackBotToken) : undefined,
-      responder: createInteractionResponder(),
-      // Score buttons the interaction route accepted but did not finish
-      // applying, because its instance stopped after acknowledging
-      scoreActions: createProductionScoreActionDeps(),
+    // 5. Wire NotificationService with production sink and link checker
+    const slackLinkChecker = createProductionSlackLinkChecker({
+      slackIdentityLinkRepo: repos.slackIdentityLink,
     });
-  await queue.processPending(deliver, now);
 
-  /*
-   * What it did, not merely that it ran.
-   *
-   * cron-job.org shows the response body of every call it makes: a dashboard
-   * the maintainer already has open, refreshed daily, with no account to
-   * create. `{ ok: true }` told it nothing, so a check that failed to open
-   * looked exactly like a Wednesday.
-   *
-   * The counts did not fix that on their own — `opened: 0` is right on a
-   * Wednesday and wrong on Monday at 15:30, and reading it needed a reminder
-   * of what the fields meant. So the sentence leads, and the counts follow it
-   * for anything that wants to parse them.
-   *
-   * Requirements: Knowing What Happened 1.4, 1.6. Counts, reasons and ids
-   * only — never anything a member answered.
-   */
-  const sentence = summariseTick({ ...summary, prompts });
+    const slackBotToken = process.env.SLACK_BOT_TOKEN;
+    const notificationSink = _testDeps.notificationSink
+      ?? (slackBotToken
+      ? createProductionNotificationSink({
+          slackClient: createSlackApiClient(slackBotToken),
+          slackIdentityLinkRepo: repos.slackIdentityLink,
+          slackInteractionQueueRepo: repos.interactionQueue,
+          questionRepo: repos.question,
+          sessionLinkRepo: repos.sessionLink,
+          responseRepo: repos.response,
+          sessionRepo: repos.session,
+        })
+        : { send: async () => {} }); // No-op sink if no Slack token configured
 
-  /*
-   * The copy that is still there tomorrow.
-   *
-   * The response above is read by whoever is looking at the cron dashboard at
-   * the time, and cron-job.org keeps the last fifty executions — between fifty
-   * minutes and four hours, depending on the tick interval. Vercel's Hobby plan
-   * keeps the logs for an hour. The question this milestone is named after is
-   * asked the following week.
-   *
-   * Written for every tick, including one that did nothing: a quiet week and a
-   * stopped scheduler are indistinguishable unless something is written when
-   * nothing happened.
-   *
-   * The same sentence and the same tick id as the response, deliberately. Two
-   * accounts of one tick would leave anybody comparing them with no way to
-   * choose between the two.
-   */
-  await createTickRecordService({
-    schedulerHeartbeatRepo: repos.schedulerHeartbeat,
-    schedulerTickRecordRepo: repos.schedulerTickRecord,
-    recorder,
-  }).record({
-    tickId: summary.tickId,
-    ranAt: now,
-    summary: sentence,
-    opened: summary.opened,
-    closed: summary.closed,
-    materialised: summary.materialised,
-    prompts,
-    failures: summary.failures,
-    durationMs: summary.durationMs,
-    reasons: summary.reasons,
-  });
+    /*
+     * Wrapped once, here, because every notification the tick sends goes through
+     * this one object — prompts, closing reminders, nudges. "I never got a
+     * message" had no answer before it.
+     */
+    const recordedSink = recordingSink(notificationSink, recorder);
 
-  /*
-   * Indented, because this body is read by a person in a job history rather
-   * than parsed by anything that cares about bytes.
-   *
-   * On one line it arrived as `{"ok":true,"summary":"Ran, nothing was due: 1
-   * team outside the collection window.","tickId":"r899tibd","opened":0,...}`,
-   * which is something you pick apart rather than read.
-   *
-   * **Confirmed against the real dashboard on 2026-09-16** — tick `polp7zlm`,
-   * the first run on the deployed build. cron-job.org renders the indentation:
-   * the fields land on their own lines, so the sentence leads and the counts
-   * sit under it in the order a reader meets them. This was written on the
-   * argument that indenting could not be worse either way; it turned out not
-   * to need the fallback.
-   *
-   * `Response.json` has no way to ask for this, so the body is built directly
-   * and the header set by hand.
-   */
-  return new Response(
-    JSON.stringify(
+    const notificationService = createNotificationService({
+      teamRepo: repos.team,
+      teamMemberRepo: repos.teamMember,
+      responseRepo: repos.response,
+      questionRepo: repos.question,
+      availabilityRepo: repos.availability,
+      sessionRepo: repos.session,
+      notificationDeliveryRepo: repos.notificationDelivery,
+      notificationSink: recordedSink,
+      slackLinkChecker,
+      /*
+       * Requirements: Reaching Your Health Check 3.1, 3.2
+       *
+       * The second channel. Absent an email provider these are undefined and the
+       * tick prompts by Slack alone, which is the arrangement every deployment
+       * had before this existed.
+       */
+      sessionLinkRepo: repos.sessionLink,
+      emailService: _testDeps.emailService ?? productionEmailService,
+      recorder,
+      now: tickClock,
+    });
+
+    // 6. Notify for open sessions (Requirements 8.1, 8.2).
+    // NotificationService owns eligibility: Slack link, availability, delivery
+    // window, reminder preference, completion, and the once-per-session guard.
+    let prompts = 0;
+
+    for (const team of teams) {
+      if (team.archived) continue;
+
+      const openSession = await repos.session.findOpenByTeamId(team.id);
+      if (!openSession) continue;
+
+      if (!openSessionsBefore.has(team.id)) {
+        // Session was just opened — prompt eligible members
+        const members = await repos.teamMember.findByTeamId(team.id);
+        for (const member of members) {
+          /*
+           * Every channel the member is eligible for, not only Slack.
+           *
+           * A team with no Slack was never told a check had opened — the tick
+           * called `sendSlackPrompt` and nothing else. One channel failing does
+           * not stop the other, and each failure is recorded.
+           *
+           * The count is of members reached, not messages sent: somebody who
+           * got both has been prompted once as far as a person reading the
+           * response is concerned.
+           */
+          const reached = await notificationService.promptByEveryChannel(member.id, openSession);
+          if (reached.slack || reached.email) {
+            prompts += 1;
+          }
+        }
+      }
+
+      // Remind members whose session is approaching its close
+      await notificationService.sendDueClosingReminders(openSession, reminderLeadMs());
+    }
+
+    // 7. Retry Slack deliveries that failed on an earlier tick (Requirement 8.5).
+    // The queue is Prisma-backed, so entries survive the request that created them.
+    const queue = createInteractionQueue({ repo: repos.interactionQueue });
+    const deliver =
+      _testDeps.queueDeliver ??
+      createQueuedDeliveryDispatcher({
+        slackClient: slackBotToken ? createSlackApiClient(slackBotToken) : undefined,
+        responder: createInteractionResponder(),
+        // Score buttons the interaction route accepted but did not finish
+        // applying, because its instance stopped after acknowledging
+        scoreActions: createProductionScoreActionDeps(),
+      });
+    await queue.processPending(deliver, now);
+
+    /*
+     * What it did, not merely that it ran.
+     *
+     * cron-job.org shows the response body of every call it makes: a dashboard
+     * the maintainer already has open, refreshed daily, with no account to
+     * create. `{ ok: true }` told it nothing, so a check that failed to open
+     * looked exactly like a Wednesday.
+     *
+     * The counts did not fix that on their own — `opened: 0` is right on a
+     * Wednesday and wrong on Monday at 15:30, and reading it needed a reminder
+     * of what the fields meant. So the sentence leads, and the counts follow it
+     * for anything that wants to parse them.
+     *
+     * Requirements: Knowing What Happened 1.4, 1.6. Counts, reasons and ids
+     * only — never anything a member answered.
+     */
+    const sentence = summariseTick({ ...summary, prompts });
+
+    /*
+     * The copy that is still there tomorrow.
+     *
+     * The response above is read by whoever is looking at the cron dashboard at
+     * the time, and cron-job.org keeps the last fifty executions — between fifty
+     * minutes and four hours, depending on the tick interval. Vercel's Hobby plan
+     * keeps the logs for an hour. The question this milestone is named after is
+     * asked the following week.
+     *
+     * Written for every tick, including one that did nothing: a quiet week and a
+     * stopped scheduler are indistinguishable unless something is written when
+     * nothing happened.
+     *
+     * The same sentence and the same tick id as the response, deliberately. Two
+     * accounts of one tick would leave anybody comparing them with no way to
+     * choose between the two.
+     */
+    await createTickRecordService({
+      schedulerHeartbeatRepo: repos.schedulerHeartbeat,
+      schedulerTickRecordRepo: repos.schedulerTickRecord,
+      recorder,
+    }).record({
+      tickId: summary.tickId,
+      ranAt: now,
+      summary: sentence,
+      opened: summary.opened,
+      closed: summary.closed,
+      materialised: summary.materialised,
+      prompts,
+      failures: summary.failures,
+      durationMs: summary.durationMs,
+      reasons: summary.reasons,
+    });
+
+    /*
+     * Indented, because this body is read by a person in a job history rather
+     * than parsed by anything that cares about bytes.
+     *
+     * On one line it arrived as `{"ok":true,"summary":"Ran, nothing was due: 1
+     * team outside the collection window.","tickId":"r899tibd","opened":0,...}`,
+     * which is something you pick apart rather than read.
+     *
+     * **Confirmed against the real dashboard on 2026-09-16** — tick `polp7zlm`,
+     * the first run on the deployed build. cron-job.org renders the indentation:
+     * the fields land on their own lines, so the sentence leads and the counts
+     * sit under it in the order a reader meets them. This was written on the
+     * argument that indenting could not be worse either way; it turned out not
+     * to need the fallback.
+     *
+     * `Response.json` has no way to ask for this, so the body is built directly
+     * and the header set by hand.
+     */
+    return new Response(
+      JSON.stringify(
+        {
+          // The sentence first, because it is the line worth reading. Then what
+          // happened, then what it cost, then the breakdown — spreading the
+          // summary put durationMs in the middle of the counts.
+          ok: true,
+          summary: sentence,
+          tickId: summary.tickId,
+          opened: summary.opened,
+          closed: summary.closed,
+          materialised: summary.materialised,
+          prompts,
+          failures: summary.failures,
+          durationMs: summary.durationMs,
+          reasons: summary.reasons,
+        },
+        null,
+        2,
+      ),
+      { headers: { 'content-type': 'application/json' } },
+    );
+  } catch (error: unknown) {
+    /*
+     * Recorded, then rethrown unchanged.
+     *
+     * `withErrorHandling` turns it into the 500 the cron service has to see:
+     * a tick that failed must report failure, or the trigger carries on
+     * believing it worked. This only adds the row that says why.
+     */
+    await recordFailedTick(
       {
-        // The sentence first, because it is the line worth reading. Then what
-        // happened, then what it cost, then the breakdown — spreading the
-        // summary put durationMs in the middle of the counts.
-        ok: true,
-        summary: sentence,
-        tickId: summary.tickId,
-        opened: summary.opened,
-        closed: summary.closed,
-        materialised: summary.materialised,
-        prompts,
-        failures: summary.failures,
-        durationMs: summary.durationMs,
-        reasons: summary.reasons,
+        schedulerHeartbeatRepo: repos.schedulerHeartbeat,
+        schedulerTickRecordRepo: repos.schedulerTickRecord,
+        recorder,
       },
-      null,
-      2,
-    ),
-    { headers: { 'content-type': 'application/json' } },
-  );
+      { now, startedAt, error },
+    );
+    throw error;
+  }
 });
