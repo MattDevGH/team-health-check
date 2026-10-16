@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe, toHaveNoViolations } from 'jest-axe';
 import { http, HttpResponse } from 'msw';
@@ -369,7 +369,29 @@ describe('SessionLifecyclePanel', () => {
 
       const trigger = await screen.findByRole('button', { name: /^close the health check$/i });
       await user.click(trigger);
-      await screen.findByRole('dialog', { name: /close this health check/i });
+      const dialog = await screen.findByRole('dialog', { name: /close this health check/i });
+
+      /*
+       * Focus is put inside the dialog here, because the browser does it and
+       * this environment cannot.
+       *
+       * A real browser moves focus into the dialog as part of `showModal()`.
+       * jsdom has never implemented `showModal`, so the component falls back
+       * to setting `open` directly in an effect — and from jsdom 30.1.2 a
+       * child of a dialog that is not yet open cannot take focus, which is
+       * correct and which is what the browser's own autofocus would be doing
+       * after `showModal()` rather than before it.
+       *
+       * Until 30.1.2 jsdom allowed that focus, so `autoFocus` happened to land
+       * and this test passed without ever stating what it depended on. With
+       * focus left on the trigger, Escape never passes through the dialog and
+       * the component's fallback handler is not exercised at all — the test
+       * would have been asserting nothing.
+       *
+       * The real modal path is covered where it can be: the keyboard close
+       * flow in `e2e/session-lifecycle.spec.ts`, which passes in Chromium.
+       */
+      within(dialog).getByRole('button', { name: /yes, close it/i }).focus();
 
       await user.keyboard('{Escape}');
 
