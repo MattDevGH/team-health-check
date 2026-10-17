@@ -263,9 +263,46 @@ value of a preview is that you can do anything to it.
 
 That is the correct posture — Requirement 1.3 says a preview must never write
 to the production database, and the surest way to guarantee that is to give it
-no credentials at all. But it means **a failing preview deployment on a pull
-request is expected and is not a signal worth chasing.** Judge a change by the
-CI checks, not by Vercel’s preview.
+no credentials at all. But it means **a preview deployment on a pull request
+tells you nothing about whether the change is good.** Judge a change by the CI
+checks, not by Vercel’s preview.
+
+### Previews are not built for Dependabot branches
+
+Set 2026-10-17, in **Settings → Build and Deployment → Ignored Build Step**,
+as a Custom command:
+
+```bash
+if [ "$VERCEL_ENV" = "production" ]; then exit 1; fi; case "$VERCEL_GIT_COMMIT_REF" in dependabot/*) exit 0;; *) exit 1;; esac
+```
+
+**The exit codes are inverted from the obvious reading, and getting them the
+wrong way round stops production deploying.** Exit 1 means build; exit 0 means
+abort, and the deployment is marked `CANCELED`. The `VERCEL_ENV` guard is
+belt and braces: even a mistake in the branch pattern cannot take production
+down.
+
+The reason is noise rather than cost. A preview of a parked Dependabot branch
+fails for the same reason CI already failed — #116 bumps TypeScript to 7.0,
+`typescript-eslint` does not support it, lint fails, and the build fails with
+it. That is a true signal arriving twice, on a pull request deliberately left
+open as a watcher, by email, for ever. It produced two false alarms in two
+days despite the paragraph above having said since 2026-09-23 that previews
+are not worth chasing: writing "ignore this" down does not stop the
+notification arriving.
+
+Checked before turning it on: **`Vercel` is not a required status check** on
+`master`. The required four are `Lint, Type Check, Test, Build`, `Audit
+Production Dependencies`, `Playwright E2E Tests` and
+`Analyze (javascript-typescript)`. A `CANCELED` preview therefore cannot
+block a merge — **if `Vercel` is ever added to branch protection, revisit
+this first**, or every Dependabot pull request will deadlock.
+
+Two things it does not do. Cancelled builds still count against deployment
+quota and concurrent build slots, so this buys quiet rather than capacity. And
+it only hides a duplicate: the signal that TypeScript 7 has become viable is
+the `Lint, Type Check, Test, Build` job going green, which is the better
+watcher anyway because it is the job that actually runs the linter.
 
 ### `NEXT_PUBLIC_APP_URL` has three traps in it
 

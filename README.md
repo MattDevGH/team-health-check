@@ -273,9 +273,15 @@ account there matches a member, so the path where somebody is *not* recognised
 never runs.
 
 One dependency upgrade is also parked, and it is blocked upstream rather than
-undone: ESLint 10 cannot be adopted while `eslint-config-next` depends on
-`eslint-plugin-react`, whose latest release declares `eslint: ^3 || … || ^9.7`
-and calls a method ESLint 10 removed.
+undone: **TypeScript 7** cannot be adopted while `typescript-eslint` refuses
+it outright — lint exits with `typescript-eslint does not support TS 7.0`.
+
+ESLint 10 was parked here on the same grounds for a month and **landed on
+2026-10-17**. Its lesson is worth carrying to the next one: the blocker was
+real, but `eslint-plugin-react` fixed the crash *without* widening its
+declared peer range, which still reads `eslint: ^3 || … || ^9.7`. Watching
+the metadata would have said "blocked" for ever. What actually answered the
+question was running the linter.
 
 ### Later milestones (not started)
 - **Delivery-manager user guide** in `docs/`, once in-app guidance exists.
@@ -858,6 +864,11 @@ Feature specifications at `.kiro/specs/`:
 - Preview deployments carry no production credentials, confirmed 2026-09-23.
   They are therefore unusable, deliberately: a preview nobody can click through
   beats one pointed at the live team’s answers
+- Previews are not built at all for `dependabot/*` branches, from 2026-10-17.
+  A parked bump whose lint fails produced a failing preview email every time
+  the branch moved — a true signal, arriving a second time, for a pull request
+  deliberately left open. `docs/deployment.md` has the command and the
+  warning about its inverted exit codes
 - `docs/deployment.md` is the working reference: every variable, which file it
   belongs in, and what happens when each one is wrong
 
