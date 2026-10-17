@@ -1226,6 +1226,47 @@ names a question that exists, and still queries the session once per entry.
 Both belong with the batch and transaction work, where a service method will
 take the whole submission at once.
 
+**ESLint 10 landed, and the peer range never moved** (2026-10-17).
+
+Blocked since September by `eslint-plugin-react`, which crashed under ESLint
+10 with `contextOrFilename.getFilename is not a function`. PR #123 (10.12.0)
+went green on its own and merged.
+
+**The watcher worked and the metadata lied.** Dependabot raises a fresh pull
+request for each new 10.x release, and the day one lints green the block has
+cleared — no manual checking needed. Meanwhile `eslint-plugin-react@7.37.5`
+*still* declares `eslint: ^3 || … || ^9.7`, so `npm ci` still warns
+`ERESOLVE`. Anyone checking the declared range, which is what this project's
+notes had said to do, would have concluded "still blocked" indefinitely.
+
+**Green was not taken at face value**, because the way a linter upgrade fails
+quietly is by linting nothing. Verified instead: `npx eslint .` processes 486
+files; `--print-config` shows 22 `react/*` rules with `react/display-name` at
+error; and a deliberate anonymous-component violation is reported. Do that trio
+on any future linter bump.
+
+**Two advisories and a test that was about to assert nothing** (2026-10-16).
+
+`sharp` (librsvg, CVE-2026-96889) and `source-map-js` (event-loop DoS) both
+reached production and blocked every open pull request. next 16.4.0 looked like
+the upstream fix and is not — checked rather than assumed, it still resolves
+sharp 0.35.4 and source-map-js 1.2.1. Overrides six and seven.
+
+In the same batch, jsdom 30.1.2 broke the `<dialog>` Escape test, and the cause
+is worth keeping: jsdom now correctly refuses focus to a child of a dialog that
+is not open yet. The component has no `showModal` under jsdom so it sets
+`open` in an effect, which runs *after* React honours `autoFocus`. Older jsdom
+allowed the focus anyway. With focus left on the trigger the Escape never
+passes through the dialog and the handler is never reached — the test would
+have passed while exercising nothing. Isolated by holding everything else still
+and swapping jsdom 30.1.1 for 30.1.2.
+
+**Vercel no longer builds previews for Dependabot branches** (2026-10-17). An
+Ignored Build Step; the exit codes are inverted and `docs/deployment.md` has
+the command and the warnings. Worth knowing why it was needed: the runbook had
+said since September that preview failures are not worth chasing, and that did
+not stop two false alarms in two days, because a note cannot stop an email.
+
 **A tick that failed left no trace, and it cost a diagnosis** (2026-10-15).
 
 The scheduler stopped on 11 October. Four days later the cause was
